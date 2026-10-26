@@ -2,7 +2,9 @@
 //
 // Credentials come from environment variables only, never hardcoded:
 //   META_API_KEY (or LLAMA_API_KEY fallback) - required secret
-//   META_API_URL  - optional endpoint override
+//   META_API_URL  - optional override; must be the FULL chat-completions URL
+//                   (e.g. https://host/.../chat/completions), not a base URL,
+//                   since it is POSTed to directly
 //   META_MODEL    - optional model name override
 
 const DEFAULT_API_URL =

@@ -107,6 +107,32 @@ describe("rerank", () => {
     expect(ranked.map((r) => r.caseId)).toEqual([a.id, b.id, c.id]);
   });
 
+  it("bozuk yanıtta geri dönüş ilk 5 ile sınırlıdır (6 adaydan ilk 5)", async () => {
+    const base = threeCases();
+    const extra = [4, 5, 6].map((n) =>
+      makeCase({
+        id: `case-x${n}`,
+        summary: `su kenarında vaka ${n}`,
+        locationType: "su kenarı",
+      }),
+    );
+    const all = [...base, ...extra];
+    const fake = {
+      chatCompletion: async (_prompt: string) => "bozuk yanıt {{{",
+    };
+
+    const ranked = await rerank(all, query, fake);
+
+    expect(ranked).toHaveLength(5);
+    expect(ranked.map((r) => r.caseId)).toEqual(
+      all.slice(0, 5).map((c) => c.id),
+    );
+    for (const r of ranked) {
+      expect(r.score).toBe(0);
+      expect(r.quote.trim().length).toBeGreaterThan(0);
+    }
+  });
+
   it("ilk 5'i döndürür (6 adaydan en yüksek puanlı 5)", async () => {
     const base = threeCases();
     const extra = [4, 5, 6].map((n) =>

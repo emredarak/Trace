@@ -4,6 +4,7 @@ import type { CaseFeatures } from "./prefilter";
 
 export interface RankedCase {
   caseId: string;
+  /** 0 = unscored, 1-10 = scored. */
   score: number;
   reason: string;
   quote: string;
@@ -151,9 +152,9 @@ export async function rerank(
     }
     return scored.slice(0, MAX_RESULTS);
   } catch {
-    // Bozuk yanıt / istemci hatası: adayları puansız, giriş sırasıyla listele.
-    return cases.map((c) =>
-      toUnscored(c, query, "model yanıtı kullanılamadı"),
-    );
+    // Bozuk yanıt / istemci hatası: ilk 5 adayı puansız, giriş sırasıyla listele.
+    return cases
+      .map((c) => toUnscored(c, query, "model yanıtı kullanılamadı"))
+      .slice(0, MAX_RESULTS);
   }
 }
