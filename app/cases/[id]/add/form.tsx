@@ -63,6 +63,17 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
   const photoRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
 
+  // Servis çalışanı çevrimdışı kaydı kuyruğa alırsa 202 {queued:true} döner.
+  async function queueState(res: Response): Promise<"queued" | null> {
+    if (res.status !== 202) return null;
+    try {
+      const body = (await res.json()) as { queued?: boolean };
+      return body?.queued ? "queued" : null;
+    } catch {
+      return "queued";
+    }
+  }
+
   async function saveNote() {
     if (note.trim().length === 0 && !type) {
       setStatus("Not ya da delil tipi gerekli.");
@@ -79,7 +90,12 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         }),
       });
       setStatus(res.ok ? "Not kaydedildi." : "Not kaydedilemedi.");
-      if (res.ok) setNote("");
+      if (res.ok) {
+        setNote("");
+      } else if ((await queueState(res)) === "queued") {
+        setStatus("Not kuyruğa alındı, bağlantı gelince gönderilecek.");
+        setNote("");
+      }
     } catch {
       setStatus("Bağlantı hatası, tekrar deneyin.");
     } finally {
@@ -99,7 +115,11 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         body: form,
       });
       if (!res.ok) {
-        setStatus("Fotoğraf işaretlenemedi.");
+        if ((await queueState(res)) === "queued") {
+          setStatus("Fotoğraf kuyruğa alındı, bağlantı gelince işlenecek.");
+        } else {
+          setStatus("Fotoğraf işaretlenemedi.");
+        }
         return;
       }
       const body = await res.json();
@@ -122,7 +142,11 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         body: form,
       });
       if (!res.ok) {
-        setStatus("Ses çözülemedi.");
+        if ((await queueState(res)) === "queued") {
+          setStatus("Ses kuyruğa alındı, bağlantı gelince çözülecek.");
+        } else {
+          setStatus("Ses çözülemedi.");
+        }
         return;
       }
       const body = await res.json();

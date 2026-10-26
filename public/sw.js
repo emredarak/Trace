@@ -5,9 +5,9 @@
  * esas alınır: kuyruktaki kopya silinir.
  *
  * Not: fotoğraf/video gibi multipart gövdeler ArrayBuffer olarak aynen
- * saklanır ve aynı Content-Type ile geri oynatılır. Çok büyük videolar
- * cihaz belleğine sığmayabilir; o durumda kayıt reddedilir, uygulama
- * normal hata yoluna düşer.
+ * saklanır ve orijinal Content-Type (boundary dahil) ile birebir geri
+ * oynatılır. Gövde okunamaz ya da kuyruğa yazılamazsa 503 {queued:false}
+ * dönülür; kayıt kaybolmaz, arayan taslağı elinde tutar.
  */
 "use strict";
 
@@ -82,9 +82,9 @@ function scheduleSync() {
 }
 
 async function replay(entry) {
+  // Başlıklar ve gövde birebir korunur: multipart yüklemeler orijinal
+  // Content-Type (boundary dahil) ile aynen geri oynatılır.
   const headers = Object.assign({}, entry.headers);
-  // fetch multipart sınırı kendisi üretsin diye bayat content-type'ı at;
-  // ArrayBuffer ile oynatırken orijinal başlık korunur.
   const init = { method: entry.method || "POST", headers };
   if (entry.bodyBuffer) {
     init.body = entry.bodyBuffer;
@@ -97,17 +97,17 @@ async function replay(entry) {
     await removeEntry(entry.id);
     return "done";
   }
-  // Sunucu hatası: kaydı bırak, sonrakine geç.
-  return "retry";
+  // Sunucu hatası: katı FIFO için patlat, flushQueue dursun; kayıt kalır.
+  throw new Error("outbox replay failed: http " + res.status);
 }
 
 async function flushQueue() {
   const all = await readAll();
   for (const entry of all) {
+    // İlk hatada dur (ağ ya da sunucu): varış sırası kuyruk sırasıyla aynı kalır.
     try {
       await replay(entry);
     } catch (err) {
-      // Ağ hatası (hâlâ çevrimdışı): kalanı bırak, sonra tekrar dene.
       break;
     }
   }
@@ -157,8 +157,12 @@ self.addEventListener("fetch", (event) => {
           }
         }
       } catch (err) {
-        // Gövde okunamadı (çok büyük dosya olabilir): kuyruğa almadan geçir.
-        return fetch(req);
+        // Gövde okunamadı (çok büyük dosya olabilir): kayıt kuyruğa girmedi,
+        // arayan taslağı elinde tutsun diye yeniden denenebilir 503 dön.
+        return new Response(JSON.stringify({ queued: false }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        });
       }
       try {
         const res = await fetch(req);
@@ -167,10 +171,14 @@ self.addEventListener("fetch", (event) => {
         try {
           await enqueue(entry);
         } catch (dbErr) {
-          return new Response(JSON.stringify({ error: "kuyruk dolu" }), {
-            status: 507,
-            headers: { "Content-Type": "application/json" },
-          });
+          // Kuyruğa yazılamadı: 503 dön, arayan form verisini saklasın.
+          return new Response(
+            JSON.stringify({ queued: false, error: "kuyruk yazılamadı" }),
+            {
+              status: 503,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
         }
         await scheduleSync();
         return new Response(JSON.stringify({ queued: true }), {

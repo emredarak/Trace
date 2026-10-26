@@ -1,7 +1,8 @@
 // Çevrimdışı giden kutusu (outbox).
 //
 // Tarayıcıda IndexedDB destekli FIFO kuyruk; IndexedDB yoksa (ör. test/SSR)
-// bellek içi depoya düşer. Sıra korunur, çakışmada (HTTP 409) sunucu kaydı
+// bellek içi depoya düşer. Katı FIFO: ilk başarısızlıkta durulur, varış
+// sırası kuyruk sırasıyla aynı kalır. Çakışmada (HTTP 409) sunucu kaydı
 // esas alınır: yerel kopya silinir, rapor artar.
 //
 // Fotoğraf/ses gibi dosyalar Blob olarak kaydın içinde saklanır; IndexedDB
@@ -252,7 +253,7 @@ export function createOutbox(deps: OutboxDeps = {}): Outbox {
           status: "failed",
           detail: (err as Error)?.message ?? "network error",
         });
-        continue;
+        break; // Katı FIFO: ilk hatada dur, varış sırası kuyruk sırasını izler.
       }
       if (res.ok) {
         await store.remove(entry.id);
@@ -276,6 +277,7 @@ export function createOutbox(deps: OutboxDeps = {}): Outbox {
           status: "failed",
           detail: `http ${res.status}`,
         });
+        break; // Katı FIFO: ilk hatada dur, denenmeyenler kuyrukta kalır.
       }
     }
     return report;

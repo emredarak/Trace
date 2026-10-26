@@ -61,6 +61,41 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
     expect(await outbox.pending()).toBe(0);
   });
 
+  it("katı FIFO: ilk gönderim başarısız olursa sonrakiler denenmez", async () => {
+    const calls: string[] = [];
+    let mode: "fail-first" | "ok" = "fail-first";
+    const outbox = createOutbox({
+      store: createMemoryStore(),
+      fetchFn: (async (_input: unknown, init?: RequestInit) => {
+        const note = (JSON.parse(init?.body as string) as { note: string })
+          .note;
+        calls.push(note);
+        if (mode === "fail-first" && note === "birinci") {
+          return new Response("hata", { status: 500 });
+        }
+        return okJson({ ok: true });
+      }) as unknown as typeof fetch,
+    });
+    await outbox.queue({
+      url: "/api/cases/abc/entries",
+      body: { type: "note", note: "birinci" },
+    });
+    await outbox.queue({
+      url: "/api/cases/abc/entries",
+      body: { type: "note", note: "ikinci" },
+    });
+    const first = await outbox.sync();
+    expect(first.failed).toBe(1);
+    // İkinci kayıt denenmedi: varış sırası kuyruk sırasını izler.
+    expect(calls).toEqual(["birinci"]);
+    expect(await outbox.pending()).toBe(2);
+    mode = "ok";
+    const second = await outbox.sync();
+    expect(second.sent).toBe(2);
+    expect(calls).toEqual(["birinci", "birinci", "ikinci"]);
+    expect(await outbox.pending()).toBe(0);
+  });
+
   it("çakışmada sunucu kaydı esas alınır (409 kuyruktan düşer)", async () => {
     const outbox = createOutbox({
       store: createMemoryStore(),
@@ -140,5 +175,8 @@ describe("public/sw.js", () => {
     // Kuyruk sinyali: 202 kabul yanıtı + sync/flush mantığı.
     expect(sw).toMatch(/202/);
     expect(sw).toMatch(/sync/i);
+    // Kuyruk yazılamazsa/gövde okunamazsa yeniden denenebilir 503 dönülür.
+    expect(sw).toMatch(/503/);
+    expect(sw).not.toMatch(/507/);
   });
 });
