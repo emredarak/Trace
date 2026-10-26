@@ -1,0 +1,7 @@
+node_modules/
+.next/
+.superpowers/
+tsconfig.tsbuildinfo
+*.db
+*.db-journal
+*.db-wal
