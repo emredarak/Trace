@@ -1,0 +1,76 @@
+// @vitest-environment jsdom
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import NewCasePage from "../app/new/page";
+
+afterEach(() => cleanup());
+
+beforeEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("Yeni vaka formu (yalnız özet zorunlu)", () => {
+  it("boş özetle gönderim engellenir", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NewCasePage />);
+
+    fireEvent.click(screen.getByRole("button", { name: /vakayı aç/i }));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(await screen.findByText(/özet zorunludur/i)).toBeTruthy();
+  });
+
+  it("dolu özetle POST /api/cases çağrılır", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "abc", caseNo: "TR-0001" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NewCasePage />);
+
+    fireEvent.change(screen.getByLabelText(/özet/i), {
+      target: { value: "gece hırsızlık" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /vakayı aç/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/cases");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      summary: "gece hırsızlık",
+    });
+    expect(await screen.findByText(/TR-0001/)).toBeTruthy();
+  });
+
+  it("GPS yoksa konum metni yeterlidir", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "abc", caseNo: "TR-0002" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NewCasePage />);
+
+    fireEvent.change(screen.getByLabelText(/özet/i), {
+      target: { value: "olay" },
+    });
+    fireEvent.change(screen.getByLabelText(/konum \(metin\)/i), {
+      target: { value: "çarşı meydanı" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /vakayı aç/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      summary: "olay",
+      locationText: "çarşı meydanı",
+    });
+  });
+});

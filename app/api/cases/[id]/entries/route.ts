@@ -5,7 +5,7 @@ import type { Evidence } from "../../../../../lib/case-schema";
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   initDb();
   const { id } = await params;

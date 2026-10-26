@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb, initDb } from "../../../../../lib/db";
 
-type RouteParams = { params: { id: string } | Promise<{ id: string }> };
+type RouteParams = { params: Promise<{ id: string }> };
 
 async function readTargetId(req: Request): Promise<unknown> {
   const url = new URL(req.url);

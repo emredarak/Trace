@@ -3,15 +3,12 @@ import { readdirSync, rmSync, mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { closeDb, getDb, initDb } from "../lib/db";
-import { markPhoto } from "../lib/mark-photo";
+import { markPhoto, __setMarkPhotoClientForTests } from "../lib/mark-photo";
 import {
   POST as createCase,
   GET as listCases,
 } from "../app/api/cases/route";
-import {
-  POST as markPhotoRoute,
-  __setMarkPhotoClientForTests,
-} from "../app/api/cases/[id]/mark-photo/route";
+import { POST as markPhotoRoute } from "../app/api/cases/[id]/mark-photo/route";
 
 // Sahte işaretleme: "bıçak" ipucuna 2 kutu.
 const FAKE_BOXES = [

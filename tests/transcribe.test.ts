@@ -3,15 +3,12 @@ import { existsSync, readdirSync, rmSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { closeDb, getDb, initDb } from "../lib/db";
-import { transcribe } from "../lib/transcribe";
+import { transcribe, __setTranscribeClientForTests } from "../lib/transcribe";
 import {
   POST as createCase,
   GET as listCases,
 } from "../app/api/cases/route";
-import {
-  POST as transcribeAudio,
-  __setTranscribeClientForTests,
-} from "../app/api/cases/[id]/transcribe/route";
+import { POST as transcribeAudio } from "../app/api/cases/[id]/transcribe/route";
 
 // Sahte çözüm: iki konuşmacı, 3 bölüm.
 const FAKE_TRANSCRIPT = {

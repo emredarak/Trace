@@ -6,18 +6,8 @@ import { getDb, initDb } from "../../../../../lib/db";
 import {
   markPhoto,
   type Marking,
-  type MarkingClient,
 } from "../../../../../lib/mark-photo";
 import type { Evidence } from "../../../../../lib/case-schema";
-
-let clientOverride: MarkingClient | undefined;
-
-/** Test seam: tests inject a fake client so no network is used. */
-export function __setMarkPhotoClientForTests(
-  client: MarkingClient | undefined,
-): void {
-  clientOverride = client;
-}
 
 function uploadDir(): string {
   return process.env.TRACE_UPLOAD_DIR ?? "uploads";
@@ -34,7 +24,7 @@ function storedFilename(original: string, caseId: string): string {
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   initDb();
   const { id } = await params;
@@ -80,7 +70,7 @@ export async function POST(
 
   let marking: Marking;
   try {
-    marking = await markPhoto(buffer, hint, clientOverride);
+    marking = await markPhoto(buffer, hint);
   } catch {
     return NextResponse.json(
       { error: "fotoğraf işaretleme başarısız oldu, yüklenen dosya saklandı" },

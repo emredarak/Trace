@@ -27,6 +27,15 @@ export interface TranscriptionClient {
   transcribeAudio(audio: Buffer, filename: string): Promise<Transcript>;
 }
 
+let clientOverride: TranscriptionClient | undefined;
+
+/** Test seam: tests inject a fake client so no network is used. */
+export function __setTranscribeClientForTests(
+  client: TranscriptionClient | undefined,
+): void {
+  clientOverride = client;
+}
+
 const DEFAULT_TRANSCRIBE_URL =
   "https://api.llama.com/compat/v1/audio/transcriptions";
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
@@ -97,7 +106,7 @@ const defaultTranscriptionClient: TranscriptionClient = {
 export async function transcribe(
   audio: Buffer,
   filename = "audio.wav",
-  client: TranscriptionClient = defaultTranscriptionClient,
+  client: TranscriptionClient = clientOverride ?? defaultTranscriptionClient,
 ): Promise<Transcript> {
   if (!Buffer.isBuffer(audio) || audio.length === 0) {
     throw new Error("ses verisi boş");

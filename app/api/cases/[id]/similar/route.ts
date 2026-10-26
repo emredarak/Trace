@@ -20,7 +20,7 @@ function toRecord(row: CaseRow): CaseRecord {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   initDb();
   const { id } = await params;

@@ -27,6 +27,15 @@ export interface MarkingClient {
   markImage(image: Buffer, hint: string): Promise<Marking>;
 }
 
+let clientOverride: MarkingClient | undefined;
+
+/** Test seam: tests inject a fake client so no network is used. */
+export function __setMarkPhotoClientForTests(
+  client: MarkingClient | undefined,
+): void {
+  clientOverride = client;
+}
+
 const DEFAULT_SAM_URL = "https://api.llama.com/compat/v1/images/markings";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
@@ -99,7 +108,7 @@ const defaultMarkingClient: MarkingClient = {
 export async function markPhoto(
   image: Buffer,
   hint: string,
-  client: MarkingClient = defaultMarkingClient,
+  client: MarkingClient = clientOverride ?? defaultMarkingClient,
 ): Promise<Marking> {
   if (!Buffer.isBuffer(image) || image.length === 0) {
     throw new Error("görüntü verisi boş");

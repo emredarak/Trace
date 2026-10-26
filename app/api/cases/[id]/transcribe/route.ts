@@ -6,18 +6,8 @@ import { getDb, initDb } from "../../../../../lib/db";
 import {
   transcribe,
   type Transcript,
-  type TranscriptionClient,
 } from "../../../../../lib/transcribe";
 import type { Evidence } from "../../../../../lib/case-schema";
-
-let clientOverride: TranscriptionClient | undefined;
-
-/** Test seam: tests inject a fake client so no network is used. */
-export function __setTranscribeClientForTests(
-  client: TranscriptionClient | undefined,
-): void {
-  clientOverride = client;
-}
 
 function uploadDir(): string {
   return process.env.TRACE_UPLOAD_DIR ?? "uploads";
@@ -34,7 +24,7 @@ function storedFilename(original: string, caseId: string): string {
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } | Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   initDb();
   const { id } = await params;
@@ -72,11 +62,7 @@ export async function POST(
 
   let transcript: Transcript;
   try {
-    transcript = await transcribe(
-      buffer,
-      file.name || stored,
-      clientOverride,
-    );
+    transcript = await transcribe(buffer, file.name || stored);
   } catch {
     return NextResponse.json(
       { error: "ses çözümü başarısız oldu, yüklenen dosya saklandı" },
