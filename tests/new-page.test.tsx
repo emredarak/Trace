@@ -73,4 +73,25 @@ describe("Yeni vaka formu (yalnız özet zorunlu)", () => {
       locationText: "çarşı meydanı",
     });
   });
+
+  it("202 {queued:true} alınca (ok:true) 'kuyruğa alındı' gösterir, tanımsız bağlantı çizmez", async () => {
+    // Gerçek fetch anlami: 202 yanıtında ok:true'dur.
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      json: async () => ({ queued: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NewCasePage />);
+
+    fireEvent.change(screen.getByLabelText(/özet/i), {
+      target: { value: "gece hırsızlık" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /vakayı aç/i }));
+
+    expect(await screen.findByText(/kuyruğa alındı/i)).toBeTruthy();
+    // Gerileme koruması: tanımsız id/caseNo ile "açıldı" ekranı çizilmemeli.
+    expect(screen.queryByText(/vaka açıldı/i)).toBeNull();
+    expect(screen.queryByText(/delil ekle/i)).toBeNull();
+  });
 });

@@ -158,3 +158,36 @@ export async function rerank(
       .slice(0, MAX_RESULTS);
   }
 }
+
+export const RERANK_TIMEOUT_MS = 15_000;
+
+// Yavaş/yanıtsız model istemcisinde isteği asılı bırakmaz: 15 sn'de zaman
+// aşımına uğrar ve mevcut geri dönüş yoluna (puansız liste, kayıp yok) düşer.
+export async function rerankWithTimeout(
+  cases: CaseRecord[],
+  query: CaseRecord,
+  client?: ChatClient,
+  timeoutMs: number = RERANK_TIMEOUT_MS,
+): Promise<RankedCase[]> {
+  if (cases.length === 0) return [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("rerank zaman aşımı")),
+        timeoutMs,
+      );
+    });
+    const pending =
+      client === undefined
+        ? rerank(cases, query)
+        : rerank(cases, query, client);
+    return await Promise.race([pending, timeout]);
+  } catch {
+    return cases
+      .map((c) => toUnscored(c, query, "model yanıtı kullanılamadı"))
+      .slice(0, MAX_RESULTS);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}

@@ -54,6 +54,7 @@ export default function NewCasePage() {
   const [created, setCreated] = useState<{ id: string; caseNo: string } | null>(
     null,
   );
+  const [queued, setQueued] = useState(false);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -69,6 +70,23 @@ export default function NewCasePage() {
       { timeout: 8000 },
     );
   }, []);
+
+  // Servis çalışanı çevrimdışı kaydı kuyruğa alırsa 202 {queued:true} döner.
+  // Gerçek fetch'te 202'nin ok'u true'dur; bu yüzden kuyruk bayrağı res.ok
+  // dallanmasından ÖNCE, ayrıştırılmış gövdeden okunur.
+  interface CreatedBody {
+    queued?: boolean;
+    id?: unknown;
+    caseNo?: unknown;
+  }
+
+  async function readBody(res: Response): Promise<CreatedBody | null> {
+    try {
+      return (await res.json()) as CreatedBody;
+    } catch {
+      return null;
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -92,16 +110,38 @@ export default function NewCasePage() {
             : {}),
         }),
       });
+      const body = await readBody(res);
+      if (body?.queued === true) {
+        setQueued(true);
+        return;
+      }
       if (!res.ok) {
         setError("Kayıt açılamadı, tekrar deneyin.");
         return;
       }
-      setCreated(await res.json());
+      if (
+        body &&
+        typeof body.id === "string" &&
+        typeof body.caseNo === "string"
+      ) {
+        setCreated({ id: body.id, caseNo: body.caseNo });
+      } else {
+        setError("Kayıt açılamadı, tekrar deneyin.");
+      }
     } catch {
       setError("Bağlantı hatası, tekrar deneyin.");
     } finally {
       setSaving(false);
     }
+  }
+
+  if (queued) {
+    return (
+      <main style={wrap}>
+        <h1>Vaka kuyruğa alındı</h1>
+        <p>Bağlantı gelince açılacak.</p>
+      </main>
+    );
   }
 
   if (created) {

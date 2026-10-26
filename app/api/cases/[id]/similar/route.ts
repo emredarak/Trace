@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb, initDb } from "../../../../../lib/db";
 import { prefilter } from "../../../../../lib/prefilter";
-import { rerank } from "../../../../../lib/rerank";
+import { rerankWithTimeout } from "../../../../../lib/rerank";
 import type { CaseRecord } from "../../../../../lib/case-schema";
 
 interface CaseRow {
@@ -51,7 +51,7 @@ export async function GET(
     if (record) records.push(record);
   }
 
-  const results = await rerank(records, query);
+  const results = await rerankWithTimeout(records, query);
   db.prepare("UPDATE cases SET needsRerank = 0 WHERE id = ?").run(id);
   return NextResponse.json({ results, fresh });
 }

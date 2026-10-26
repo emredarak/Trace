@@ -10,6 +10,8 @@ Kurgu veriyle çekilir. Tüm vaka ve kişiler hayal ürünüdür (`seed/cases.js
 3. 32 kurgu vakayı yükleyin: `TRACE_BASE_URL=http://localhost:3000 node seed/seed.ts`
    (`seed/seed.ts` gerçek `POST /api/cases` zincirini kullanır; `TR-SEED-01…05`
    su kenarı | bıçak | gece arkadan yaklaşma seri kümesidir).
+   PowerShell: `$env:TRACE_BASE_URL="http://localhost:3000"; node seed/seed.ts`
+   (ya da kısaca `npm run seed` — aynı adrese yükler; Node 22.6+ gerekir).
 4. Telefonu hazırlayın: mobil görünüm, konum izni sorulursa "bir kez izin ver".
 
 ## 0:30–1:10 — Telefonla vaka girişi (`/new`)
