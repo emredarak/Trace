@@ -63,6 +63,15 @@ export function initDb(): void {
       createdAt TEXT NOT NULL,
       PRIMARY KEY (sourceId, targetId)
     );
+    CREATE TABLE IF NOT EXISTS case_locations (
+      id TEXT PRIMARY KEY,
+      caseId TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      note TEXT,
+      locationText TEXT,
+      latitude REAL,
+      longitude REAL,
+      createdAt TEXT NOT NULL
+    );
     CREATE VIRTUAL TABLE IF NOT EXISTS case_fts USING fts5(
       summary, crimeType, locationType, weapon, mo,
       content='cases', content_rowid='rowid'

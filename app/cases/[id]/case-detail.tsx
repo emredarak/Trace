@@ -3,8 +3,13 @@
 import { useEffect, useState } from "react";
 import type { CaseRecord, Evidence } from "../../../lib/case-schema";
 import type { RankedCase } from "../../../lib/rerank";
+import type { CaseLocation } from "../../api/cases/[id]/route";
+import MapPicker from "../../components/map-picker";
 
-type CaseWithEntries = CaseRecord & { entries?: Evidence[] };
+type CaseWithEntries = CaseRecord & {
+  entries?: Evidence[];
+  locations?: CaseLocation[];
+};
 
 interface SimilarResponse {
   results: RankedCase[];
@@ -144,22 +149,20 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   const [approved, setApproved] = useState<Record<string, boolean>>({});
   const [approveError, setApproveError] = useState<Record<string, string>>({});
   const [approving, setApproving] = useState<Record<string, boolean>>({});
+  const [togglingStatus, setTogglingStatus] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch("/api/cases");
+        const res = await fetch(`/api/cases/${id}`);
         if (!res.ok) {
           if (!cancelled) setCaseMissing(true);
           return;
         }
-        const list = (await res.json()) as CaseWithEntries[];
-        const found = Array.isArray(list)
-          ? list.find((c) => c.id === id)
-          : undefined;
+        const found = (await res.json()) as CaseWithEntries;
         if (!cancelled) {
-          if (found) setCaseItem(found);
+          if (found && found.id === id) setCaseItem(found);
           else setCaseMissing(true);
         }
       } catch {
@@ -188,8 +191,30 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     };
   }, [id]);
 
-  async function approve(targetId: string) {
-    setApproving((cur) => ({ ...cur, [targetId]: true }));
+  async function toggleStatus() {
+    if (!caseItem || togglingStatus) return;
+    setTogglingStatus(true);
+    try {
+      const next = caseItem.status === "closed" ? "open" : "closed";
+      const res = await fetch(`/api/cases/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: next }),
+      });
+      if (res.ok) {
+        const body = (await res.json()) as { status?: string };
+        if (body.status === "open" || body.status === "closed") {
+          setCaseItem({ ...caseItem, status: body.status });
+        }
+      }
+    } catch {
+      // Sessiz geç: durum düğmesi kritik akışı engellemez.
+    } finally {
+      setTogglingStatus(false);
+    }
+  }
+
+  async function approve(targetId: string) {    setApproving((cur) => ({ ...cur, [targetId]: true }));
     setApproveError((cur) => ({ ...cur, [targetId]: "" }));
     try {
       const res = await fetch(`/api/cases/${id}/links`, {
@@ -237,6 +262,16 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     <main style={mainStyle}>
       <style>{layoutCss}</style>
       <h1>Vaka {caseItem.caseNo}</h1>
+      <p>
+        <button
+          type="button"
+          disabled={togglingStatus}
+          onClick={() => void toggleStatus()}
+          style={approveButtonStyle}
+        >
+          {caseItem.status === "closed" ? "Vakayı Aç" : "Vakayı Kapat"}
+        </button>
+      </p>
       {showFreshBadge ? <p style={badgeStyle}>yeni benzerler</p> : null}
       <div className="trace-case-layout">
         <section aria-label="Vaka detayı" style={cardStyle}>
@@ -249,7 +284,11 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           {fieldRow("Silah", caseItem.weapon)}
           {fieldRow("Durum", caseItem.status)}
           {fieldRow("Memur", caseItem.officer)}
-          <h3>Deliller ({entries.length})</h3>
+          <h3>Deliller ({entries.length})</h3>          {caseItem.status !== "closed" ? (
+            <p>
+              <a href={`/cases/${caseItem.id}/edit`}>Vakayı Düzenle</a>
+            </p>
+          ) : null}
           {entries.length === 0 ? (
             <p>Delil yok.</p>
           ) : (
@@ -258,6 +297,45 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 <EntryView key={e.id} entry={e} />
               ))}
             </ul>
+          )}
+          <h3>
+            Konumlar (
+            {Array.isArray(caseItem.locations) ? caseItem.locations.length : 0})
+          </h3>
+          {Array.isArray(caseItem.locations) &&
+          caseItem.locations.length > 0 ? (
+            <>
+              <ul>
+                {caseItem.locations.map((l) => (
+                  <li key={l.id}>
+                    {l.note ? <strong>{l.note} </strong> : null}
+                    {l.locationText ? <span>{l.locationText} </span> : null}
+                    {typeof l.latitude === "number" &&
+                    typeof l.longitude === "number" ? (
+                      <span>
+                        ({l.latitude.toFixed(4)}, {l.longitude.toFixed(4)})
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              <MapPicker
+                readOnly
+                points={caseItem.locations
+                  .filter(
+                    (l) =>
+                      typeof l.latitude === "number" &&
+                      typeof l.longitude === "number",
+                  )
+                  .map((l) => ({
+                    latitude: l.latitude as number,
+                    longitude: l.longitude as number,
+                    note: l.note,
+                  }))}
+              />
+            </>
+          ) : (
+            <p>Konum yok.</p>
           )}
         </section>
         <section aria-label="Benzer vakalar" style={cardStyle}>
@@ -273,7 +351,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 <li key={r.caseId} style={cardStyle}>
                   <p>
                     <strong>Vaka: </strong>
-                    {r.caseId}
+                    <a href={`/cases/${r.caseId}`}>{r.caseId}</a>
                   </p>
                   <p>
                     <strong>skor: </strong>

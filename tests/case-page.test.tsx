@@ -99,8 +99,8 @@ function stubFetch(fresh = false) {
   const calls: { url: string; init?: RequestInit }[] = [];
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
-    if (url === "/api/cases") {
-      return { ok: true, status: 200, json: async () => [CASE_ITEM] };
+    if (url === `/api/cases/${CASE_ID}` && !init?.method) {
+      return { ok: true, status: 200, json: async () => CASE_ITEM };
     }
     if (url === `/api/cases/${CASE_ID}/similar`) {
       return {
