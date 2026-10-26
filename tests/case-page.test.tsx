@@ -8,7 +8,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { CaseDetail } from "../app/cases/[id]/page";
+import { CaseDetail } from "../app/cases/[id]/case-detail";
 
 afterEach(() => cleanup());
 
