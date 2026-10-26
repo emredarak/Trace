@@ -9,5 +9,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/cases/:path*", "/new/:path*", "/api/cases/:path*"],
+  matcher: ["/", "/cases/:path*", "/new/:path*", "/api/cases/:path*"],
 };
