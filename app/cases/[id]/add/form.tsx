@@ -64,13 +64,19 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
   const audioRef = useRef<HTMLInputElement>(null);
 
   // Servis çalışanı çevrimdışı kaydı kuyruğa alırsa 202 {queued:true} döner.
-  async function queueState(res: Response): Promise<"queued" | null> {
-    if (res.status !== 202) return null;
+  // Gerçek fetch'te 202'nin ok'u true'dur; bu yüzden kuyruk bayrağı res.ok
+  // dallanmasından ÖNCE, ayrıştırılmış gövdeden okunur.
+  interface ApiBody {
+    queued?: boolean;
+    boxes?: unknown;
+    transcript?: { text?: string };
+  }
+
+  async function readBody(res: Response): Promise<ApiBody | null> {
     try {
-      const body = (await res.json()) as { queued?: boolean };
-      return body?.queued ? "queued" : null;
+      return (await res.json()) as ApiBody;
     } catch {
-      return "queued";
+      return null;
     }
   }
 
@@ -89,12 +95,15 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
           ...(note.trim() ? { note: note.trim() } : {}),
         }),
       });
-      setStatus(res.ok ? "Not kaydedildi." : "Not kaydedilemedi.");
-      if (res.ok) {
-        setNote("");
-      } else if ((await queueState(res)) === "queued") {
+      const body = await readBody(res);
+      if (body?.queued === true) {
         setStatus("Not kuyruğa alındı, bağlantı gelince gönderilecek.");
         setNote("");
+      } else if (res.ok) {
+        setStatus("Not kaydedildi.");
+        setNote("");
+      } else {
+        setStatus("Not kaydedilemedi.");
       }
     } catch {
       setStatus("Bağlantı hatası, tekrar deneyin.");
@@ -114,16 +123,16 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         method: "POST",
         body: form,
       });
-      if (!res.ok) {
-        if ((await queueState(res)) === "queued") {
-          setStatus("Fotoğraf kuyruğa alındı, bağlantı gelince işlenecek.");
-        } else {
-          setStatus("Fotoğraf işaretlenemedi.");
-        }
+      const body = await readBody(res);
+      if (body?.queued === true) {
+        setStatus("Fotoğraf kuyruğa alındı, bağlantı gelince işlenecek.");
         return;
       }
-      const body = await res.json();
-      const n = Array.isArray(body.boxes) ? body.boxes.length : 0;
+      if (!res.ok) {
+        setStatus("Fotoğraf işaretlenemedi.");
+        return;
+      }
+      const n = Array.isArray(body?.boxes) ? body.boxes.length : 0;
       setStatus(`Fotoğraf kaydedildi (${n} kutu).`);
     } catch {
       setStatus("Bağlantı hatası, tekrar deneyin.");
@@ -141,16 +150,16 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         method: "POST",
         body: form,
       });
-      if (!res.ok) {
-        if ((await queueState(res)) === "queued") {
-          setStatus("Ses kuyruğa alındı, bağlantı gelince çözülecek.");
-        } else {
-          setStatus("Ses çözülemedi.");
-        }
+      const body = await readBody(res);
+      if (body?.queued === true) {
+        setStatus("Ses kuyruğa alındı, bağlantı gelince çözülecek.");
         return;
       }
-      const body = await res.json();
-      setStatus(`Ses çözüldü: ${body.transcript?.text ?? ""}`);
+      if (!res.ok) {
+        setStatus("Ses çözülemedi.");
+        return;
+      }
+      setStatus(`Ses çözüldü: ${body?.transcript?.text ?? ""}`);
     } catch {
       setStatus("Bağlantı hatası, tekrar deneyin.");
     } finally {
