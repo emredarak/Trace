@@ -28,6 +28,9 @@ export async function POST(req: Request) {
   }
   try {
     const record = insertCase(body as Parameters<typeof insertCase>[0]);
+    getDb()
+      .prepare("UPDATE cases SET needsRerank = 1 WHERE id = ?")
+      .run(record.id);
     return NextResponse.json(
       { id: record.id, caseNo: record.caseNo },
       { status: 201 },

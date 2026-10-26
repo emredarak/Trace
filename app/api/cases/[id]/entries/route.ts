@@ -35,5 +35,6 @@ export async function POST(
   db.prepare(
     "INSERT INTO evidences (id, caseId, type, note, createdAt) VALUES (?, ?, ?, ?, ?)",
   ).run(entry.id, entry.caseId, entry.type, entry.note ?? null, entry.createdAt);
+  db.prepare("UPDATE cases SET needsRerank = 1 WHERE id = ?").run(id);
   return NextResponse.json(entry, { status: 201 });
 }
