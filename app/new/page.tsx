@@ -4,8 +4,8 @@ import { useState } from "react";
 import CaseForm, {
   emptyCaseForm,
   type CaseFormPayload,
-  type CaseLocationDraft,
 } from "../components/case-form";
+import type { CaseLocationDraft } from "../../lib/locations";
 
 const wrap: React.CSSProperties = {
   maxWidth: "28rem",
@@ -42,8 +42,10 @@ export default function NewCasePage() {
         body: JSON.stringify({
           ...payload,
           locations: locations.map((l) => ({
+            title: l.title,
             note: l.note || null,
-            locationText: l.locationText || null,
+            kind: l.kind,
+            priority: l.priority,
             latitude: l.latitude ?? null,
             longitude: l.longitude ?? null,
           })),
@@ -112,7 +114,6 @@ export default function NewCasePage() {
       <CaseForm
         idPrefix="yeni"
         initial={emptyCaseForm()}
-        autoGps
         submitLabel="Vakayı Aç"
         saving={saving}
         error={error}

@@ -50,7 +50,7 @@ describe("Yeni vaka formu (yalnız özet zorunlu)", () => {
     expect(await screen.findByText(/TR-0001/)).toBeTruthy();
   });
 
-  it("GPS yoksa konum metni yeterlidir", async () => {
+  it("panelden koordinatsız konum eklenip yeni alanlarla gönderilir", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ id: "abc", caseNo: "TR-0002" }),
@@ -61,17 +61,33 @@ describe("Yeni vaka formu (yalnız özet zorunlu)", () => {
     fireEvent.change(screen.getByLabelText(/özet/i), {
       target: { value: "olay" },
     });
-    fireEvent.change(screen.getByLabelText(/konum \(metin\)/i), {
-      target: { value: "çarşı meydanı" },
+    fireEvent.click(screen.getByRole("button", { name: "+ Konum Ekle" }));
+    fireEvent.change(screen.getByLabelText(/konum başlığı/i), {
+      target: { value: "Çarşı meydanı" },
     });
+    fireEvent.change(screen.getByLabelText("Konum Not"), {
+      target: { value: "tanığın gördüğü köşe" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Bu Konumu Kullan" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: /vakayı aç/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      summary: "olay",
-      locationText: "çarşı meydanı",
-    });
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({ summary: "olay" });
+    expect(body).not.toHaveProperty("locationText");
+    expect(body.locations).toEqual([
+      {
+        title: "Çarşı meydanı",
+        note: "tanığın gördüğü köşe",
+        kind: "iliskili",
+        priority: null,
+        latitude: null,
+        longitude: null,
+      },
+    ]);
   });
 
   it("202 {queued:true} alınca (ok:true) 'kuyruğa alındı' gösterir, tanımsız bağlantı çizmez", async () => {

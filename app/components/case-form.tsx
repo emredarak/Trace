@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import MapPicker, { type MapPoint } from "./map-picker";
+import { useState, type ReactNode } from "react";
+import LocationsSection from "./locations-section";
+import type { CaseLocationDraft } from "../../lib/locations";
+
+export type { CaseLocationDraft } from "../../lib/locations";
 
 // Vaka açma ve vaka düzenleme ekranlarının TEK alan tanımı.
 // Yeni alan eklenirse buraya eklenir; iki ekran da otomatik alır.
@@ -14,18 +17,6 @@ export const CRIME_SUGGESTIONS = [
   "kundaklama",
   "trafik kazası",
   "kayıp şahıs",
-];
-
-export const LOCATION_TYPE_SUGGESTIONS = [
-  "su kenarı",
-  "orman",
-  "ev içi",
-  "ev",
-  "iş yeri",
-  "sokak",
-  "araç",
-  "kırsal",
-  "diğer",
 ];
 
 export const WEAPON_SUGGESTIONS = [
@@ -47,21 +38,11 @@ export interface CaseFormValues {
   crimeType: string;
   mo: string;
   weapon: string;
-  locationType: string;
-  locationText: string;
   officer: string;
   victimAge: string;
   victimGender: string;
   suspects: string;
   witnesses: string;
-}
-
-export interface CaseLocationDraft {
-  id: string;
-  note: string;
-  locationText: string;
-  latitude?: number;
-  longitude?: number;
 }
 
 export type CaseFormPayload = {
@@ -70,15 +51,11 @@ export type CaseFormPayload = {
   crimeType: string | null;
   mo: string | null;
   weapon: string | null;
-  locationType: string | null;
-  locationText: string | null;
   officer: string | null;
   victimAge: number | null;
   victimGender: string | null;
   suspects: string | null;
   witnesses: string | null;
-  latitude: number | null;
-  longitude: number | null;
 };
 
 export function emptyCaseForm(): CaseFormValues {
@@ -88,8 +65,6 @@ export function emptyCaseForm(): CaseFormValues {
     crimeType: "",
     mo: "",
     weapon: "",
-    locationType: "",
-    locationText: "",
     officer: "",
     victimAge: "",
     victimGender: "",
@@ -104,15 +79,11 @@ interface CaseLike {
   crimeType?: string | null;
   mo?: string | null;
   weapon?: string | null;
-  locationType?: string | null;
-  locationText?: string | null;
   officer?: string | null;
   victimAge?: number | null;
   victimGender?: string | null;
   suspects?: string | null;
   witnesses?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
 }
 
 export function caseToFormValues(c: CaseLike): CaseFormValues {
@@ -123,8 +94,6 @@ export function caseToFormValues(c: CaseLike): CaseFormValues {
     crimeType: str(c.crimeType),
     mo: str(c.mo),
     weapon: str(c.weapon),
-    locationType: str(c.locationType),
-    locationText: str(c.locationText),
     officer: str(c.officer),
     victimAge: c.victimAge == null ? "" : String(c.victimAge),
     victimGender: str(c.victimGender),
@@ -143,23 +112,20 @@ const fieldStyle: React.CSSProperties = {
 };
 
 const hintStyle: React.CSSProperties = {
-  fontSize: "0.85rem",
-  opacity: 0.75,
+  fontSize: "1rem",
+  lineHeight: 1.5,
+  color: "#111111",
   margin: "-0.6rem 0 1rem",
 };
 
 interface CaseFormProps {
   idPrefix: string;
   initial: CaseFormValues;
-  initialPrimary?: MapPoint | null;
   initialLocations?: CaseLocationDraft[];
-  autoGps?: boolean;
   header?: ReactNode;
   submitLabel: string;
   saving?: boolean;
   error?: string;
-  onAddLocation?: (loc: CaseLocationDraft) => Promise<boolean>;
-  onRemoveLocation?: (loc: CaseLocationDraft) => Promise<void>;
   onSubmit: (
     payload: CaseFormPayload,
     locations: CaseLocationDraft[],
@@ -169,83 +135,20 @@ interface CaseFormProps {
 export default function CaseForm({
   idPrefix,
   initial,
-  initialPrimary = null,
   initialLocations = [],
-  autoGps = false,
   header,
   submitLabel,
   saving = false,
   error = "",
-  onAddLocation,
-  onRemoveLocation,
   onSubmit,
 }: CaseFormProps) {
   const [values, setValues] = useState<CaseFormValues>(initial);
-  const [primary, setPrimary] = useState<MapPoint | null>(initialPrimary);
-  const [gpsStatus, setGpsStatus] = useState("");
   const [formError, setFormError] = useState("");
   const [locations, setLocations] =
     useState<CaseLocationDraft[]>(initialLocations);
-  const [locNote, setLocNote] = useState("");
-  const [locText, setLocText] = useState("");
-  const [locPick, setLocPick] = useState<MapPoint | null>(null);
-  const [locError, setLocError] = useState("");
-
-  useEffect(() => {
-    if (!autoGps) return;
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setGpsStatus("GPS yok; konum metni ya da harita seçimi yeterli.");
-      return;
-    }
-    setGpsStatus("Konum bekleniyor.");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setPrimary((cur) =>
-          cur ?? {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          },
-        );
-        setGpsStatus("Konum alındı (haritada ana konum olarak işaretli).");
-      },
-      () => setGpsStatus("GPS alınamadı; konum metni ya da harita seçimi yeterli."),
-      { timeout: 8000 },
-    );
-  }, [autoGps]);
 
   const set = (key: keyof CaseFormValues) => (e: { target: { value: string } }) =>
     setValues((v) => ({ ...v, [key]: e.target.value }));
-
-  async function addLocation() {
-    if (!locText.trim() && !locPick) {
-      setLocError("Konum için açıklama yazın ya da haritadan seçin.");
-      return;
-    }
-    const draft: CaseLocationDraft = {
-      id:
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `loc-${Date.now()}`,
-      note: locNote.trim(),
-      locationText: locText.trim(),
-      latitude: locPick?.latitude,
-      longitude: locPick?.longitude,
-    };
-    if (onAddLocation) {
-      const ok = await onAddLocation(draft);
-      if (!ok) return;
-    }
-    setLocations((cur) => [...cur, draft]);
-    setLocNote("");
-    setLocText("");
-    setLocPick(null);
-    setLocError("");
-  }
-
-  async function removeLocation(loc: CaseLocationDraft) {
-    if (onRemoveLocation) await onRemoveLocation(loc);
-    setLocations((cur) => cur.filter((l) => l.id !== loc.id));
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -272,8 +175,6 @@ export default function CaseForm({
         crimeType: text(values.crimeType),
         mo: text(values.mo),
         weapon: text(values.weapon),
-        locationType: text(values.locationType),
-        locationText: text(values.locationText),
         officer: text(values.officer),
         victimAge: values.victimAge.trim()
           ? Number(values.victimAge)
@@ -281,8 +182,6 @@ export default function CaseForm({
         victimGender: text(values.victimGender),
         suspects: text(values.suspects),
         witnesses: text(values.witnesses),
-        latitude: primary?.latitude ?? null,
-        longitude: primary?.longitude ?? null,
       },
       locations,
     );
@@ -357,49 +256,6 @@ export default function CaseForm({
         </fieldset>
 
         <fieldset>
-          <legend>Konum (ana olay yeri)</legend>
-          <label htmlFor={id("locationType")}>Konum tipi</label>
-          <input
-            id={id("locationType")}
-            type="text"
-            list={id("location-type-list")}
-            value={values.locationType}
-            onChange={set("locationType")}
-            style={fieldStyle}
-            placeholder="Seçin ya da kendiniz yazın"
-          />
-          <datalist id={id("location-type-list")}>
-            {LOCATION_TYPE_SUGGESTIONS.map((s) => (
-              <option key={s} value={s} />
-            ))}
-          </datalist>
-          <label htmlFor={id("locationText")}>Konum (metin)</label>
-          <input
-            id={id("locationText")}
-            type="text"
-            value={values.locationText}
-            onChange={set("locationText")}
-            style={fieldStyle}
-            placeholder="Örn. kuzey gölü kıyısı, 3 No'lu iskele"
-          />
-          <p style={hintStyle}>
-            Ana konumu haritadan da seçebilirsiniz (dokun/tıkla). GPS yalnızca
-            yeni vakada otomatik denenir.
-          </p>
-          <MapPicker pick={primary} onPick={setPrimary} height={220} />
-          {gpsStatus ? <p aria-live="polite">{gpsStatus}</p> : null}
-          {primary ? (
-            <p>
-              Ana konum: ({primary.latitude.toFixed(4)},{" "}
-              {primary.longitude.toFixed(4)}){" "}
-              <button type="button" onClick={() => setPrimary(null)}>
-                Temizle
-              </button>
-            </p>
-          ) : null}
-        </fieldset>
-
-        <fieldset>
           <legend>Kişiler</legend>
           <label htmlFor={id("officer")}>Sorumlu memur</label>
           <input
@@ -453,59 +309,11 @@ export default function CaseForm({
           />
         </fieldset>
 
-        <fieldset>
-          <legend>Konumlar (birden fazla olabilir)</legend>
-          <p style={hintStyle}>
-            Her konumun ne için olduğunu notla belirtin: maktulün bulunduğu
-            nokta, delilin bulunduğu yer, tanığın gördüğü köşe gibi.
-          </p>
-          {locations.length === 0 ? <p>Ekli konum yok.</p> : null}
-          <ul>
-            {locations.map((l) => (
-              <li key={l.id}>
-                {l.note ? <strong>{l.note} </strong> : null}
-                {l.locationText ? <span>{l.locationText} </span> : null}
-                {typeof l.latitude === "number" &&
-                typeof l.longitude === "number" ? (
-                  <span>
-                    ({l.latitude.toFixed(4)}, {l.longitude.toFixed(4)})
-                  </span>
-                ) : null}{" "}
-                <button type="button" onClick={() => void removeLocation(l)}>
-                  Sil
-                </button>
-              </li>
-            ))}
-          </ul>
-          <label htmlFor={id("locNote")}>Konum notu (bu konum ne için?)</label>
-          <input
-            id={id("locNote")}
-            type="text"
-            value={locNote}
-            onChange={(e) => setLocNote(e.target.value)}
-            style={fieldStyle}
-            placeholder="Örn. maktulün bulunduğu nokta"
-          />
-          <label htmlFor={id("locText")}>Konum açıklaması</label>
-          <input
-            id={id("locText")}
-            type="text"
-            value={locText}
-            onChange={(e) => setLocText(e.target.value)}
-            style={fieldStyle}
-          />
-          <MapPicker pick={locPick} onPick={setLocPick} height={220} />
-          {locPick ? (
-            <p>
-              Seçili: ({locPick.latitude.toFixed(4)},{" "}
-              {locPick.longitude.toFixed(4)})
-            </p>
-          ) : null}
-          {locError ? <p role="alert">{locError}</p> : null}
-          <button type="button" onClick={() => void addLocation()}>
-            Konumu Ekle
-          </button>
-        </fieldset>
+        <LocationsSection
+          locations={locations}
+          onChange={setLocations}
+          idPrefix={idPrefix}
+        />
 
         {formError ? <p role="alert">{formError}</p> : null}
         {error ? <p role="alert">{error}</p> : null}

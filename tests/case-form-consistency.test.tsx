@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import NewCasePage from "../app/new/page";
 import EditForm from "../app/cases/[id]/edit/edit-form";
 
@@ -15,16 +15,31 @@ const SHARED_LABELS = [
   /suç tipi/i,
   /yöntem/i,
   /silah/i,
-  /konum tipi/i,
-  /konum \(metin\)/i,
   /sorumlu memur/i,
   /maktul yaşı/i,
   /maktul cinsiyeti/i,
   /şüpheliler/i,
   /tanıklar/i,
-  /konum notu/i,
-  /konum açıklaması/i,
 ];
+
+function expectLocationsSection() {
+  expect(screen.getByText("Konumlar")).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "+ Konum Ekle" }),
+  ).toBeTruthy();
+  // Panel kapalıyken gömülü seçim haritası/paneli yoktur.
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByLabelText(/konum tipi/i)).toBeNull();
+  expect(screen.queryByLabelText(/konum \(metin\)/i)).toBeNull();
+  expect(screen.queryByLabelText(/konum açıklaması/i)).toBeNull();
+}
+
+function openPickerAndExpectFields() {
+  fireEvent.click(screen.getByRole("button", { name: "+ Konum Ekle" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(screen.getByLabelText(/konum başlığı/i)).toBeTruthy();
+  expect(screen.getByLabelText("Konum Not")).toBeTruthy();
+}
 
 describe("vaka açma ve düzenleme formları tutarlı", () => {
   it("yeni vaka formu tüm ortak alanları gösterir", () => {
@@ -33,7 +48,8 @@ describe("vaka açma ve düzenleme formları tutarlı", () => {
     for (const label of SHARED_LABELS) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
-    expect(screen.getByRole("button", { name: /konumu ekle/i })).toBeTruthy();
+    expectLocationsSection();
+    openPickerAndExpectFields();
   });
 
   it("düzenleme formu aynı alanları + değiştirilemez sistem bilgilerini gösterir", async () => {
@@ -58,6 +74,8 @@ describe("vaka açma ve düzenleme formları tutarlı", () => {
       expect(await screen.findByLabelText(label)).toBeTruthy();
     }
     expect(await screen.findByText(/TR-0042/)).toBeTruthy();
+    expectLocationsSection();
+    openPickerAndExpectFields();
     expect(screen.getByText(/değiştirilemez/i)).toBeTruthy();
     // Sistem alanları form girdisi değildir: vaka no düzenlenemez.
     expect(screen.queryByLabelText(/vaka no/i)).toBeNull();
