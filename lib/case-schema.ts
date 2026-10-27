@@ -86,7 +86,7 @@ const LOCATION_PRIORITIES: readonly string[] = ["kritik", "onemli", "rutin"];
 export function normalizeLocationInput(
   raw: unknown,
   prefix = "location",
-): CaseLocationInput {
+): Required<CaseLocationInput> {
   if (typeof raw !== "object" || raw === null) {
     throw new Error(`${prefix} must be an object`);
   }
@@ -194,12 +194,10 @@ export function toLocationResponse(
       ? (row.priority as LocationPriority)
       : null;
   if (kind === "olay-yeri") priority = null;
+  // Eski veri taşınmaz: note yalnızca row.note'tan gelir; locationText
+  // onun aliasıdır, boş note eski locationText ile doldurulmaz.
   const note =
-    typeof row.note === "string" && row.note.trim()
-      ? row.note.trim()
-      : typeof row.locationText === "string" && row.locationText.trim()
-        ? row.locationText.trim()
-        : null;
+    typeof row.note === "string" && row.note.trim() ? row.note.trim() : null;
   return {
     id: String(row.id),
     caseId: String(row.caseId),

@@ -68,13 +68,13 @@ export async function POST(req: Request, { params }: Params) {
     .run(
       locId,
       id,
-      normalized.title ?? "Konum",
-      normalized.note ?? null,
-      normalized.note ?? null,
-      normalized.kind ?? "iliskili",
-      normalized.priority ?? null,
-      normalized.latitude ?? null,
-      normalized.longitude ?? null,
+      normalized.title,
+      normalized.note,
+      normalized.note,
+      normalized.kind,
+      normalized.priority,
+      normalized.latitude,
+      normalized.longitude,
       new Date().toISOString(),
     );
   return NextResponse.json(findLocation(locId), { status: 201 });

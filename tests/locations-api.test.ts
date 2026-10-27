@@ -235,6 +235,9 @@ describe("konum uçları", () => {
     expect(list).toHaveLength(1);
     expect(list[0].title).toBe("Konum");
     expect(list[0].kind).toBe("iliskili");
+    // Eski veri taşınmaz: locationText note'a yükseltilmez, ikisi de null kalır.
+    expect(list[0].note).toBeNull();
+    expect(list[0].locationText).toBeNull();
   });
 
   it("PATCH konum günceller", async () => {

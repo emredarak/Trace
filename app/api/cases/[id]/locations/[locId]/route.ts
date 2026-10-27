@@ -39,18 +39,21 @@ export async function PATCH(req: Request, { params }: Params) {
       "UPDATE case_locations SET title = ?, note = ?, locationText = ?, kind = ?, priority = ?, latitude = ?, longitude = ? WHERE id = ? AND caseId = ?",
     )
     .run(
-      normalized.title ?? "Konum",
-      normalized.note ?? null,
-      normalized.note ?? null,
-      normalized.kind ?? "iliskili",
-      normalized.priority ?? null,
-      normalized.latitude ?? null,
-      normalized.longitude ?? null,
+      normalized.title,
+      normalized.note,
+      normalized.note,
+      normalized.kind,
+      normalized.priority,
+      normalized.latitude,
+      normalized.longitude,
       locId,
       id,
     );
   const updated = findRow(id, locId);
-  return NextResponse.json(updated ? toLocationResponse(updated) : undefined);
+  if (!updated) {
+    return NextResponse.json({ error: "location not found" }, { status: 404 });
+  }
+  return NextResponse.json(toLocationResponse(updated));
 }
 
 export async function DELETE(_req: Request, { params }: Params) {
