@@ -1,3 +1,7 @@
+import type { LocationKind, LocationPriority } from "./locations";
+
+export type { LocationKind, LocationPriority };
+
 export interface Evidence {
   id: string;
   caseId: string;
@@ -7,8 +11,11 @@ export interface Evidence {
 }
 
 export interface CaseLocationInput {
+  title?: string;
   note?: string | null;
   locationText?: string | null;
+  kind?: LocationKind;
+  priority?: LocationPriority | null;
   latitude?: number | null;
   longitude?: number | null;
 }
@@ -73,28 +80,92 @@ function normalizeNumber(value: unknown, field: string): number | null {
   return num;
 }
 
+const LOCATION_KINDS: readonly string[] = ["olay-yeri", "iliskili"];
+const LOCATION_PRIORITIES: readonly string[] = ["kritik", "onemli", "rutin"];
+
+export function normalizeLocationInput(
+  raw: unknown,
+  prefix = "location",
+): CaseLocationInput {
+  if (typeof raw !== "object" || raw === null) {
+    throw new Error(`${prefix} must be an object`);
+  }
+  const loc = raw as Record<string, unknown>;
+  const titleRaw = normalizeText(loc.title, `${prefix}.title`);
+  const noteRaw = normalizeText(loc.note, `${prefix}.note`);
+  const locationTextRaw = normalizeText(
+    loc.locationText,
+    `${prefix}.locationText`,
+  );
+  const latitude = normalizeNumber(loc.latitude, `${prefix}.latitude`);
+  const longitude = normalizeNumber(loc.longitude, `${prefix}.longitude`);
+  if ((latitude === null) !== (longitude === null)) {
+    throw new Error(
+      `${prefix} latitude and longitude must be provided together`,
+    );
+  }
+  if (latitude !== null && (latitude < -90 || latitude > 90)) {
+    throw new Error(`${prefix}.latitude must be between -90 and 90`);
+  }
+  if (longitude !== null && (longitude < -180 || longitude > 180)) {
+    throw new Error(`${prefix}.longitude must be between -180 and 180`);
+  }
+
+  let kind: LocationKind = "iliskili";
+  if (loc.kind !== undefined && loc.kind !== null && loc.kind !== "") {
+    if (typeof loc.kind !== "string" || !LOCATION_KINDS.includes(loc.kind)) {
+      throw new Error(`${prefix}.kind must be 'olay-yeri' or 'iliskili'`);
+    }
+    kind = loc.kind as LocationKind;
+  }
+
+  let priority: LocationPriority | null = null;
+  if (loc.priority !== undefined && loc.priority !== null && loc.priority !== "") {
+    if (
+      typeof loc.priority !== "string" ||
+      !LOCATION_PRIORITIES.includes(loc.priority)
+    ) {
+      throw new Error(
+        `${prefix}.priority must be 'kritik', 'onemli' or 'rutin'`,
+      );
+    }
+    priority = loc.priority as LocationPriority;
+  }
+  if (kind === "olay-yeri") priority = null;
+
+  let title: string;
+  let note: string | null;
+  if (titleRaw) {
+    title = titleRaw;
+    note = noteRaw ?? locationTextRaw;
+  } else if (noteRaw) {
+    title = noteRaw;
+    note = locationTextRaw ?? null;
+  } else if (locationTextRaw) {
+    title = locationTextRaw;
+    note = null;
+  } else if (latitude !== null && longitude !== null) {
+    title = "Konum";
+    note = null;
+  } else {
+    throw new Error(`${prefix} needs a title or coordinates`);
+  }
+
+  return {
+    title,
+    note,
+    locationText: note,
+    kind,
+    priority,
+    latitude,
+    longitude,
+  };
+}
+
 function normalizeLocations(value: unknown): CaseLocationInput[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) throw new Error("locations must be an array");
-  return value.map((item, i) => {
-    if (typeof item !== "object" || item === null) {
-      throw new Error(`locations[${i}] must be an object`);
-    }
-    const loc = item as Record<string, unknown>;
-    const out: CaseLocationInput = {
-      note: normalizeText(loc.note, `locations[${i}].note`),
-      locationText: normalizeText(
-        loc.locationText,
-        `locations[${i}].locationText`,
-      ),
-      latitude: normalizeNumber(loc.latitude, `locations[${i}].latitude`),
-      longitude: normalizeNumber(loc.longitude, `locations[${i}].longitude`),
-    };
-    if (!out.locationText && out.latitude === null && out.longitude === null) {
-      throw new Error(`locations[${i}] needs locationText or coordinates`);
-    }
-    return out;
-  });
+  return value.map((item, i) => normalizeLocationInput(item, `locations[${i}]`));
 }
 
 export function validateCaseInput(raw: unknown): CreateCaseInput {

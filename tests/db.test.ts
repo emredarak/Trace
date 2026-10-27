@@ -72,6 +72,45 @@ describe("case database", () => {
     expect(row.n).toBe(1);
   });
 
+  it("writes location title/kind/priority and mirrors note into locationText", () => {
+    const rec = insertCase({
+      summary: "konumlu vaka",
+      locations: [
+        {
+          title: "Olay evi",
+          note: "kapı zorlanmış",
+          kind: "olay-yeri",
+          priority: "kritik",
+          latitude: 41.01,
+          longitude: 28.97,
+        },
+        { locationText: "köprü altı" },
+      ],
+    });
+    initDb();
+    const rows = getDb()
+      .prepare(
+        "SELECT title, note, locationText, kind, priority FROM case_locations WHERE caseId = ? ORDER BY rowid ASC",
+      )
+      .all(rec.id) as Record<string, unknown>[];
+    expect(rows).toEqual([
+      {
+        title: "Olay evi",
+        note: "kapı zorlanmış",
+        locationText: "kapı zorlanmış",
+        kind: "olay-yeri",
+        priority: null,
+      },
+      {
+        title: "köprü altı",
+        note: null,
+        locationText: null,
+        kind: "iliskili",
+        priority: null,
+      },
+    ]);
+  });
+
   it("links evidence rows to their case", () => {
     const db = getDb();
     const rec = insertCase({ summary: "delilli vaka" });

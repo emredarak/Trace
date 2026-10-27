@@ -170,12 +170,13 @@ describe("vaka açarken konum ve tüm alanlar", () => {
     ).json()) as {
       crimeType: string;
       victimAge: number;
-      locations: Array<{ note: string; latitude: number }>;
+      locations: Array<{ title: string; note: string; latitude: number }>;
     };
     expect(body.crimeType).toBe("gasp");
     expect(body.victimAge).toBe(40);
     expect(body.locations).toHaveLength(1);
-    expect(body.locations[0].note).toBe("maktulün bulunduğu nokta");
+    expect(body.locations[0].title).toBe("maktulün bulunduğu nokta");
+    expect(body.locations[0].note).toBe("dere yatağı");
   });
 
   it("bilinmeyen alan sessizce kaydedilmez (beyaz liste)", async () => {

@@ -92,6 +92,24 @@ export function initDb(): void {
         VALUES (new.rowid, new.summary, new.crimeType, new.locationType, new.weapon, new.mo);
     END;
   `);
+  const locationColumns = new Set(
+    (
+      database.prepare("PRAGMA table_info(case_locations)").all() as {
+        name: string;
+      }[]
+    ).map((c) => c.name),
+  );
+  if (!locationColumns.has("title")) {
+    database.exec("ALTER TABLE case_locations ADD COLUMN title TEXT");
+  }
+  if (!locationColumns.has("kind")) {
+    database.exec(
+      "ALTER TABLE case_locations ADD COLUMN kind TEXT NOT NULL DEFAULT 'iliskili'",
+    );
+  }
+  if (!locationColumns.has("priority")) {
+    database.exec("ALTER TABLE case_locations ADD COLUMN priority TEXT");
+  }
 }
 
 function nextCaseNo(database: Database.Database): string {
@@ -163,14 +181,17 @@ export function insertCase(input: CreateCaseInput): CaseRecord {
     });
   if (locations && locations.length > 0) {
     const insertLocation = database.prepare(
-      "INSERT INTO case_locations (id, caseId, note, locationText, latitude, longitude, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO case_locations (id, caseId, title, note, locationText, kind, priority, latitude, longitude, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     );
     for (const loc of locations) {
       insertLocation.run(
         randomUUID(),
         record.id,
+        loc.title ?? "Konum",
         loc.note ?? null,
-        loc.locationText ?? null,
+        loc.note ?? null,
+        loc.kind ?? "iliskili",
+        loc.priority ?? null,
         loc.latitude ?? null,
         loc.longitude ?? null,
         now,
