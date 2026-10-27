@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import { getDb, initDb } from "../../../../lib/db";
-import type { CaseRecord, Evidence } from "../../../../lib/case-schema";
+import {
+  toLocationResponse,
+  type CaseRecord,
+  type Evidence,
+} from "../../../../lib/case-schema";
+import type {
+  LocationKind,
+  LocationPriority,
+} from "../../../../lib/locations";
 
 type Params = { params: Promise<{ id: string }> };
 
 export interface CaseLocation {
   id: string;
   caseId: string;
-  note?: string;
-  locationText?: string;
+  title: string;
+  note?: string | null;
+  locationText?: string | null;
+  kind: LocationKind;
+  priority: LocationPriority | null;
   latitude?: number;
   longitude?: number;
   createdAt: string;
@@ -50,11 +61,13 @@ export async function GET(_req: Request, { params }: Params) {
   const entries = db
     .prepare("SELECT * FROM evidences WHERE caseId = ? ORDER BY createdAt ASC")
     .all(id) as Evidence[];
-  const locations = db
-    .prepare(
-      "SELECT * FROM case_locations WHERE caseId = ? ORDER BY createdAt ASC",
-    )
-    .all(id) as CaseLocation[];
+  const locations = (
+    db
+      .prepare(
+        "SELECT * FROM case_locations WHERE caseId = ? ORDER BY createdAt ASC",
+      )
+      .all(id) as Record<string, unknown>[]
+  ).map(toLocationResponse) as CaseLocation[];
   return NextResponse.json({
     ...(row as unknown as CaseRecord),
     entries,

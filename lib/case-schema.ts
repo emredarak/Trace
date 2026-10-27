@@ -162,6 +162,58 @@ export function normalizeLocationInput(
   };
 }
 
+export interface LocationResponse {
+  id: string;
+  caseId: string;
+  title: string;
+  note: string | null;
+  locationText: string | null;
+  kind: LocationKind;
+  priority: LocationPriority | null;
+  latitude?: number;
+  longitude?: number;
+  createdAt: string;
+}
+
+// Ham DB satırını API yanıtına çevirir; eski satırlarda boş başlık/tür
+// görüntü amaçlı varsayılanlara düşer (veri taşınmaz).
+export function toLocationResponse(
+  row: Record<string, unknown>,
+): LocationResponse {
+  const title =
+    typeof row.title === "string" && row.title.trim()
+      ? row.title.trim()
+      : "Konum";
+  const kind: LocationKind =
+    typeof row.kind === "string" && LOCATION_KINDS.includes(row.kind)
+      ? (row.kind as LocationKind)
+      : "iliskili";
+  let priority: LocationPriority | null =
+    typeof row.priority === "string" &&
+    LOCATION_PRIORITIES.includes(row.priority)
+      ? (row.priority as LocationPriority)
+      : null;
+  if (kind === "olay-yeri") priority = null;
+  const note =
+    typeof row.note === "string" && row.note.trim()
+      ? row.note.trim()
+      : typeof row.locationText === "string" && row.locationText.trim()
+        ? row.locationText.trim()
+        : null;
+  return {
+    id: String(row.id),
+    caseId: String(row.caseId),
+    title,
+    note,
+    locationText: note,
+    kind,
+    priority,
+    latitude: typeof row.latitude === "number" ? row.latitude : undefined,
+    longitude: typeof row.longitude === "number" ? row.longitude : undefined,
+    createdAt: String(row.createdAt),
+  };
+}
+
 function normalizeLocations(value: unknown): CaseLocationInput[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) throw new Error("locations must be an array");

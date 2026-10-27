@@ -335,7 +335,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                   .map((l) => ({
                     latitude: l.latitude as number,
                     longitude: l.longitude as number,
-                    note: l.note,
+                    note: l.note ?? undefined,
                   }))}
               />
             </>
