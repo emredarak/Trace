@@ -16,24 +16,43 @@ Kurgu veriyle çekilir. Tüm vaka ve kişiler hayal ürünüdür (`seed/cases.js
 
 ## 0:30–1:10 — Telefonla vaka girişi (`/new`)
 
-1. "Yeni Vaka"yı açın; üstte "Konum bekleniyor." yazar, GPS gelince "Konum alındı."
-   olur (GPS yoksa "konum metni yeterli" — metinle devam edilir).
-2. Özet yazın (zorunlu): "Gece göl kıyısında olta takımları çalındı; şüpheli
-   arkadan yaklaşıp bıçak gösterdi."
-3. Suç tipi: `hırsızlık` (öneri listesinden), konum metni: "kuzey gölü kıyısı,
-   4 No'lu iskele". "Vakayı Aç"a basın → "Vaka açıldı: TR-00XX" ekranı ve
-   "Delil ekle" bağlantısı.
+1. "Yeni Vaka"yı açın. Özet yazın (zorunlu): "Gece göl kıyısında olta
+   takımları çalındı; şüpheli arkadan yaklaşıp bıçak gösterdi."
+2. Suç tipi: `hırsızlık` (öneri listesinden).
+3. Konumlar tek bölümdedir: başta harita, konum listesi ve sarı uyarı bandı
+   ("Bu vakada Olay Yeri olarak işaretlenmiş konum yok.") görünür.
+   "+ Konum Ekle"ye basın; panel ("Konum Seç") açılır:
+   - Tür: `Olay Yeri`, Başlık (zorunlu): "4 No'lu iskele"; "Adres / yer adı
+     ile bul"a gölün adını yazıp "Ara"ya basın (Nominatim sonuçları gelir,
+     birini seçin) ya da haritaya tıklayarak pini bırakın. "Bu Konumu
+     Kullan"a basın → uyarı bandı kalkar, haritada kırmızı Olay Yeri pini
+     belirir.
+   - Tekrar "+ Konum Ekle": Tür `İlişkili Konum`, Öncelik `Kritik`,
+     Başlık: "şüphelinin kaçış yönü"; bu kez "Konumuma Git" ile cihaz
+     konumuna gidin (izin sorulursa "bir kez izin ver") ya da haritadan
+     tıklayın, "Bu Konumu Kullan"a basın → turuncu Kritik pin belirir ve
+     iki pin arasında mesafe etiketi (örn. "320 m") çizilir.
+4. "Vakayı Aç"a basın → "Vaka açıldı: TR-00XX" ekranı ve "Delil ekle"
+   bağlantısı. (Koordinatsız konum da kaydedilebilir; pin çizilmez.)
 
 ## 1:10–2:00 — Benzer vaka listesi (`/cases/[id]`)
 
-1. Vaka detayını açın: özet, suç tipi, konum, yöntem, silah kartları.
-2. "Benzer vakalar" paneli `GET /api/cases/[id]/similar` sonucudur
+1. Vaka detayını açın: özet, suç tipi, yöntem, silah kartları ve tek
+   "Konumlar" bölümü — birleşik haritada kırmızı Olay Yeri ile turuncu
+   Kritik pin, aralarında mesafe etiketi; rozet ve yazıların her zeminde
+   okunur olduğunu gösterin.
+2. Konum düzenlemeyi deneyin: bir konumda "Düzenle"ye basıp panelden
+   başlığı değiştirin; bölüm altında "Kaydet / Vazgeç" belirir. Önce
+   "Vazgeç" ile taslağın geri alındığını, sonra aynı değişikliği
+   "Kaydet" ile kalıcı olduğunu gösterin (kapalı vakada bölüm salt
+   okunurdur).
+3. "Benzer vakalar" paneli `GET /api/cases/[id]/similar` sonucudur
    (ön filtre → yeniden sıralama): 5'li seri kümesinden en az 2 vaka,
    her birinde skor, kısa gerekçe, alıntı ve eşleşen alanlar
    (`crimeType, locationType, weapon, mo`) görünür.
-3. "alakalı" düğmesine basıp bir eşleşmeyi onaylayın → "onaylandı" olur
+4. "alakalı" düğmesine basıp bir eşleşmeyi onaylayın → "onaylandı" olur
    (`POST /api/cases/[id]/links`).
-4. Not: anahtarsız / çevrimdışı ortamda skor "0 (puanlanmadı)" görünür —
+5. Not: anahtarsız / çevrimdışı ortamda skor "0 (puanlanmadı)" görünür —
    liste yine de ön filtre sırasıyla gelir, kayıp olmaz.
 
 ## 2:00–2:40 — Ses ve fotoğraf modülleri (`/cases/[id]/add`)
@@ -51,7 +70,9 @@ Kurgu veriyle çekilir. Tüm vaka ve kişiler hayal ürünüdür (`seed/cases.js
 
 1. Bağlantıyı kesin (uçak modu) ve "Delil Ekle"den bir not kaydedin:
    servis çalışanı isteği kuyruğa alır → "Not kuyruğa alındı, bağlantı gelince
-   gönderilecek." (ses/fotoğrafta da aynı kuyruk mesajları).
+   gönderilecek." (ses/fotoğrafta da aynı kuyruk mesajları; vaka
+   detayındaki konum "Kaydet"i de çevrimdışıyken kuyruğa girer ve
+   "Kuyruğa alındı" gösterir).
 2. Bağlantı gelince kuyruk kendiliğinden gönderilir; yeni delil
    `needsRerank` bayrağını kaldırır ve detayda "yeni benzerler" rozeti çıkar.
 3. Kapanış cümlesi: "Kayıt, benzerlik, delil ve çevrimdışı kuyruk — tamamı
