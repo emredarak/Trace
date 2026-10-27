@@ -1,11 +1,11 @@
 import type Database from "better-sqlite3";
 
 export interface CaseFeatures {
-  summary?: string;
-  crimeType?: string;
-  locationType?: string;
-  weapon?: string;
-  mo?: string;
+  summary?: string | null;
+  crimeType?: string | null;
+  locationType?: string | null;
+  weapon?: string | null;
+  mo?: string | null;
 }
 
 export interface Candidate {

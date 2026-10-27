@@ -134,7 +134,7 @@ function fieldRow(label: string, value: unknown) {
   const text = String(value).trim();
   if (text.length === 0) return null;
   return (
-    <p>
+    <p style={{ whiteSpace: "pre-line" }}>
       <strong>{label}: </strong>
       {text}
     </p>
@@ -278,12 +278,17 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           <h2>Vaka detayı</h2>
           <p>{caseItem.summary}</p>
           {fieldRow("Suç tipi", caseItem.crimeType)}
+          {fieldRow("Olay tarihi", caseItem.occurredAt)}
           {fieldRow("Konum tipi", caseItem.locationType)}
           {fieldRow("Konum", caseItem.locationText)}
           {fieldRow("Yöntem", caseItem.mo)}
           {fieldRow("Silah", caseItem.weapon)}
-          {fieldRow("Durum", caseItem.status)}
+          {fieldRow("Durum", caseItem.status === "closed" ? "Kapalı" : "Açık")}
           {fieldRow("Memur", caseItem.officer)}
+          {fieldRow("Maktul yaşı", caseItem.victimAge)}
+          {fieldRow("Maktul cinsiyeti", caseItem.victimGender)}
+          {fieldRow("Şüpheliler", caseItem.suspects)}
+          {fieldRow("Tanıklar", caseItem.witnesses)}
           <h3>Deliller ({entries.length})</h3>          {caseItem.status !== "closed" ? (
             <p>
               <a href={`/cases/${caseItem.id}/edit`}>Vakayı Düzenle</a>

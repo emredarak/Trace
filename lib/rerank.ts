@@ -25,8 +25,8 @@ function tokenize(value: string): string[] {
 }
 
 function fieldsOverlap(
-  a: string | undefined,
-  b: string | undefined,
+  a: string | null | undefined,
+  b: string | null | undefined,
 ): boolean {
   if (!a || !b) return false;
   const lowerA = a.toLowerCase();

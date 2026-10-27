@@ -71,6 +71,15 @@ describe("PATCH /api/cases/[id] alan düzenleme", () => {
     const res = await patchCase(jsonReq("PATCH", {}), paramsOf(id));
     expect(res.status).toBe(400);
   });
+
+  it("boş gönderilen alan temizlenir (silme desteklenir)", async () => {
+    const id = await makeCase();
+    await patchCase(jsonReq("PATCH", { weapon: "levye" }), paramsOf(id));
+    const res = await patchCase(jsonReq("PATCH", { weapon: "" }), paramsOf(id));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { weapon: string | null };
+    expect(body.weapon).toBeNull();
+  });
 });
 
 describe("konum uçları", () => {
@@ -126,5 +135,59 @@ describe("konum uçları", () => {
       paramsOf("yok"),
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("vaka açarken konum ve tüm alanlar", () => {
+  it("POST /api/cases konumları da kaydeder; GET tek vakada döner", async () => {
+    const created = (await (
+      await createCase(
+        jsonReq("POST", {
+          summary: "tam alanlı vaka",
+          crimeType: "gasp",
+          locationType: "su kenarı",
+          mo: "gece arkadan yaklaşma",
+          weapon: "bıçak",
+          victimAge: 40,
+          victimGender: "erkek",
+          suspects: "bir kişi",
+          witnesses: "bir tanık",
+          locations: [
+            {
+              note: "maktulün bulunduğu nokta",
+              locationText: "dere yatağı",
+              latitude: 41.01,
+              longitude: 28.97,
+            },
+          ],
+        }),
+      )
+    ).json()) as { id: string };
+    expect(created.id).toBeTruthy();
+    const { GET: getCase } = await import("../app/api/cases/[id]/route");
+    const body = (await (
+      await getCase(new Request("http://localhost/x"), paramsOf(created.id))
+    ).json()) as {
+      crimeType: string;
+      victimAge: number;
+      locations: Array<{ note: string; latitude: number }>;
+    };
+    expect(body.crimeType).toBe("gasp");
+    expect(body.victimAge).toBe(40);
+    expect(body.locations).toHaveLength(1);
+    expect(body.locations[0].note).toBe("maktulün bulunduğu nokta");
+  });
+
+  it("bilinmeyen alan sessizce kaydedilmez (beyaz liste)", async () => {
+    const created = (await (
+      await createCase(
+        jsonReq("POST", { summary: "v", gizliAlan: "sızıntı" }),
+      )
+    ).json()) as { id: string };
+    const { GET: getCase } = await import("../app/api/cases/[id]/route");
+    const body = (await (
+      await getCase(new Request("http://localhost/x"), paramsOf(created.id))
+    ).json()) as Record<string, unknown>;
+    expect(body.gizliAlan).toBeUndefined();
   });
 });

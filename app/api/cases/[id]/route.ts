@@ -111,6 +111,15 @@ export async function PATCH(req: Request, { params }: Params) {
           { status: 400 },
         );
       }
+      if (
+        field === "victimAge" &&
+        (!Number.isInteger(num) || num < 0 || num > 120)
+      ) {
+        return NextResponse.json(
+          { error: "victimAge must be an integer between 0 and 120" },
+          { status: 400 },
+        );
+      }
       updates[field] = num;
       continue;
     }

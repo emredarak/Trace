@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   CaseInput,
   CaseRecord,
+  CreateCaseInput,
   validateCaseInput,
 } from "./case-schema";
 
@@ -112,12 +113,13 @@ function toRecord(row: Record<string, unknown>): CaseRecord {
   } as CaseRecord;
 }
 
-export function insertCase(input: CaseInput): CaseRecord {
+export function insertCase(input: CreateCaseInput): CaseRecord {
   const valid = validateCaseInput(input);
+  const { locations, ...caseFields } = valid;
   const database = getDb();
   const now = new Date().toISOString();
   const record: CaseRecord = {
-    ...valid,
+    ...caseFields,
     id: randomUUID(),
     caseNo: nextCaseNo(database),
     status: valid.status ?? "open",
@@ -159,5 +161,21 @@ export function insertCase(input: CaseInput): CaseRecord {
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });
+  if (locations && locations.length > 0) {
+    const insertLocation = database.prepare(
+      "INSERT INTO case_locations (id, caseId, note, locationText, latitude, longitude, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    );
+    for (const loc of locations) {
+      insertLocation.run(
+        randomUUID(),
+        record.id,
+        loc.note ?? null,
+        loc.locationText ?? null,
+        loc.latitude ?? null,
+        loc.longitude ?? null,
+        now,
+      );
+    }
+  }
   return toRecord(record as unknown as Record<string, unknown>);
 }

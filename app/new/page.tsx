@@ -1,19 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-const CRIME_SUGGESTIONS = [
-  "hırsızlık",
-  "gasp",
-  "cinayet",
-  "yaralama",
-  "dolandırıcılık",
-  "kundaklama",
-  "trafik kazası",
-  "kayıp şahıs",
-];
-
-const LOCATION_TYPES = ["ev", "iş yeri", "sokak", "araç", "kırsal", "diğer"];
+import { useState } from "react";
+import CaseForm, {
+  emptyCaseForm,
+  type CaseFormPayload,
+  type CaseLocationDraft,
+} from "../components/case-form";
 
 const wrap: React.CSSProperties = {
   maxWidth: "28rem",
@@ -23,32 +15,13 @@ const wrap: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
-const field: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  boxSizing: "border-box",
-  fontSize: "1rem",
-  padding: "0.75rem",
-  margin: "0.25rem 0 1rem",
-};
-
-const button: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  fontSize: "1.1rem",
-  padding: "0.9rem",
-  cursor: "pointer",
-};
+interface CreatedBody {
+  queued?: boolean;
+  id?: unknown;
+  caseNo?: unknown;
+}
 
 export default function NewCasePage() {
-  const [summary, setSummary] = useState("");
-  const [crimeType, setCrimeType] = useState("");
-  const [locationType, setLocationType] = useState("");
-  const [locationText, setLocationText] = useState("");
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    null,
-  );
-  const [gpsStatus, setGpsStatus] = useState("Konum bekleniyor.");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<{ id: string; caseNo: string } | null>(
@@ -56,44 +29,10 @@ export default function NewCasePage() {
   );
   const [queued, setQueued] = useState(false);
 
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setGpsStatus("GPS yok; konum metni yeterli.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGpsStatus("Konum alındı.");
-      },
-      () => setGpsStatus("GPS alınamadı; konum metni yeterli."),
-      { timeout: 8000 },
-    );
-  }, []);
-
-  // Servis çalışanı çevrimdışı kaydı kuyruğa alırsa 202 {queued:true} döner.
-  // Gerçek fetch'te 202'nin ok'u true'dur; bu yüzden kuyruk bayrağı res.ok
-  // dallanmasından ÖNCE, ayrıştırılmış gövdeden okunur.
-  interface CreatedBody {
-    queued?: boolean;
-    id?: unknown;
-    caseNo?: unknown;
-  }
-
-  async function readBody(res: Response): Promise<CreatedBody | null> {
-    try {
-      return (await res.json()) as CreatedBody;
-    } catch {
-      return null;
-    }
-  }
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (summary.trim().length === 0) {
-      setError("Özet zorunludur.");
-      return;
-    }
+  async function onSubmit(
+    payload: CaseFormPayload,
+    locations: CaseLocationDraft[],
+  ) {
     setError("");
     setSaving(true);
     try {
@@ -101,16 +40,21 @@ export default function NewCasePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          summary: summary.trim(),
-          ...(crimeType.trim() ? { crimeType: crimeType.trim() } : {}),
-          ...(locationType ? { locationType } : {}),
-          ...(locationText.trim() ? { locationText: locationText.trim() } : {}),
-          ...(coords
-            ? { latitude: coords.lat, longitude: coords.lng }
-            : {}),
+          ...payload,
+          locations: locations.map((l) => ({
+            note: l.note || null,
+            locationText: l.locationText || null,
+            latitude: l.latitude ?? null,
+            longitude: l.longitude ?? null,
+          })),
         }),
       });
-      const body = await readBody(res);
+      let body: CreatedBody | null = null;
+      try {
+        body = (await res.json()) as CreatedBody;
+      } catch {
+        body = null;
+      }
       if (body?.queued === true) {
         setQueued(true);
         return;
@@ -148,7 +92,12 @@ export default function NewCasePage() {
     return (
       <main style={wrap}>
         <h1>Vaka açıldı: {created.caseNo}</h1>
-        <a href={`/cases/${created.id}/add`}>Delil ekle</a>
+        <p>
+          <a href={`/cases/${created.id}`}>Vakayı Gör</a>
+        </p>
+        <p>
+          <a href={`/cases/${created.id}/add`}>Delil ekle</a>
+        </p>
       </main>
     );
   }
@@ -156,63 +105,19 @@ export default function NewCasePage() {
   return (
     <main style={wrap}>
       <h1>Yeni Vaka</h1>
-      <form onSubmit={onSubmit}>
-        <label htmlFor="ozet">Özet *</label>
-        <textarea
-          id="ozet"
-          aria-label="Özet"
-          rows={3}
-          value={summary}
-          onChange={(e) => setSummary(e.target.value)}
-          style={field}
-        />
-
-        <label htmlFor="suc-tipi">Suç tipi</label>
-        <input
-          id="suc-tipi"
-          type="text"
-          list="suc-tipleri"
-          value={crimeType}
-          onChange={(e) => setCrimeType(e.target.value)}
-          style={field}
-        />
-        <datalist id="suc-tipleri">
-          {CRIME_SUGGESTIONS.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-
-        <label htmlFor="konum-tipi">Konum tipi</label>
-        <select
-          id="konum-tipi"
-          value={locationType}
-          onChange={(e) => setLocationType(e.target.value)}
-          style={field}
-        >
-          <option value="">Seçin</option>
-          {LOCATION_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
-
-        <label htmlFor="konum-metin">Konum (metin)</label>
-        <input
-          id="konum-metin"
-          type="text"
-          value={locationText}
-          onChange={(e) => setLocationText(e.target.value)}
-          placeholder="GPS yoksa buraya yazın"
-          style={field}
-        />
-        <p aria-live="polite">{gpsStatus}</p>
-
-        {error ? <p role="alert">{error}</p> : null}
-        <button type="submit" disabled={saving} style={button}>
-          {saving ? "Açılıyor…" : "Vakayı Aç"}
-        </button>
-      </form>
+      <p>
+        Vaka numarası ve durum (Açık) sistem tarafından atanır. Yıldızlı alan
+        dışında hepsi isteğe bağlıdır; sonra da düzenleyebilirsiniz.
+      </p>
+      <CaseForm
+        idPrefix="yeni"
+        initial={emptyCaseForm()}
+        autoGps
+        submitLabel="Vakayı Aç"
+        saving={saving}
+        error={error}
+        onSubmit={onSubmit}
+      />
     </main>
   );
 }

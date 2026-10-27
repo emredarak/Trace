@@ -114,3 +114,19 @@ li {
 .trace-nav nav a {
   text-decoration: none;
 }
+
+fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin: 0 0 1.25rem;
+}
+
+legend {
+  font-weight: 700;
+  padding: 0 0.4rem;
+}
+
+fieldset p {
+  margin: 0.35rem 0;
+}
