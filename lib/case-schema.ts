@@ -1,6 +1,8 @@
 import type { LocationKind, LocationPriority } from "./locations";
+import { normalizePersonsInput, type NormalizedPerson } from "./persons";
 
 export type { LocationKind, LocationPriority };
+export type { NormalizedPerson };
 
 export interface Evidence {
   id: string;
@@ -40,6 +42,7 @@ export interface CaseInput {
 
 export interface CreateCaseInput extends CaseInput {
   locations?: CaseLocationInput[];
+  persons?: NormalizedPerson[];
 }
 
 export interface CaseRecord extends CaseInput {
@@ -245,5 +248,6 @@ export function validateCaseInput(raw: unknown): CreateCaseInput {
   }
   const locations = normalizeLocations(input.locations);
   if (locations !== undefined) out.locations = locations;
+  if (input.persons !== undefined) out.persons = normalizePersonsInput(input.persons);
   return out;
 }

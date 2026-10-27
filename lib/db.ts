@@ -64,6 +64,20 @@ export function initDb(): void {
       createdAt TEXT NOT NULL,
       PRIMARY KEY (sourceId, targetId)
     );
+    CREATE TABLE IF NOT EXISTS case_persons (
+      id TEXT PRIMARY KEY,
+      caseId TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      name TEXT,
+      age INTEGER,
+      gender TEXT,
+      note TEXT,
+      type TEXT NOT NULL,
+      relatedVictimId TEXT REFERENCES case_persons(id) ON DELETE SET NULL,
+      relationship TEXT,
+      unidentified INTEGER NOT NULL DEFAULT 0,
+      contactStatus TEXT,
+      createdAt TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS case_locations (
       id TEXT PRIMARY KEY,
       caseId TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
@@ -133,7 +147,7 @@ function toRecord(row: Record<string, unknown>): CaseRecord {
 
 export function insertCase(input: CreateCaseInput): CaseRecord {
   const valid = validateCaseInput(input);
-  const { locations, ...caseFields } = valid;
+  const { locations, persons, ...caseFields } = valid;
   const database = getDb();
   const now = new Date().toISOString();
   const record: CaseRecord = {
@@ -197,6 +211,38 @@ export function insertCase(input: CreateCaseInput): CaseRecord {
         now,
       );
     }
+  }
+  if (persons && persons.length > 0) {
+    const insertPerson = database.prepare(
+      "INSERT INTO case_persons (id, caseId, name, age, gender, note, type, relatedVictimId, relationship, unidentified, contactStatus, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    );
+    const personIds: string[] = [];
+    for (const person of persons) {
+      const personId = person.id ?? randomUUID();
+      personIds.push(personId);
+      insertPerson.run(
+        personId,
+        record.id,
+        person.name,
+        person.age,
+        person.gender,
+        person.note,
+        person.type,
+        null,
+        null,
+        person.unidentified ? 1 : 0,
+        person.contactStatus,
+        now,
+      );
+    }
+    const linkPerson = database.prepare(
+      "UPDATE case_persons SET relatedVictimId = ?, relationship = ? WHERE id = ?",
+    );
+    persons.forEach((person, i) => {
+      if (person.relatedVictimId !== null) {
+        linkPerson.run(person.relatedVictimId, person.relationship, personIds[i]);
+      }
+    });
   }
   return toRecord(record as unknown as Record<string, unknown>);
 }
