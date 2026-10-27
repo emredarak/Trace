@@ -134,6 +134,46 @@ export function normalizePersonInput(raw: unknown): NormalizedPerson {
   };
 }
 
+export interface CasePerson {
+  id: string;
+  caseId: string;
+  name: string | null;
+  age: number | null;
+  gender: string | null;
+  note: string | null;
+  type: PersonType;
+  relatedVictimId: string | null;
+  relationship: string | null;
+  unidentified: boolean;
+  contactStatus: ContactStatus | null;
+  createdAt: string;
+}
+
+export function toPersonResponse(row: Record<string, unknown>): CasePerson {
+  const text = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  return {
+    id: String(row.id),
+    caseId: String(row.caseId),
+    name: text(row.name),
+    age: typeof row.age === "number" ? row.age : null,
+    gender: text(row.gender),
+    note: text(row.note),
+    type: row.type as PersonType,
+    relatedVictimId:
+      typeof row.relatedVictimId === "string" && row.relatedVictimId
+        ? row.relatedVictimId
+        : null,
+    relationship: text(row.relationship),
+    unidentified: Boolean(row.unidentified),
+    contactStatus:
+      row.contactStatus === "ulasildi" || row.contactStatus === "ulasilamadi"
+        ? row.contactStatus
+        : null,
+    createdAt: String(row.createdAt),
+  };
+}
+
 export function normalizePersonsInput(raw: unknown): NormalizedPerson[] {
   if (!Array.isArray(raw)) throw new Error("persons must be an array");
   const persons = raw.map((item) => normalizePersonInput(item));

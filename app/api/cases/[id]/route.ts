@@ -9,6 +9,9 @@ import type {
   LocationKind,
   LocationPriority,
 } from "../../../../lib/locations";
+import { toPersonResponse, type CasePerson } from "../../../../lib/persons";
+
+export type { CasePerson };
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -68,10 +71,18 @@ export async function GET(_req: Request, { params }: Params) {
       )
       .all(id) as Record<string, unknown>[]
   ).map(toLocationResponse) as CaseLocation[];
+  const persons = (
+    db
+      .prepare(
+        "SELECT * FROM case_persons WHERE caseId = ? ORDER BY createdAt ASC",
+      )
+      .all(id) as Record<string, unknown>[]
+  ).map(toPersonResponse) as CasePerson[];
   return NextResponse.json({
     ...(row as unknown as CaseRecord),
     entries,
     locations,
+    persons,
   });
 }
 
