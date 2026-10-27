@@ -100,12 +100,13 @@ export function haversineMeters(a: GeoPoint, b: GeoPoint): number {
 }
 
 export function formatDistance(meters: number): string {
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  const km = meters / 1000;
-  if (km < 10) {
-    return `${(Math.round(km * 10) / 10).toFixed(1).replace(".", ",")} km`;
+  const roundedMeters = Math.round(meters);
+  if (roundedMeters < 1000) return `${roundedMeters} m`;
+  const kmRounded = Math.round((meters / 1000) * 10) / 10;
+  if (kmRounded < 10) {
+    return `${kmRounded.toFixed(1).replace(".", ",")} km`;
   }
-  return `${Math.round(km)} km`;
+  return `${Math.round(kmRounded)} km`;
 }
 
 export function distancePairs(

@@ -114,7 +114,7 @@ const fieldStyle: React.CSSProperties = {
 const hintStyle: React.CSSProperties = {
   fontSize: "1rem",
   lineHeight: 1.5,
-  color: "#111111",
+  color: "#e2e8f0",
   margin: "-0.6rem 0 1rem",
 };
 

@@ -200,6 +200,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     [],
   );
   const [locationStatus, setLocationStatus] = useState("");
+  const [savingLocations, setSavingLocations] = useState(false);
   const savingLocationsRef = useRef(false);
 
   useEffect(() => {
@@ -252,6 +253,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     // Yeniden giriş koruması: çift tık yinelenen POST yaratmaz.
     if (savingLocationsRef.current) return;
     savingLocationsRef.current = true;
+    setSavingLocations(true);
     setLocationStatus("");
     // Başarılı işlemler ara tabana işlenir; kısmi hatada taslak korunur.
     let working = [...baselineLocations];
@@ -281,7 +283,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           const locRes = await fetch(`/api/cases/${id}/locations`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(locationBody(loc)),
+            body: JSON.stringify({ ...locationBody(loc), id: loc.id }),
           });
           const createdId = await readQueued(locRes);
           if (!locRes.ok) {
@@ -349,6 +351,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       setLocationStatus("Bağlantı hatası, tekrar deneyin.");
     } finally {
       savingLocationsRef.current = false;
+      setSavingLocations(false);
     }
   }
 
@@ -365,6 +368,10 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       if (res.ok) {
         const body = (await res.json()) as { status?: string };
         if (body.status === "open" || body.status === "closed") {
+          if (body.status === "closed") {
+            setDraftLocations(baselineLocations.map((l) => ({ ...l })));
+            setLocationStatus("");
+          }
           setCaseItem({ ...caseItem, status: body.status });
         }
       }
@@ -470,7 +477,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
               setLocationStatus("");
             }}
             idPrefix="detay"
-            readOnly={caseItem.status === "closed"}
+            readOnly={caseItem.status === "closed" || savingLocations}
             dirty={caseItem.status !== "closed" && locationsDirty}
             status={locationStatus}
             onSave={saveLocations}

@@ -108,15 +108,13 @@ describe("LocationPicker", () => {
   });
 
   it("adres sonucunda tıklanan nokta taslak koordinatı olur, hata çıkmaz", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => [
-          { display_name: "Test Adres, Ankara", lat: "39.93", lon: "32.85" },
-        ],
-      }),
-    );
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        { display_name: "Test Adres, Ankara", lat: "39.93", lon: "32.85" },
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const onConfirm = vi.fn();
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={onConfirm} />,
@@ -131,6 +129,10 @@ describe("LocationPicker", () => {
       target: { value: "Test Adres" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Ara" }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("accept-language=tr");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("limit=5");
 
     fireEvent.click(
       await screen.findByRole("button", { name: /Test Adres, Ankara/ }),

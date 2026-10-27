@@ -53,7 +53,7 @@ function pointInfoHtml(p: MapPoint): string {
     `<strong>${escapeHtml(title)}</strong>`,
     `<span style="background:${color.badgeBg};color:${color.badgeFg};padding:0.1rem 0.45rem;border-radius:0.4rem;">${escapeHtml(locationLabel(p))}</span>`,
   ];
-  if (p.note?.trim()) lines.push(escapeHtml(p.note));
+  if (p.note?.trim()) lines.push(`Not: ${escapeHtml(p.note)}`);
   lines.push(`(${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)})`);
   return lines.join("<br/>");
 }
@@ -90,8 +90,10 @@ const MAP_CSS = `
 }
 `;
 
+const EMPTY_POINTS: MapPoint[] = [];
+
 export default function MapPicker({
-  points = [],
+  points = EMPTY_POINTS,
   pick = null,
   onPick,
   readOnly = false,
@@ -108,6 +110,8 @@ export default function MapPicker({
   const layerGroupRef = useRef<ReturnType<
     (typeof import("leaflet"))["layerGroup"]
   > | null>(null);
+  const prevPickCoordsRef = useRef<string | null>(null);
+  const prevPointsCoordsRef = useRef<string | null>(null);
 
   // Haritayi yalnizca bileşen kaldirilirken yok et.
   useEffect(() => {
@@ -153,24 +157,6 @@ export default function MapPicker({
         if (!group) return;
         group.clearLayers();
 
-        for (const p of points) {
-          const color = locationColor(p);
-          const marker = L.circleMarker([p.latitude, p.longitude], {
-            radius: 8,
-            color: color.pin,
-            fillColor: color.pin,
-            fillOpacity: 0.9,
-            weight: 2,
-          }).addTo(group);
-          marker.bindTooltip(pointInfoHtml(p), {
-            className: "trace-map-tooltip",
-            direction: "top",
-          });
-          marker.bindPopup(pointInfoHtml(p), {
-            className: "trace-map-popup",
-          });
-        }
-
         for (const pair of distancePairs(points)) {
           const a = points[pair.aIndex];
           const b = points[pair.bIndex];
@@ -194,6 +180,24 @@ export default function MapPicker({
             ])
             .setContent(pair.label)
             .addTo(group);
+        }
+
+        for (const p of points) {
+          const color = locationColor(p);
+          const marker = L.circleMarker([p.latitude, p.longitude], {
+            radius: 8,
+            color: color.pin,
+            fillColor: color.pin,
+            fillOpacity: 0.9,
+            weight: 2,
+          }).addTo(group);
+          marker.bindTooltip(pointInfoHtml(p), {
+            className: "trace-map-tooltip",
+            direction: "top",
+          });
+          marker.bindPopup(pointInfoHtml(p), {
+            className: "trace-map-popup",
+          });
         }
 
         if (pick) {
@@ -221,14 +225,24 @@ export default function MapPicker({
           });
         }
 
+        const pickKey = pick ? `${pick.latitude},${pick.longitude}` : null;
+        const pointsKey = points
+          .map((p) => `${p.latitude},${p.longitude}`)
+          .join("|");
+        const pickChanged = pickKey !== prevPickCoordsRef.current;
+        const pointsChanged = pointsKey !== prevPointsCoordsRef.current;
+        prevPickCoordsRef.current = pickKey;
+        prevPointsCoordsRef.current = pointsKey;
         if (pick) {
-          leafletMap.setView(
-            [pick.latitude, pick.longitude],
-            Math.max(leafletMap.getZoom(), 15),
-          );
-        } else if (points.length === 1) {
+          if (pickChanged) {
+            leafletMap.setView(
+              [pick.latitude, pick.longitude],
+              Math.max(leafletMap.getZoom(), 15),
+            );
+          }
+        } else if (pointsChanged && points.length === 1) {
           leafletMap.setView([points[0].latitude, points[0].longitude], 15);
-        } else if (points.length > 1) {
+        } else if (pointsChanged && points.length > 1) {
           leafletMap.fitBounds(
             L.latLngBounds(
               points.map(
@@ -237,7 +251,7 @@ export default function MapPicker({
             ),
             { padding: [24, 24] },
           );
-        } else {
+        } else if (pointsChanged) {
           leafletMap.setView(
             [DEFAULT_CENTER.latitude, DEFAULT_CENTER.longitude],
             13,

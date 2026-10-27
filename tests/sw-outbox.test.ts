@@ -316,6 +316,21 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
+  it("koleksiyon yolundaki PATCH/DELETE (locId yok) yakalanmaz", async () => {
+    const { listeners, idb } = loadSw(offline());
+    for (const method of ["PATCH", "DELETE"] as const) {
+      const res = await dispatchFetch(
+        listeners,
+        fakeRequest(method, "/api/cases/abc/locations", {
+          text: method === "PATCH" ? JSON.stringify({ title: "x" }) : "",
+          contentType: method === "PATCH" ? undefined : null,
+        }),
+      );
+      expect(res).toBeUndefined();
+    }
+    expect(idb.count()).toBe(0);
+  });
+
   it("konum dışı PATCH yakalanmaz", async () => {
     const { listeners, idb } = loadSw(offline());
     const res = await dispatchFetch(

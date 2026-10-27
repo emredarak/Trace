@@ -486,9 +486,42 @@ describe("Vaka detayı Konumlar bölümü", () => {
     ).toBeNull();
     expect(screen.queryByRole("button", { name: "Düzenle" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sil" })).toBeNull();
+    // Kaydedilmemiş taslak satır da ortadan kalkar (tabana dönülür).
+    expect(screen.queryByText("Kapanış taslağı")).toBeNull();
+    expect(screen.getByText("Merdiven girişi")).toBeTruthy();
     expect(locationCalls(fetchMock, "POST")).toHaveLength(0);
     expect(locationCalls(fetchMock, "PATCH")).toHaveLength(0);
     expect(locationCalls(fetchMock, "DELETE")).toHaveLength(0);
+  });
+
+  it("(j) çevrimdışı (202) eklenen konum düzenlenince PATCH aynı istemci id'sine gider", async () => {
+    const { fetchMock } = stubFetch(false, { queued: true });
+    renderPage();
+    await screen.findByText("Merdiven girişi");
+    await addDraftLocation("Çevrimdışı nokta");
+    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+    expect(await screen.findByText(/Kuyruğa alındı/)).toBeTruthy();
+    const posts = locationCalls(fetchMock, "POST");
+    expect(posts).toHaveLength(1);
+    const postedId = (JSON.parse(posts[0][1].body as string) as { id: string }).id;
+    expect(typeof postedId).toBe("string");
+    expect(postedId.length).toBeGreaterThan(0);
+
+    const item = (await screen.findByText("Çevrimdışı nokta")).closest("li");
+    fireEvent.click(
+      within(item as HTMLElement).getByRole("button", { name: "Düzenle" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/konum başlığı/i), {
+      target: { value: "Çevrimdışı nokta güncel" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Kaydet" }));
+    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+    await waitFor(() => {
+      expect(locationCalls(fetchMock, "PATCH")).toHaveLength(1);
+    });
+    const [patchUrl] = locationCalls(fetchMock, "PATCH")[0];
+    expect(patchUrl).toBe(`/api/cases/${CASE_ID}/locations/${postedId}`);
   });
 
   it("(h) Kaydet hata verirse taslak satır ve Kaydet düğmesi korunur", async () => {

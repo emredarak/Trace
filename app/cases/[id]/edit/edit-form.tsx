@@ -77,6 +77,7 @@ export default function EditForm({ caseId }: { caseId: string }) {
   >([]);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [queuedSaved, setQueuedSaved] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -114,10 +115,28 @@ export default function EditForm({ caseId }: { caseId: string }) {
   ) {
     setError("");
     setSaved(false);
+    setQueuedSaved(false);
     setSaving(true);
+    let queued = false;
     // Başarılı konum işlemleri ara tabana işlenir; kısmi hatada
     // tekrar denemede tamamlanmış işlemler yinelenmez, taslak korunur.
     let working = [...originalLocations];
+    const effectiveLocations = locations.map((l) => ({ ...l }));
+    async function noteQueued(res: Response): Promise<string | null> {
+      try {
+        const body = (await (typeof res.clone === "function"
+          ? res.clone()
+          : res
+        ).json()) as {
+          queued?: boolean;
+          id?: unknown;
+        } | null;
+        if (body?.queued === true) queued = true;
+        return typeof body?.id === "string" ? body.id : null;
+      } catch {
+        return null;
+      }
+    }
     try {
       const res = await fetch(`/api/cases/${caseId}`, {
         method: "PATCH",
@@ -132,29 +151,27 @@ export default function EditForm({ caseId }: { caseId: string }) {
       const originalById = new Map(originalLocations.map((l) => [l.id, l]));
       const currentIds = new Set(locations.map((l) => l.id));
 
-      for (const loc of locations) {
+      for (let i = 0; i < effectiveLocations.length; i++) {
+        const loc = effectiveLocations[i];
         if (!originalById.has(loc.id)) {
           const locRes = await fetch(`/api/cases/${caseId}/locations`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(locationBody(loc)),
+            body: JSON.stringify({ ...locationBody(loc), id: loc.id }),
           });
+          const createdId = await noteQueued(locRes);
           if (!locRes.ok) {
             setOriginalLocations(working);
             setError("Konumlar kaydedilemedi, tekrar deneyin.");
             return;
           }
-          try {
-            const created = (await locRes.json()) as CaseLocation;
-            if (created && typeof created.id === "string") loc.id = created.id;
-          } catch {
-            // Kuyruk yanıtı gibi gövdesiz başarıda taslak kimliği korunur.
-          }
-          working = [...working, { ...loc }];
+          const savedLoc = createdId ? { ...loc, id: createdId } : { ...loc };
+          effectiveLocations[i] = savedLoc;
+          working = [...working, { ...savedLoc }];
         }
       }
 
-      for (const loc of locations) {
+      for (const loc of effectiveLocations) {
         const original = originalById.get(loc.id);
         if (original && !sameLocation(original, loc)) {
           const locRes = await fetch(
@@ -165,6 +182,7 @@ export default function EditForm({ caseId }: { caseId: string }) {
               body: JSON.stringify(locationBody(loc)),
             },
           );
+          await noteQueued(locRes);
           if (!locRes.ok) {
             setOriginalLocations(working);
             setError("Konumlar kaydedilemedi, tekrar deneyin.");
@@ -180,6 +198,7 @@ export default function EditForm({ caseId }: { caseId: string }) {
             `/api/cases/${caseId}/locations/${original.id}`,
             { method: "DELETE" },
           );
+          await noteQueued(locRes);
           if (!locRes.ok) {
             setOriginalLocations(working);
             setError("Konumlar kaydedilemedi, tekrar deneyin.");
@@ -190,7 +209,8 @@ export default function EditForm({ caseId }: { caseId: string }) {
       }
 
       setOriginalLocations(working);
-      setSaved(true);
+      if (queued) setQueuedSaved(true);
+      else setSaved(true);
     } catch {
       setOriginalLocations(working);
       setError("Bağlantı hatası, tekrar deneyin.");
@@ -217,7 +237,11 @@ export default function EditForm({ caseId }: { caseId: string }) {
   return (
     <main>
       <h1>Vakayı Düzenle</h1>
-      {saved ? <p>Kaydedildi.</p> : null}
+      {queuedSaved ? (
+        <p>Kuyruğa alındı, bağlantı gelince gönderilecek.</p>
+      ) : saved ? (
+        <p>Kaydedildi.</p>
+      ) : null}
       <CaseForm
         idPrefix="duzen"
         initial={initial}

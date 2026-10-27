@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import MapPicker, { type MapPoint } from "./map-picker";
 import { LocationPicker } from "./location-picker";
 import {
@@ -24,7 +24,7 @@ export interface LocationsSectionProps {
 const textStyle: React.CSSProperties = {
   fontSize: "1rem",
   lineHeight: 1.5,
-  color: "#111111",
+  color: "#f1f5f9",
 };
 
 const buttonStyle: React.CSSProperties = {
@@ -53,19 +53,23 @@ export function LocationsSection({
     undefined,
   );
 
-  const sorted = sortLocations(locations);
-  const points: MapPoint[] = sorted
-    .filter(
-      (l) => typeof l.latitude === "number" && typeof l.longitude === "number",
-    )
-    .map((l) => ({
-      latitude: l.latitude as number,
-      longitude: l.longitude as number,
-      title: l.title,
-      note: l.note,
-      kind: l.kind,
-      priority: l.priority,
-    }));
+  const sorted = useMemo(() => sortLocations(locations), [locations]);
+  const points = useMemo<MapPoint[]>(
+    () =>
+      sorted
+        .filter(
+          (l) => typeof l.latitude === "number" && typeof l.longitude === "number",
+        )
+        .map((l) => ({
+          latitude: l.latitude as number,
+          longitude: l.longitude as number,
+          title: l.title,
+          note: l.note,
+          kind: l.kind,
+          priority: l.priority,
+        })),
+    [sorted],
+  );
   const hasCrimeScene = locations.some((l) => l.kind === "olay-yeri");
 
   function handleConfirm(draft: CaseLocationDraft) {
@@ -82,7 +86,17 @@ export function LocationsSection({
   }
 
   return (
-    <section aria-labelledby={`${idPrefix}-konumlar-baslik`} style={textStyle}>
+    <section
+      aria-labelledby={`${idPrefix}-konumlar-baslik`}
+      style={{
+        ...textStyle,
+        background: "#1e293b",
+        border: "1px solid #334155",
+        borderRadius: "0.6rem",
+        padding: "1rem",
+        margin: "0 0 1rem",
+      }}
+    >
       <h2
         id={`${idPrefix}-konumlar-baslik`}
         style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}
@@ -95,6 +109,7 @@ export function LocationsSection({
           role="note"
           style={{
             ...textStyle,
+            color: "#111111",
             background: "#fff3cd",
             border: "1px solid #111111",
             borderRadius: "0.4rem",
@@ -113,7 +128,17 @@ export function LocationsSection({
         {sorted.map((loc) => {
           const color = locationColor(loc);
           return (
-            <li key={loc.id} style={{ ...textStyle, marginBottom: "0.75rem" }}>
+            <li
+              key={loc.id}
+              style={{
+                ...textStyle,
+                marginBottom: "0.75rem",
+                background: "#1e293b",
+                border: "1px solid #334155",
+                borderRadius: "0.6rem",
+                padding: "0.9rem 1rem",
+              }}
+            >
               <strong>{loc.title} </strong>
               <span
                 style={{

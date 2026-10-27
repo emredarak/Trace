@@ -90,6 +90,28 @@ describe("Yeni vaka formu (yalnız özet zorunlu)", () => {
     ]);
   });
 
+  it("konum panelinde Konum Başlığı'nda Enter vaka gönderimini tetiklemez", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "abc", caseNo: "TR-0003" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NewCasePage />);
+    fireEvent.change(screen.getByLabelText(/özet/i), {
+      target: { value: "olay özeti" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "+ Konum Ekle" }));
+    const titleInput = screen.getByLabelText(/konum başlığı/i);
+    fireEvent.change(titleInput, { target: { value: "Enter yeri" } });
+    const notPrevented = fireEvent.keyDown(titleInput, { key: "Enter" });
+    // Dialog Enter'ı preventDefault eder; form gönderimi olmaz.
+    expect(notPrevented).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+    const noteInput = screen.getByLabelText("Konum Not");
+    expect(fireEvent.keyDown(noteInput, { key: "Enter" })).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("202 {queued:true} alınca (ok:true) 'kuyruğa alındı' gösterir, tanımsız bağlantı çizmez", async () => {
     // Gerçek fetch anlami: 202 yanıtında ok:true'dur.
     const fetchMock = vi.fn().mockResolvedValue({

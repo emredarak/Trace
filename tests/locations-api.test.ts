@@ -324,6 +324,35 @@ describe("konum uçları", () => {
     expect(list).toHaveLength(0);
   });
 
+  it("POST istemci id'sini kullanır; tekrarı aynı satırı 200 döner, çoğaltmaz", async () => {
+    const id = await makeCase();
+    const body = { id: "istemci-1", title: "Çevrimdışı yer" };
+    const first = await addLocation(jsonReq("POST", body), paramsOf(id));
+    expect(first.status).toBe(201);
+    expect(((await first.json()) as { id: string }).id).toBe("istemci-1");
+    const dup = await addLocation(jsonReq("POST", body), paramsOf(id));
+    expect(dup.status).toBe(200);
+    expect(((await dup.json()) as { id: string }).id).toBe("istemci-1");
+    const list = (await (
+      await listLocations(new Request("http://localhost/x"), paramsOf(id))
+    ).json()) as unknown[];
+    expect(list).toHaveLength(1);
+  });
+
+  it("POST başka vakaya ait istemci id'sinde 400 döner", async () => {
+    const id = await makeCase();
+    const otherId = await makeCase("başka vaka 2");
+    await addLocation(
+      jsonReq("POST", { id: "paylasilan", title: "yer" }),
+      paramsOf(id),
+    );
+    const res = await addLocation(
+      jsonReq("POST", { id: "paylasilan", title: "sızıntı" }),
+      paramsOf(otherId),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("bilinmeyen vakaya konum eklenemez", async () => {
     const res = await addLocation(
       jsonReq("POST", { locationText: "x" }),

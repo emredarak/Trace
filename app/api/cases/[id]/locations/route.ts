@@ -60,7 +60,26 @@ export async function POST(req: Request, { params }: Params) {
       { status: 400 },
     );
   }
-  const locId = randomUUID();
+  const clientId =
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>).id
+      : undefined;
+  let locId: string = randomUUID();
+  if (typeof clientId === "string" && clientId.trim().length > 0) {
+    locId = clientId;
+    const existing = getDb()
+      .prepare("SELECT * FROM case_locations WHERE id = ?")
+      .get(locId) as Record<string, unknown> | undefined;
+    if (existing) {
+      if (String(existing.caseId) !== id) {
+        return NextResponse.json(
+          { error: "location id belongs to another case" },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json(toLocationResponse(existing), { status: 200 });
+    }
+  }
   getDb()
     .prepare(
       "INSERT INTO case_locations (id, caseId, title, note, locationText, kind, priority, latitude, longitude, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

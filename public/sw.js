@@ -87,9 +87,9 @@ async function replay(entry) {
   // Content-Type (boundary dahil) ile aynen geri oynatılır.
   const headers = Object.assign({}, entry.headers);
   const init = { method: entry.method || "POST", headers };
-  if (entry.bodyBuffer) {
+  if (entry.bodyBuffer && entry.bodyBuffer.byteLength) {
     init.body = entry.bodyBuffer;
-  } else if (typeof entry.bodyText === "string") {
+  } else if (typeof entry.bodyText === "string" && entry.bodyText.length > 0) {
     init.body = entry.bodyText;
   }
   const res = await fetch(entry.url, init);
@@ -134,7 +134,7 @@ self.addEventListener("fetch", (event) => {
   if (!url.pathname.startsWith("/api/")) return;
   const isLocationMutation =
     (req.method === "PATCH" || req.method === "DELETE") &&
-    /^\/api\/cases\/[^/]+\/locations(?:\/[^/]+)?\/?$/.test(url.pathname);
+    /^\/api\/cases\/[^/]+\/locations\/[^/]+\/?$/.test(url.pathname);
   if (req.method !== "POST" && !isLocationMutation) return;
 
   event.respondWith(

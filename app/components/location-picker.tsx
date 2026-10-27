@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import MapPicker, { type MapPoint } from "./map-picker";
 import {
   locationColor,
@@ -58,10 +58,11 @@ const PRIORITIES: { value: string; label: string; priority: LocationPriority | n
   { value: "rutin", label: "Rutin", priority: "rutin" },
 ];
 
+let fallbackIdCounter = 0;
 function newId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
-    : `loc-${Date.now()}`;
+    : `loc-${Date.now()}-${(++fallbackIdCounter).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerProps) {
@@ -157,8 +158,30 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
     });
   }
 
+  const mapPick = useMemo<MapPoint | null>(
+    () =>
+      pick
+        ? { ...pick, title: title || undefined, note: note || undefined, kind, priority }
+        : null,
+    [pick, title, note, kind, priority],
+  );
+
   return (
     <div
+      onKeyDown={(e) => {
+        if (e.key !== "Enter") return;
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        // Adres aramanın kendi Enter davranışı kalır.
+        if (target.id === id("address")) return;
+        if (
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          target instanceof HTMLSelectElement
+        ) {
+          e.preventDefault();
+        }
+      }}
       style={{
         position: "fixed",
         inset: 0,
@@ -354,15 +377,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
           </ul>
         ) : null}
 
-        <MapPicker
-          pick={
-            pick
-              ? { ...pick, title: title || undefined, note: note || undefined, kind, priority }
-              : null
-          }
-          onPick={setPick}
-          height={260}
-        />
+        <MapPicker pick={mapPick} onPick={setPick} height={260} />
 
         {pick ? (
           <p style={textStyle}>

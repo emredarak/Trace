@@ -21,6 +21,13 @@ describe("formatDistance", () => {
   it("10 km ve üstünü tam sayı km gösterir", () => {
     expect(formatDistance(12300)).toBe("12 km");
   });
+
+  it("yuvarlanmış değere göre terfi eder", () => {
+    expect(formatDistance(999.6)).toBe("1,0 km");
+    expect(formatDistance(999.4)).toBe("999 m");
+    expect(formatDistance(9999)).toBe("10 km");
+    expect(formatDistance(9500)).toBe("9,5 km");
+  });
 });
 
 describe("haversineMeters", () => {
