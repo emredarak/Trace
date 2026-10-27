@@ -112,6 +112,54 @@ describe("Yeni vaka formu (yalnız özet zorunlu)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("panelden kişi eklenip persons yeni alanlarla gönderilir, eski beş alan gövdede yoktur", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "abc", caseNo: "TR-0004" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NewCasePage />);
+    fireEvent.change(screen.getByLabelText(/özet/i), { target: { value: "olay" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Kişi Ekle" }));
+    fireEvent.change(screen.getByLabelText(/Ad Soyad/), { target: { value: "Ayşe Yılmaz" } });
+    fireEvent.change(screen.getByLabelText(/Yaş/), { target: { value: "34" } });
+    fireEvent.click(screen.getByRole("button", { name: "Kişiyi Kullan" }));
+    expect(screen.getByText("Ayşe Yılmaz")).toBeTruthy();
+    expect(screen.getByText("Maktül")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /vakayı aç/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("officer");
+    expect(body).not.toHaveProperty("victimAge");
+    expect(body).not.toHaveProperty("victimGender");
+    expect(body).not.toHaveProperty("suspects");
+    expect(body).not.toHaveProperty("witnesses");
+    const persons = body.persons as Record<string, unknown>[];
+    expect(persons).toHaveLength(1);
+    expect(persons[0]).toMatchObject({
+      name: "Ayşe Yılmaz", age: 34, gender: null, note: null, type: "maktul",
+      relatedVictimId: null, relationship: null, unidentified: false, contactStatus: null,
+    });
+    expect(typeof persons[0].id).toBe("string");
+    expect((persons[0].id as string).length).toBeGreaterThan(0);
+  });
+
+  it("kişi panelinde Ad alanında Enter vaka gönderimini tetiklemez", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "abc", caseNo: "TR-0005" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NewCasePage />);
+    fireEvent.change(screen.getByLabelText(/özet/i), { target: { value: "olay özeti" } });
+    fireEvent.click(screen.getByRole("button", { name: "+ Kişi Ekle" }));
+    const nameInput = screen.getByLabelText(/Ad Soyad/);
+    fireEvent.change(nameInput, { target: { value: "Enter Kişisi" } });
+    expect(fireEvent.keyDown(nameInput, { key: "Enter" })).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("202 {queued:true} alınca (ok:true) 'kuyruğa alındı' gösterir, tanımsız bağlantı çizmez", async () => {
     // Gerçek fetch anlami: 202 yanıtında ok:true'dur.
     const fetchMock = vi.fn().mockResolvedValue({

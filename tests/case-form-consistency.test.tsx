@@ -15,12 +15,23 @@ const SHARED_LABELS = [
   /suç tipi/i,
   /yöntem/i,
   /silah/i,
+];
+
+const REMOVED_LABELS = [
   /sorumlu memur/i,
   /maktul yaşı/i,
   /maktul cinsiyeti/i,
   /şüpheliler/i,
   /tanıklar/i,
 ];
+
+function expectPeopleSection() {
+  expect(screen.getByText("Kişiler")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "+ Kişi Ekle" })).toBeTruthy();
+  for (const label of REMOVED_LABELS) {
+    expect(screen.queryByLabelText(label)).toBeNull();
+  }
+}
 
 function expectLocationsSection() {
   expect(screen.getByText("Konumlar")).toBeTruthy();
@@ -48,6 +59,7 @@ describe("vaka açma ve düzenleme formları tutarlı", () => {
     for (const label of SHARED_LABELS) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
+    expectPeopleSection();
     expectLocationsSection();
     openPickerAndExpectFields();
   });
@@ -74,6 +86,7 @@ describe("vaka açma ve düzenleme formları tutarlı", () => {
       expect(await screen.findByLabelText(label)).toBeTruthy();
     }
     expect(await screen.findByText(/TR-0042/)).toBeTruthy();
+    expectPeopleSection();
     expectLocationsSection();
     openPickerAndExpectFields();
     expect(screen.getByText(/değiştirilemez/i)).toBeTruthy();

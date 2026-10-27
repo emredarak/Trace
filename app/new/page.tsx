@@ -6,6 +6,7 @@ import CaseForm, {
   type CaseFormPayload,
 } from "../components/case-form";
 import type { CaseLocationDraft } from "../../lib/locations";
+import type { CasePersonDraft } from "../../lib/persons";
 
 const wrap: React.CSSProperties = {
   maxWidth: "28rem",
@@ -32,6 +33,7 @@ export default function NewCasePage() {
   async function onSubmit(
     payload: CaseFormPayload,
     locations: CaseLocationDraft[],
+    persons: CasePersonDraft[],
   ) {
     setError("");
     setSaving(true);
@@ -48,6 +50,22 @@ export default function NewCasePage() {
             priority: l.priority,
             latitude: l.latitude ?? null,
             longitude: l.longitude ?? null,
+          })),
+          persons: persons.map((p) => ({
+            id: p.id,
+            name: p.name || null,
+            age: p.age.trim() ? Number(p.age) : null,
+            gender: p.gender || null,
+            note: p.note || null,
+            type: p.type,
+            relatedVictimId:
+              p.type === "maktul" ? null : p.relatedVictimId || null,
+            relationship:
+              p.type !== "maktul" && p.relatedVictimId
+                ? p.relationship || null
+                : null,
+            unidentified: p.unidentified,
+            contactStatus: p.contactStatus || null,
           })),
         }),
       });

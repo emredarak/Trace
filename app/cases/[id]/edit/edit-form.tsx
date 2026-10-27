@@ -7,7 +7,8 @@ import CaseForm, {
   type CaseFormValues,
 } from "../../../components/case-form";
 import type { CaseLocationDraft } from "../../../../lib/locations";
-import type { CaseLocation } from "../../../api/cases/[id]/route";
+import type { CaseLocation, CasePerson } from "../../../api/cases/[id]/route";
+import type { CasePersonDraft } from "../../../../lib/persons";
 
 interface LoadedCase {
   id: string;
@@ -26,6 +27,7 @@ interface LoadedCase {
   createdAt?: string | null;
   updatedAt?: string | null;
   locations?: CaseLocation[];
+  persons?: CasePerson[];
   [key: string]: unknown;
 }
 
@@ -56,6 +58,51 @@ function locationBody(l: CaseLocationDraft) {
   };
 }
 
+function toPersonDraft(p: CasePerson): CasePersonDraft {
+  return {
+    id: p.id,
+    name: p.name ?? "",
+    age: p.age == null ? "" : String(p.age),
+    gender: p.gender ?? "",
+    note: p.note ?? "",
+    type: p.type,
+    relatedVictimId: p.relatedVictimId ?? "",
+    relationship: p.relationship ?? "",
+    unidentified: Boolean(p.unidentified),
+    contactStatus: p.contactStatus ?? "",
+  };
+}
+
+function personBody(p: CasePersonDraft) {
+  const relatedVictimId =
+    p.type === "maktul" ? null : p.relatedVictimId || null;
+  return {
+    name: p.name.trim() || null,
+    age: p.age.trim() ? Number(p.age) : null,
+    gender: p.gender || null,
+    note: p.note.trim() || null,
+    type: p.type,
+    relatedVictimId,
+    relationship: relatedVictimId ? p.relationship.trim() || null : null,
+    unidentified: p.unidentified,
+    contactStatus: p.contactStatus || null,
+  };
+}
+
+function samePerson(a: CasePersonDraft, b: CasePersonDraft): boolean {
+  return (
+    a.name === b.name &&
+    a.age === b.age &&
+    a.gender === b.gender &&
+    a.note === b.note &&
+    a.type === b.type &&
+    a.relatedVictimId === b.relatedVictimId &&
+    a.relationship === b.relationship &&
+    a.unidentified === b.unidentified &&
+    a.contactStatus === b.contactStatus
+  );
+}
+
 function sameLocation(a: CaseLocationDraft, b: CaseLocationDraft): boolean {
   return (
     a.title === b.title &&
@@ -75,6 +122,9 @@ export default function EditForm({ caseId }: { caseId: string }) {
   const [originalLocations, setOriginalLocations] = useState<
     CaseLocationDraft[]
   >([]);
+  const [originalPersons, setOriginalPersons] = useState<CasePersonDraft[]>(
+    [],
+  );
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [queuedSaved, setQueuedSaved] = useState(false);
@@ -96,6 +146,11 @@ export default function EditForm({ caseId }: { caseId: string }) {
           setOriginalLocations(
             (Array.isArray(body.locations) ? body.locations : []).map(toDraft),
           );
+          setOriginalPersons(
+            (Array.isArray(body.persons) ? body.persons : []).map(
+              toPersonDraft,
+            ),
+          );
         }
       } catch {
         if (!cancelled) setMissing(true);
@@ -112,6 +167,7 @@ export default function EditForm({ caseId }: { caseId: string }) {
   async function onSubmit(
     payload: CaseFormPayload,
     locations: CaseLocationDraft[],
+    persons: CasePersonDraft[],
   ) {
     setError("");
     setSaved(false);
@@ -121,7 +177,9 @@ export default function EditForm({ caseId }: { caseId: string }) {
     // Başarılı konum işlemleri ara tabana işlenir; kısmi hatada
     // tekrar denemede tamamlanmış işlemler yinelenmez, taslak korunur.
     let working = [...originalLocations];
+    let workingPersons = [...originalPersons];
     const effectiveLocations = locations.map((l) => ({ ...l }));
+    const effectivePersons = persons.map((p) => ({ ...p }));
     async function noteQueued(res: Response): Promise<string | null> {
       try {
         const body = (await (typeof res.clone === "function"
@@ -208,11 +266,102 @@ export default function EditForm({ caseId }: { caseId: string }) {
         }
       }
 
+      const originalPersonById = new Map(
+        originalPersons.map((p) => [p.id, p]),
+      );
+      const currentPersonIds = new Set(persons.map((p) => p.id));
+
+      // Önce maktüller: yeni tanık/şüpheli onlara bağlanabilsin.
+      const newPersons = [
+        ...effectivePersons.filter(
+          (p) => !originalPersonById.has(p.id) && p.type === "maktul",
+        ),
+        ...effectivePersons.filter(
+          (p) => !originalPersonById.has(p.id) && p.type !== "maktul",
+        ),
+      ];
+      for (const person of newPersons) {
+        const personRes = await fetch(`/api/cases/${caseId}/persons`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...personBody(person), id: person.id }),
+        });
+        const createdId = await noteQueued(personRes);
+        if (!personRes.ok) {
+          setOriginalLocations(working);
+          setOriginalPersons(workingPersons);
+          setError("Kişiler kaydedilemedi, tekrar deneyin.");
+          return;
+        }
+        const savedPerson = createdId
+          ? { ...person, id: createdId }
+          : { ...person };
+        const idx = effectivePersons.findIndex((p) => p.id === person.id);
+        if (idx >= 0) effectivePersons[idx] = savedPerson;
+        // İstemci kimliği sunucuda değiştiyse bağlı ilişkileri yeni kimliğe taşı.
+        if (savedPerson.id !== person.id) {
+          for (let i = 0; i < effectivePersons.length; i++) {
+            if (effectivePersons[i].relatedVictimId === person.id) {
+              effectivePersons[i] = {
+                ...effectivePersons[i],
+                relatedVictimId: savedPerson.id,
+              };
+            }
+          }
+        }
+        workingPersons = [...workingPersons, { ...savedPerson }];
+      }
+
+      for (const person of effectivePersons) {
+        const original = originalPersonById.get(person.id);
+        if (original && !samePerson(original, person)) {
+          const personRes = await fetch(
+            `/api/cases/${caseId}/persons/${person.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(personBody(person)),
+            },
+          );
+          await noteQueued(personRes);
+          if (!personRes.ok) {
+            setOriginalLocations(working);
+            setOriginalPersons(workingPersons);
+            setError("Kişiler kaydedilemedi, tekrar deneyin.");
+            return;
+          }
+          workingPersons = workingPersons.map((p) =>
+            p.id === person.id ? { ...person } : p,
+          );
+        }
+      }
+
+      for (const original of originalPersons) {
+        if (!currentPersonIds.has(original.id)) {
+          const personRes = await fetch(
+            `/api/cases/${caseId}/persons/${original.id}`,
+            { method: "DELETE" },
+          );
+          await noteQueued(personRes);
+          if (!personRes.ok) {
+            setOriginalLocations(working);
+            setOriginalPersons(workingPersons);
+            setError("Kişiler kaydedilemedi, tekrar deneyin.");
+            return;
+          }
+          workingPersons = workingPersons.filter(
+            (p) => p.id !== original.id,
+          );
+        }
+      }
+
       setOriginalLocations(working);
+      setOriginalPersons(workingPersons);
       if (queued) setQueuedSaved(true);
       else setSaved(true);
     } catch {
       setOriginalLocations(working);
+      setOriginalPersons(workingPersons);
       setError("Bağlantı hatası, tekrar deneyin.");
     } finally {
       setSaving(false);
@@ -246,6 +395,7 @@ export default function EditForm({ caseId }: { caseId: string }) {
         idPrefix="duzen"
         initial={initial}
         initialLocations={originalLocations}
+        initialPersons={originalPersons}
         submitLabel="Kaydet"
         saving={saving}
         error={error}
