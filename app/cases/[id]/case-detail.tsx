@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import type { CaseRecord, Evidence } from "../../../lib/case-schema";
 import type { RankedCase } from "../../../lib/rerank";
 import type { CaseLocation } from "../../api/cases/[id]/route";
-import MapPicker from "../../components/map-picker";
+import { LocationsSection } from "../../components/locations-section";
+import type { CaseLocationDraft } from "../../../lib/locations";
 
 type CaseWithEntries = CaseRecord & {
   entries?: Evidence[];
@@ -129,6 +130,48 @@ function EntryView({ entry }: { entry: Evidence }) {
   );
 }
 
+function toDraft(l: CaseLocation): CaseLocationDraft {
+  return {
+    id: l.id,
+    title: l.title ?? "Konum",
+    note: l.note ?? "",
+    kind: l.kind ?? "iliskili",
+    priority: l.priority ?? null,
+    latitude: l.latitude ?? undefined,
+    longitude: l.longitude ?? undefined,
+  };
+}
+
+function locationBody(l: CaseLocationDraft) {
+  return {
+    title: l.title,
+    note: l.note || null,
+    kind: l.kind,
+    priority: l.kind === "olay-yeri" ? null : l.priority,
+    latitude: l.latitude ?? null,
+    longitude: l.longitude ?? null,
+  };
+}
+
+function sameLocation(a: CaseLocationDraft, b: CaseLocationDraft): boolean {
+  return (
+    a.id === b.id &&
+    a.title === b.title &&
+    a.note === b.note &&
+    a.kind === b.kind &&
+    (a.priority ?? null) === (b.priority ?? null) &&
+    (a.latitude ?? null) === (b.latitude ?? null) &&
+    (a.longitude ?? null) === (b.longitude ?? null)
+  );
+}
+
+function sameLocations(
+  a: CaseLocationDraft[],
+  b: CaseLocationDraft[],
+): boolean {
+  return a.length === b.length && a.every((l, i) => sameLocation(l, b[i]));
+}
+
 function fieldRow(label: string, value: unknown) {
   if (typeof value !== "string" && typeof value !== "number") return null;
   const text = String(value).trim();
@@ -150,6 +193,13 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   const [approveError, setApproveError] = useState<Record<string, string>>({});
   const [approving, setApproving] = useState<Record<string, boolean>>({});
   const [togglingStatus, setTogglingStatus] = useState(false);
+  const [baselineLocations, setBaselineLocations] = useState<
+    CaseLocationDraft[]
+  >([]);
+  const [draftLocations, setDraftLocations] = useState<CaseLocationDraft[]>(
+    [],
+  );
+  const [locationStatus, setLocationStatus] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -162,8 +212,14 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
         }
         const found = (await res.json()) as CaseWithEntries;
         if (!cancelled) {
-          if (found && found.id === id) setCaseItem(found);
-          else setCaseMissing(true);
+          if (found && found.id === id) {
+            setCaseItem(found);
+            const drafts = (
+              Array.isArray(found.locations) ? found.locations : []
+            ).map(toDraft);
+            setBaselineLocations(drafts);
+            setDraftLocations(drafts.map((l) => ({ ...l })));
+          } else setCaseMissing(true);
         }
       } catch {
         if (!cancelled) setCaseMissing(true);
@@ -190,6 +246,96 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       cancelled = true;
     };
   }, [id]);
+
+  async function saveLocations() {
+    setLocationStatus("");
+    // Başarılı işlemler ara tabana işlenir; kısmi hatada taslak korunur.
+    let working = [...baselineLocations];
+    let queued = false;
+    async function readQueued(res: Response): Promise<string | null> {
+      try {
+        const body = (await res.json()) as {
+          queued?: boolean;
+          id?: unknown;
+        } | null;
+        if (body?.queued === true) queued = true;
+        return typeof body?.id === "string" ? body.id : null;
+      } catch {
+        return null;
+      }
+    }
+    try {
+      const baselineById = new Map(baselineLocations.map((l) => [l.id, l]));
+      const currentIds = new Set(draftLocations.map((l) => l.id));
+
+      for (const loc of draftLocations) {
+        if (!baselineById.has(loc.id)) {
+          const locRes = await fetch(`/api/cases/${id}/locations`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(locationBody(loc)),
+          });
+          const createdId = await readQueued(locRes);
+          if (!locRes.ok) {
+            setBaselineLocations(working);
+            setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
+            return;
+          }
+          if (createdId) loc.id = createdId;
+          working = [...working, { ...loc }];
+        }
+      }
+
+      for (const loc of draftLocations) {
+        const original = baselineById.get(loc.id);
+        if (original && !sameLocation(original, loc)) {
+          const locRes = await fetch(
+            `/api/cases/${id}/locations/${loc.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(locationBody(loc)),
+            },
+          );
+          await readQueued(locRes);
+          if (!locRes.ok) {
+            setBaselineLocations(working);
+            setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
+            return;
+          }
+          working = working.map((l) => (l.id === loc.id ? { ...loc } : l));
+        }
+      }
+
+      for (const original of baselineLocations) {
+        if (!currentIds.has(original.id)) {
+          const locRes = await fetch(
+            `/api/cases/${id}/locations/${original.id}`,
+            { method: "DELETE" },
+          );
+          await readQueued(locRes);
+          if (!locRes.ok) {
+            setBaselineLocations(working);
+            setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
+            return;
+          }
+          working = working.filter((l) => l.id !== original.id);
+        }
+      }
+
+      const persisted = working.map((l) => ({ ...l }));
+      setBaselineLocations(persisted);
+      setDraftLocations(persisted.map((l) => ({ ...l })));
+      setLocationStatus(
+        queued
+          ? "Kuyruğa alındı, bağlantı gelince gönderilecek."
+          : "Konumlar kaydedildi.",
+      );
+    } catch {
+      setBaselineLocations(working);
+      setLocationStatus("Bağlantı hatası, tekrar deneyin.");
+    }
+  }
 
   async function toggleStatus() {
     if (!caseItem || togglingStatus) return;
@@ -257,6 +403,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
 
   const showFreshBadge = similar?.fresh === false || caseItem.needsRerank === true;
   const entries = Array.isArray(caseItem.entries) ? caseItem.entries : [];
+  const locationsDirty = !sameLocations(baselineLocations, draftLocations);
 
   return (
     <main style={mainStyle}>
@@ -279,8 +426,6 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           <p>{caseItem.summary}</p>
           {fieldRow("Suç tipi", caseItem.crimeType)}
           {fieldRow("Olay tarihi", caseItem.occurredAt)}
-          {fieldRow("Konum tipi", caseItem.locationType)}
-          {fieldRow("Konum", caseItem.locationText)}
           {fieldRow("Yöntem", caseItem.mo)}
           {fieldRow("Silah", caseItem.weapon)}
           {fieldRow("Durum", caseItem.status === "closed" ? "Kapalı" : "Açık")}
@@ -303,45 +448,22 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
               ))}
             </ul>
           )}
-          <h3>
-            Konumlar (
-            {Array.isArray(caseItem.locations) ? caseItem.locations.length : 0})
-          </h3>
-          {Array.isArray(caseItem.locations) &&
-          caseItem.locations.length > 0 ? (
-            <>
-              <ul>
-                {caseItem.locations.map((l) => (
-                  <li key={l.id}>
-                    {l.note ? <strong>{l.note} </strong> : null}
-                    {l.locationText ? <span>{l.locationText} </span> : null}
-                    {typeof l.latitude === "number" &&
-                    typeof l.longitude === "number" ? (
-                      <span>
-                        ({l.latitude.toFixed(4)}, {l.longitude.toFixed(4)})
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              <MapPicker
-                readOnly
-                points={caseItem.locations
-                  .filter(
-                    (l) =>
-                      typeof l.latitude === "number" &&
-                      typeof l.longitude === "number",
-                  )
-                  .map((l) => ({
-                    latitude: l.latitude as number,
-                    longitude: l.longitude as number,
-                    note: l.note ?? undefined,
-                  }))}
-              />
-            </>
-          ) : (
-            <p>Konum yok.</p>
-          )}
+          <LocationsSection
+            locations={draftLocations}
+            onChange={(locs) => {
+              setDraftLocations(locs);
+              setLocationStatus("");
+            }}
+            idPrefix="detay"
+            readOnly={caseItem.status === "closed"}
+            dirty={locationsDirty}
+            status={locationStatus}
+            onSave={saveLocations}
+            onReset={() => {
+              setDraftLocations(baselineLocations.map((l) => ({ ...l })));
+              setLocationStatus("");
+            }}
+          />
         </section>
         <section aria-label="Benzer vakalar" style={cardStyle}>
           <h2>Benzer vakalar</h2>
