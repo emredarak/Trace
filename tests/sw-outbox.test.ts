@@ -316,6 +316,74 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
+  it("çevrimdışı PATCH kişi isteği kuyruğa girer ve aynı yöntem/gövdeyle oynatılır", async () => {
+    const { listeners, idb, sandbox } = loadSw(offline());
+
+    const res = await dispatchFetch(
+      listeners,
+      fakeRequest("PATCH", "/api/cases/abc/persons/p1", {
+        text: JSON.stringify({ name: "Ayşe" }),
+      }),
+    );
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ queued: true });
+    expect(idb.count()).toBe(1);
+
+    const calls: { url: string; init?: RequestInit }[] = [];
+    sandbox.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as FetchMock;
+    await dispatchSync(listeners);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/cases/abc/persons/p1");
+    expect(calls[0].init?.method).toBe("PATCH");
+    expect(JSON.parse(calls[0].init?.body as string)).toMatchObject({
+      name: "Ayşe",
+    });
+    expect(idb.count()).toBe(0);
+  });
+
+  it("çevrimdışı DELETE kişi isteği (gövdesiz) kuyruğa girer ve DELETE olarak oynatılır", async () => {
+    const { listeners, idb, sandbox } = loadSw(offline());
+
+    const res = await dispatchFetch(
+      listeners,
+      fakeRequest("DELETE", "/api/cases/abc/persons/p1", {
+        contentType: null,
+      }),
+    );
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ queued: true });
+    expect(idb.count()).toBe(1);
+
+    const calls: { url: string; init?: RequestInit }[] = [];
+    sandbox.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as FetchMock;
+    await dispatchSync(listeners);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/cases/abc/persons/p1");
+    expect(calls[0].init?.method).toBe("DELETE");
+    expect(calls[0].init?.body ?? undefined).toBeFalsy();
+    expect(idb.count()).toBe(0);
+  });
+
+  it("kişi koleksiyon yolundaki PATCH (personId yok) yakalanmaz", async () => {
+    const { listeners, idb } = loadSw(offline());
+    const res = await dispatchFetch(
+      listeners,
+      fakeRequest("PATCH", "/api/cases/abc/persons", {
+        text: JSON.stringify({ name: "x" }),
+      }),
+    );
+    expect(res).toBeUndefined();
+    expect(idb.count()).toBe(0);
+  });
+
   it("koleksiyon yolundaki PATCH/DELETE (locId yok) yakalanmaz", async () => {
     const { listeners, idb } = loadSw(offline());
     for (const method of ["PATCH", "DELETE"] as const) {
