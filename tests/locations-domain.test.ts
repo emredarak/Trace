@@ -76,6 +76,36 @@ describe("distancePairs", () => {
     expect(pairs[0].bIndex).toBe(2);
     expect(pairs[0].label).toBe(formatDistance(pairs[0].meters));
   });
+
+  it("3 koordinatlı konumda 3 çift döner ve koordinatsız indeks hiçbir çiftte yer almaz", () => {
+    const pairs = distancePairs([
+      { latitude: 41.0082, longitude: 28.9784 },
+      { latitude: 41.02, longitude: 28.99 },
+      { latitude: null, longitude: null },
+      { latitude: 39.9334, longitude: 32.8597 },
+    ]);
+    expect(pairs).toHaveLength(3);
+    expect(pairs.map((p) => [p.aIndex, p.bIndex])).toEqual([
+      [0, 1],
+      [0, 3],
+      [1, 3],
+    ]);
+    expect(
+      pairs.every((p) => p.aIndex !== 2 && p.bIndex !== 2),
+    ).toBe(true);
+  });
+
+  it("tüm çiftlerin etiketi formatDistance(meters) ile aynıdır", () => {
+    const pairs = distancePairs([
+      { latitude: 41.0082, longitude: 28.9784 },
+      { latitude: 41.02, longitude: 28.99 },
+      { latitude: 39.9334, longitude: 32.8597 },
+    ]);
+    expect(pairs.length).toBeGreaterThan(0);
+    for (const pair of pairs) {
+      expect(pair.label).toBe(formatDistance(pair.meters));
+    }
+  });
 });
 
 describe("locationColor / locationLabel", () => {
