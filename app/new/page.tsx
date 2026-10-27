@@ -53,16 +53,16 @@ export default function NewCasePage() {
           })),
           persons: persons.map((p) => ({
             id: p.id,
-            name: p.name || null,
+            name: p.name.trim() || null,
             age: p.age.trim() ? Number(p.age) : null,
             gender: p.gender || null,
-            note: p.note || null,
+            note: p.note.trim() || null,
             type: p.type,
             relatedVictimId:
               p.type === "maktul" ? null : p.relatedVictimId || null,
             relationship:
               p.type !== "maktul" && p.relatedVictimId
-                ? p.relationship || null
+                ? p.relationship.trim() || null
                 : null,
             unidentified: p.unidentified,
             contactStatus: p.contactStatus || null,

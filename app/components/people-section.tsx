@@ -5,6 +5,7 @@ import PersonEditor from "./person-editor";
 import {
   personTypeColor,
   personTypeLabel,
+  victimLabel,
   type CasePersonDraft,
 } from "../../lib/persons";
 
@@ -113,6 +114,7 @@ export function PeopleSection({
       <ul style={{ paddingLeft: "1.25rem" }}>
         {persons.map((person) => {
           const color = personTypeColor(person.type);
+          const victims = persons.filter((p) => p.type === "maktul");
           const relatedVictim =
             person.type !== "maktul" && person.relatedVictimId
               ? persons.find((p) => p.id === person.relatedVictimId)
@@ -129,7 +131,15 @@ export function PeopleSection({
                 padding: "0.9rem 1rem",
               }}
             >
-              {person.name ? <strong>{person.name} </strong> : null}
+              {person.name ? (
+                <strong>
+                  {person.type === "maktul"
+                    ? victimLabel(person, victims)
+                    : person.name}{" "}
+                </strong>
+              ) : person.type === "maktul" ? (
+                <span>{victimLabel(person, victims)} </span>
+              ) : null}
               <span style={{ ...badgeStyle, background: color.bg, color: color.fg }}>
                 {personTypeLabel(person.type)}
               </span>{" "}
@@ -138,7 +148,7 @@ export function PeopleSection({
               {person.note ? <span>{person.note} </span> : null}
               {relatedVictim ? (
                 <span>
-                  İlişkili Maktül: {relatedVictim.name ? relatedVictim.name : "Kimliği tespit edilemedi"}
+                  İlişkili Maktül: {victimLabel(relatedVictim, victims)}
                   {person.relationship ? ` (${person.relationship})` : ""}{" "}
                 </span>
               ) : null}

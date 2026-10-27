@@ -93,6 +93,8 @@ describe("normalizePersonInput", () => {
     expect(normalizePersonInput({ name: "A", type: "maktul", age: "" }).age).toBeNull();
     expect(normalizePersonInput({ name: "A", type: "maktul", age: 0 }).age).toBe(0);
     expect(normalizePersonInput({ name: "A", type: "maktul", age: 120 }).age).toBe(120);
+    expect(normalizePersonInput({ name: "A", type: "maktul", age: "   " }).age).toBeNull();
+    expect(normalizePersonInput({ name: "A", type: "maktul", age: " 34 " }).age).toBe(34);
   });
 
   it("geçersiz tip/cinsiyet/iletişim durumu hata verir", () => {
@@ -148,6 +150,15 @@ describe("normalizePersonsInput", () => {
         { id: "s1", name: "Şüpheli", type: "supheli", relatedVictimId: "yok" },
       ]),
     ).toThrow();
+  });
+
+  it("yinelenen tanımlı kişi id'si hata verir", () => {
+    expect(() =>
+      normalizePersonsInput([
+        { id: "m1", name: "Maktül", type: "maktul" },
+        { id: "m1", name: "Başka", type: "tanik" },
+      ]),
+    ).toThrow(/duplicate person\.id/);
   });
 
   it("aynı dizideki istemci kimlikli maktüle ilişki kabul edilir (maktül sonra da olabilir)", () => {

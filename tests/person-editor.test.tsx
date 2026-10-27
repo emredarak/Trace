@@ -58,6 +58,51 @@ describe("PersonEditor", () => {
     expect(result.id.length).toBeGreaterThan(0);
   });
 
+  it("hata, ad yazılınca veya Kimliği Tespit Edilemedi açılınca temizlenir", () => {
+    render(
+      <PersonEditor
+        initial={null}
+        victims={victims}
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Kişiyi Kullan" }));
+    expect(screen.getByRole("alert")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/Ad Soyad/), {
+      target: { value: "A" },
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText(/Ad Soyad/), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Kişiyi Kullan" }));
+    expect(screen.getByRole("alert")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText(/Kimliği Tespit Edilemedi/));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("adsız maktüller İlişkili Maktül seçeneklerinde ayırt edilir", () => {
+    const unnamed: CasePersonDraft[] = [
+      draft({ id: "v-1", name: "", age: "30", gender: "kadın", type: "maktul", unidentified: true }),
+      draft({ id: "v-2", name: "", age: "45", gender: "erkek", type: "maktul", unidentified: true }),
+    ];
+    render(
+      <PersonEditor
+        initial={draft({ type: "tanik", name: "Tanık" })}
+        victims={unnamed}
+        onClose={vi.fn()}
+        onConfirm={vi.fn()}
+      />,
+    );
+    const select = screen.getByLabelText(/İlişkili Maktül/) as HTMLSelectElement;
+    const texts = Array.from(select.options).map((o) => o.textContent);
+    expect(texts[1]).toMatch(/Maktül 1/);
+    expect(texts[2]).toMatch(/Maktül 2/);
+    expect(texts[1]).not.toBe(texts[2]);
+  });
+
   it("İlişkili Maktül ve İlişki yalnızca Tanık/Şüpheli seçiliyken görünür", () => {
     render(
       <PersonEditor

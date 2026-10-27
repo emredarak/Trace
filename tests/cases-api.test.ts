@@ -44,6 +44,44 @@ describe("POST /api/cases", () => {
     expect(second.caseNo).toBe("TR-0002");
   });
 
+  it("yinelenen kişi id'leri 400 döner ve vaka sayısı değişmez", async () => {
+    const before = await (await listCases()).json();
+    const res = await createCase(
+      postRequest({
+        summary: "yinelenen kişili vaka",
+        persons: [
+          { id: "m1", name: "Maktül", type: "maktul" },
+          { id: "m1", name: "Başka", type: "tanik" },
+        ],
+      }),
+    );
+    expect(res.status).toBe(400);
+    const after = await (await listCases()).json();
+    expect(after).toHaveLength(before.length);
+  });
+
+  it("başka vakaya ait kişi id'si 400 döner ve vaka sayısı değişmez (geri alma)", async () => {
+    const first = await createCase(
+      postRequest({
+        summary: "ilk vaka",
+        persons: [{ id: "m1", name: "Maktül", type: "maktul" }],
+      }),
+    );
+    expect(first.status).toBe(201);
+    const before = await (await listCases()).json();
+    const res = await createCase(
+      postRequest({
+        summary: "ikinci vaka",
+        locations: [{ title: "Konum", note: "not" }],
+        persons: [{ id: "m1", name: "Çakışan", type: "maktul" }],
+      }),
+    );
+    expect(res.status).toBe(400);
+    const after = await (await listCases()).json();
+    expect(after).toHaveLength(before.length);
+    expect(after).toHaveLength(1);
+  });
+
   it("GPS olmadan konum metni yeterlidir", async () => {
     const res = await createCase(
       postRequest({ summary: "olay", locationText: "çarşı meydanı" }),

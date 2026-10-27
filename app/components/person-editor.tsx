@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import {
   personTypeColor,
   personTypeLabel,
+  victimLabel,
   type CasePersonDraft,
   type PersonType,
 } from "../../lib/persons";
@@ -213,7 +214,10 @@ export function PersonEditor({
           id={id("name")}
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError("");
+          }}
           style={fieldStyle}
         />
 
@@ -226,7 +230,10 @@ export function PersonEditor({
           min={0}
           max={120}
           value={age}
-          onChange={(e) => setAge(e.target.value)}
+          onChange={(e) => {
+            setAge(e.target.value);
+            setError("");
+          }}
           style={fieldStyle}
         />
 
@@ -270,9 +277,7 @@ export function PersonEditor({
               <option value=""></option>
               {victims.map((victim) => (
                 <option key={victim.id} value={victim.id}>
-                  {victim.name.trim()
-                    ? victim.name
-                    : "Kimliği tespit edilemedi"}
+                  {victimLabel(victim, victims)}
                 </option>
               ))}
             </select>
@@ -294,7 +299,10 @@ export function PersonEditor({
           <input
             type="checkbox"
             checked={unidentified}
-            onChange={(e) => setUnidentified(e.target.checked)}
+            onChange={(e) => {
+              setUnidentified(e.target.checked);
+              setError("");
+            }}
           />{" "}
           Kimliği Tespit Edilemedi
         </label>

@@ -55,6 +55,25 @@ export function personTypeColor(type: PersonType): { bg: string; fg: string } {
   return TYPE_COLORS[type] ?? { bg: "#5A5A5A", fg: "#FFFFFF" };
 }
 
+export function victimLabel(
+  victim: Pick<CasePersonDraft, "id" | "name" | "age" | "gender">,
+  victims: Pick<CasePersonDraft, "id" | "name" | "age" | "gender">[],
+): string {
+  const base = victim.name.trim() ? victim.name.trim() : "Kimliği tespit edilemedi";
+  const ambiguous = victims.some(
+    (v) =>
+      v.id !== victim.id &&
+      (v.name.trim() ? v.name.trim() : "Kimliği tespit edilemedi") === base,
+  );
+  if (!ambiguous) return base;
+  const index = victims.findIndex((v) => v.id === victim.id);
+  const parts = [`Maktül ${index >= 0 ? index + 1 : 1}`];
+  const age = typeof victim.age === "string" ? victim.age.trim() : victim.age;
+  if (age !== "" && age !== null && age !== undefined) parts.push(`Yaş ${age}`);
+  if (victim.gender.trim()) parts.push(victim.gender.trim());
+  return `${base} (${parts.join(", ")})`;
+}
+
 function normalizeText(value: unknown, field: string): string | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value !== "string") throw new Error(`${field} must be a string`);
@@ -94,17 +113,21 @@ export function normalizePersonInput(raw: unknown): NormalizedPerson {
   }
 
   let age: number | null = null;
-  if (person.age !== undefined && person.age !== null && person.age !== "") {
-    const num =
-      typeof person.age === "number"
-        ? person.age
-        : typeof person.age === "string"
-          ? Number(person.age)
-          : NaN;
-    if (!Number.isInteger(num) || num < 0 || num > 120) {
-      throw new Error("person.age must be an integer between 0 and 120");
+  if (person.age !== undefined && person.age !== null) {
+    const rawAge =
+      typeof person.age === "string" ? person.age.trim() : person.age;
+    if (rawAge !== "") {
+      const num =
+        typeof rawAge === "number"
+          ? rawAge
+          : typeof rawAge === "string"
+            ? Number(rawAge)
+            : NaN;
+      if (!Number.isInteger(num) || num < 0 || num > 120) {
+        throw new Error("person.age must be an integer between 0 and 120");
+      }
+      age = num;
     }
-    age = num;
   }
 
   const gender = normalizeText(person.gender, "person.gender");
@@ -192,7 +215,12 @@ export function normalizePersonsInput(raw: unknown): NormalizedPerson[] {
   const persons = raw.map((item) => normalizePersonInput(item));
   const byId = new Map<string, NormalizedPerson>();
   for (const person of persons) {
-    if (person.id !== undefined) byId.set(person.id, person);
+    if (person.id !== undefined) {
+      if (byId.has(person.id)) {
+        throw new Error(`duplicate person.id: ${person.id}`);
+      }
+      byId.set(person.id, person);
+    }
   }
   for (const person of persons) {
     if (person.relatedVictimId !== null) {

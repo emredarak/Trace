@@ -149,6 +149,7 @@ export function insertCase(input: CreateCaseInput): CaseRecord {
   const valid = validateCaseInput(input);
   const { locations, persons, ...caseFields } = valid;
   const database = getDb();
+  const runInsert = database.transaction((): CaseRecord => {
   const now = new Date().toISOString();
   const record: CaseRecord = {
     ...caseFields,
@@ -245,4 +246,6 @@ export function insertCase(input: CreateCaseInput): CaseRecord {
     });
   }
   return toRecord(record as unknown as Record<string, unknown>);
+  });
+  return runInsert();
 }

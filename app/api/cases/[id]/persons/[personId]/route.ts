@@ -77,8 +77,8 @@ export async function PATCH(req: Request, { params }: Params) {
     );
     if (existing.type === "maktul" && normalized.type !== "maktul") {
       db.prepare(
-        "UPDATE case_persons SET relatedVictimId = NULL, relationship = NULL WHERE relatedVictimId = ?",
-      ).run(personId);
+        "UPDATE case_persons SET relatedVictimId = NULL, relationship = NULL WHERE relatedVictimId = ? AND caseId = ?",
+      ).run(personId, id);
     }
   })();
   const updated = findRow(id, personId);
@@ -97,8 +97,8 @@ export async function DELETE(_req: Request, { params }: Params) {
   const db = getDb();
   db.transaction(() => {
     db.prepare(
-      "UPDATE case_persons SET relatedVictimId = NULL, relationship = NULL WHERE relatedVictimId = ?",
-    ).run(personId);
+      "UPDATE case_persons SET relatedVictimId = NULL, relationship = NULL WHERE relatedVictimId = ? AND caseId = ?",
+    ).run(personId, id);
     db.prepare(
       "DELETE FROM case_persons WHERE id = ? AND caseId = ?",
     ).run(personId, id);

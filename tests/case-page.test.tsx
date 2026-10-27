@@ -847,6 +847,26 @@ describe("Vaka detayı Kişiler bölümü", () => {
     expect(personCalls(fetchMock, "DELETE")).toHaveLength(0);
   });
 
+  it("(g) 202 kuyruk yanıtında 'Kuyruğa alındı' gösterilir, 'Kişiler kaydedildi.' gösterilmez; çift tık POST'u yinelemez", async () => {
+    const { fetchMock } = stubFetch(false, { queued: true });
+    renderPage();
+
+    const people = await peopleSectionEl();
+    await addDraftPerson("Kuyruk Kişisi");
+    const saveButton = within(people).getByRole("button", { name: "Kaydet" });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    expect(await within(people).findByText(/Kuyruğa alındı/)).toBeTruthy();
+    expect(within(people).queryByText(/Kişiler kaydedildi\./)).toBeNull();
+    expect(personCalls(fetchMock, "POST")).toHaveLength(1);
+    await waitFor(() => {
+      expect(
+        within(people).queryByRole("button", { name: "Kaydet" }),
+      ).toBeNull();
+    });
+  });
+
   it("(f) Kaydet hatasında taslak korunur", async () => {
     const { fetchMock } = stubFetch(false, { failPersonSave: true });
     renderPage();
