@@ -3,13 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { CaseRecord, Evidence } from "../../../lib/case-schema";
 import type { RankedCase } from "../../../lib/rerank";
-import type { CaseLocation } from "../../api/cases/[id]/route";
+import type { CaseLocation, CasePerson } from "../../api/cases/[id]/route";
 import { LocationsSection } from "../../components/locations-section";
+import { PeopleSection } from "../../components/people-section";
 import type { CaseLocationDraft } from "../../../lib/locations";
+import type { CasePersonDraft } from "../../../lib/persons";
 
 type CaseWithEntries = CaseRecord & {
   entries?: Evidence[];
   locations?: CaseLocation[];
+  persons?: CasePerson[];
 };
 
 interface SimilarResponse {
@@ -172,6 +175,59 @@ function sameLocations(
   return a.length === b.length && a.every((l, i) => sameLocation(l, b[i]));
 }
 
+function toPersonDraft(p: CasePerson): CasePersonDraft {
+  return {
+    id: p.id,
+    name: p.name ?? "",
+    age: p.age == null ? "" : String(p.age),
+    gender: p.gender ?? "",
+    note: p.note ?? "",
+    type: p.type,
+    relatedVictimId: p.relatedVictimId ?? "",
+    relationship: p.relationship ?? "",
+    unidentified: Boolean(p.unidentified),
+    contactStatus: p.contactStatus ?? "",
+  };
+}
+
+function personBody(p: CasePersonDraft) {
+  const relatedVictimId =
+    p.type === "maktul" ? null : p.relatedVictimId || null;
+  return {
+    name: p.name.trim() || null,
+    age: p.age.trim() ? Number(p.age) : null,
+    gender: p.gender || null,
+    note: p.note.trim() || null,
+    type: p.type,
+    relatedVictimId,
+    relationship: relatedVictimId ? p.relationship.trim() || null : null,
+    unidentified: p.unidentified,
+    contactStatus: p.contactStatus || null,
+  };
+}
+
+function samePerson(a: CasePersonDraft, b: CasePersonDraft): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.age === b.age &&
+    a.gender === b.gender &&
+    a.note === b.note &&
+    a.type === b.type &&
+    a.relatedVictimId === b.relatedVictimId &&
+    a.relationship === b.relationship &&
+    a.unidentified === b.unidentified &&
+    a.contactStatus === b.contactStatus
+  );
+}
+
+function samePersons(
+  a: CasePersonDraft[],
+  b: CasePersonDraft[],
+): boolean {
+  return a.length === b.length && a.every((p, i) => samePerson(p, b[i]));
+}
+
 function fieldRow(label: string, value: unknown) {
   if (typeof value !== "string" && typeof value !== "number") return null;
   const text = String(value).trim();
@@ -202,6 +258,13 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   const [locationStatus, setLocationStatus] = useState("");
   const [savingLocations, setSavingLocations] = useState(false);
   const savingLocationsRef = useRef(false);
+  const [baselinePersons, setBaselinePersons] = useState<CasePersonDraft[]>(
+    [],
+  );
+  const [draftPersons, setDraftPersons] = useState<CasePersonDraft[]>([]);
+  const [personStatus, setPersonStatus] = useState("");
+  const [savingPersons, setSavingPersons] = useState(false);
+  const savingPersonsRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,6 +284,11 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             ).map(toDraft);
             setBaselineLocations(drafts);
             setDraftLocations(drafts.map((l) => ({ ...l })));
+            const personDrafts = (
+              Array.isArray(found.persons) ? found.persons : []
+            ).map(toPersonDraft);
+            setBaselinePersons(personDrafts);
+            setDraftPersons(personDrafts.map((p) => ({ ...p })));
           } else setCaseMissing(true);
         }
       } catch {
@@ -355,6 +423,123 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     }
   }
 
+  async function savePersons() {
+    // Yeniden giriş koruması: çift tık yinelenen POST yaratmaz.
+    if (savingPersonsRef.current) return;
+    savingPersonsRef.current = true;
+    setSavingPersons(true);
+    setPersonStatus("");
+    // Başarılı işlemler ara tabana işlenir; kısmi hatada taslak korunur.
+    let working = [...baselinePersons];
+    let effectiveDraft = draftPersons.map((p) => ({ ...p }));
+    let queued = false;
+    async function readQueued(res: Response): Promise<string | null> {
+      try {
+        const body = (await res.json()) as {
+          queued?: boolean;
+          id?: unknown;
+        } | null;
+        if (body?.queued === true) queued = true;
+        return typeof body?.id === "string" ? body.id : null;
+      } catch {
+        return null;
+      }
+    }
+    function failSave() {
+      setBaselinePersons(working);
+      setDraftPersons(effectiveDraft.map((p) => ({ ...p })));
+      setPersonStatus("Kişiler kaydedilemedi, tekrar deneyin.");
+    }
+    try {
+      const baselineById = new Map(baselinePersons.map((p) => [p.id, p]));
+      const currentIds = new Set(draftPersons.map((p) => p.id));
+
+      // Önce yeni maktüller: yeni tanık/şüpheli onlara bağlanabilsin.
+      for (const wantVictim of [true, false]) {
+        for (let i = 0; i < effectiveDraft.length; i++) {
+          const person = effectiveDraft[i];
+          if (baselineById.has(person.id)) continue;
+          if ((person.type === "maktul") !== wantVictim) continue;
+          const personRes = await fetch(`/api/cases/${id}/persons`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ...personBody(person), id: person.id }),
+          });
+          const createdId = await readQueued(personRes);
+          if (!personRes.ok) {
+            failSave();
+            return;
+          }
+          const savedPerson = createdId
+            ? { ...person, id: createdId }
+            : { ...person };
+          effectiveDraft[i] = savedPerson;
+          if (savedPerson.id !== person.id) {
+            effectiveDraft = effectiveDraft.map((p) =>
+              p.relatedVictimId === person.id
+                ? { ...p, relatedVictimId: savedPerson.id }
+                : p,
+            );
+          }
+          working = [...working, { ...savedPerson }];
+        }
+      }
+
+      for (const person of effectiveDraft) {
+        const original = baselineById.get(person.id);
+        if (original && !samePerson(original, person)) {
+          const personRes = await fetch(
+            `/api/cases/${id}/persons/${person.id}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(personBody(person)),
+            },
+          );
+          await readQueued(personRes);
+          if (!personRes.ok) {
+            failSave();
+            return;
+          }
+          working = working.map((p) =>
+            p.id === person.id ? { ...person } : p,
+          );
+        }
+      }
+
+      for (const original of baselinePersons) {
+        if (!currentIds.has(original.id)) {
+          const personRes = await fetch(
+            `/api/cases/${id}/persons/${original.id}`,
+            { method: "DELETE" },
+          );
+          await readQueued(personRes);
+          if (!personRes.ok) {
+            failSave();
+            return;
+          }
+          working = working.filter((p) => p.id !== original.id);
+        }
+      }
+
+      const persisted = working.map((p) => ({ ...p }));
+      setBaselinePersons(persisted);
+      setDraftPersons(persisted.map((p) => ({ ...p })));
+      setPersonStatus(
+        queued
+          ? "Kuyruğa alındı, bağlantı gelince gönderilecek."
+          : "Kişiler kaydedildi.",
+      );
+    } catch {
+      setBaselinePersons(working);
+      setDraftPersons(effectiveDraft.map((p) => ({ ...p })));
+      setPersonStatus("Bağlantı hatası, tekrar deneyin.");
+    } finally {
+      savingPersonsRef.current = false;
+      setSavingPersons(false);
+    }
+  }
+
   async function toggleStatus() {
     if (!caseItem || togglingStatus) return;
     setTogglingStatus(true);
@@ -371,6 +556,8 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           if (body.status === "closed") {
             setDraftLocations(baselineLocations.map((l) => ({ ...l })));
             setLocationStatus("");
+            setDraftPersons(baselinePersons.map((p) => ({ ...p })));
+            setPersonStatus("");
           }
           setCaseItem({ ...caseItem, status: body.status });
         }
@@ -426,6 +613,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   const showFreshBadge = similar?.fresh === false || caseItem.needsRerank === true;
   const entries = Array.isArray(caseItem.entries) ? caseItem.entries : [];
   const locationsDirty = !sameLocations(baselineLocations, draftLocations);
+  const personsDirty = !samePersons(baselinePersons, draftPersons);
 
   return (
     <main style={mainStyle}>
@@ -451,11 +639,6 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           {fieldRow("Yöntem", caseItem.mo)}
           {fieldRow("Silah", caseItem.weapon)}
           {fieldRow("Durum", caseItem.status === "closed" ? "Kapalı" : "Açık")}
-          {fieldRow("Memur", caseItem.officer)}
-          {fieldRow("Maktul yaşı", caseItem.victimAge)}
-          {fieldRow("Maktul cinsiyeti", caseItem.victimGender)}
-          {fieldRow("Şüpheliler", caseItem.suspects)}
-          {fieldRow("Tanıklar", caseItem.witnesses)}
           <h3>Deliller ({entries.length})</h3>          {caseItem.status !== "closed" ? (
             <p>
               <a href={`/cases/${caseItem.id}/edit`}>Vakayı Düzenle</a>
@@ -484,6 +667,22 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             onReset={() => {
               setDraftLocations(baselineLocations.map((l) => ({ ...l })));
               setLocationStatus("");
+            }}
+          />
+          <PeopleSection
+            persons={draftPersons}
+            onChange={(persons) => {
+              setDraftPersons(persons);
+              setPersonStatus("");
+            }}
+            idPrefix="detay"
+            readOnly={caseItem.status === "closed" || savingPersons}
+            dirty={caseItem.status !== "closed" && personsDirty}
+            status={personStatus}
+            onSave={savePersons}
+            onReset={() => {
+              setDraftPersons(baselinePersons.map((p) => ({ ...p })));
+              setPersonStatus("");
             }}
           />
         </section>

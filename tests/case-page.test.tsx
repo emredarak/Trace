@@ -29,6 +29,55 @@ const CASE_ITEM = {
   needsRerank: false,
   createdAt: "2026-10-26T00:00:00.000Z",
   updatedAt: "2026-10-26T00:00:00.000Z",
+  officer: "Eski Memur Adı",
+  victimAge: 99,
+  victimGender: "eski-cinsiyet",
+  suspects: "Eski Şüpheli Metni",
+  witnesses: "Eski Tanık Metni",
+  persons: [
+    {
+      id: "kisi-1",
+      caseId: CASE_ID,
+      name: "Ayşe Yılmaz",
+      age: 34,
+      gender: "kadın",
+      note: "maktul notu",
+      type: "maktul",
+      relatedVictimId: null,
+      relationship: null,
+      unidentified: false,
+      contactStatus: "ulasildi",
+      createdAt: "2026-10-26T00:01:00.000Z",
+    },
+    {
+      id: "kisi-2",
+      caseId: CASE_ID,
+      name: "Mehmet Demir",
+      age: 40,
+      gender: "erkek",
+      note: "şüpheli notu",
+      type: "supheli",
+      relatedVictimId: "kisi-1",
+      relationship: "eşi",
+      unidentified: false,
+      contactStatus: "ulasilamadi",
+      createdAt: "2026-10-26T00:02:00.000Z",
+    },
+    {
+      id: "kisi-3",
+      caseId: CASE_ID,
+      name: null,
+      age: null,
+      gender: null,
+      note: "tanık notu",
+      type: "tanik",
+      relatedVictimId: "kisi-1",
+      relationship: "komşusu",
+      unidentified: true,
+      contactStatus: null,
+      createdAt: "2026-10-26T00:03:00.000Z",
+    },
+  ],
   locations: [
     {
       id: "loc-1",
@@ -126,8 +175,10 @@ function stubFetch(
   opts: {
     status?: string;
     locations?: unknown[];
+    persons?: unknown[];
     queued?: boolean;
     failLocationSave?: boolean;
+    failPersonSave?: boolean;
   } = {},
 ) {
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -135,6 +186,7 @@ function stubFetch(
     ...CASE_ITEM,
     ...(opts.status ? { status: opts.status } : {}),
     ...(opts.locations ? { locations: opts.locations } : {}),
+    ...(opts.persons ? { persons: opts.persons } : {}),
   };
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     calls.push({ url, init });
@@ -196,6 +248,54 @@ function stubFetch(
     }
     if (
       url.startsWith(`/api/cases/${CASE_ID}/locations/`) &&
+      init?.method === "DELETE"
+    ) {
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
+    if (url === `/api/cases/${CASE_ID}/persons` && init?.method === "POST") {
+      if (opts.failPersonSave) {
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "sunucu hatası" }),
+        };
+      }
+      if (opts.queued) {
+        return {
+          ok: true,
+          status: 202,
+          json: async () => ({ queued: true }),
+        };
+      }
+      const body = JSON.parse(init.body as string);
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: "kisi-yeni",
+          caseId: CASE_ID,
+          ...body,
+          createdAt: "2026-10-26T00:04:00.000Z",
+        }),
+      };
+    }
+    if (
+      url.startsWith(`/api/cases/${CASE_ID}/persons/`) &&
+      init?.method === "PATCH"
+    ) {
+      const body = JSON.parse(init.body as string);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: url.split("/").pop(),
+          caseId: CASE_ID,
+          ...body,
+        }),
+      };
+    }
+    if (
+      url.startsWith(`/api/cases/${CASE_ID}/persons/`) &&
       init?.method === "DELETE"
     ) {
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
@@ -559,5 +659,212 @@ describe("Vaka detayı Konumlar bölümü", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
     });
+  });
+});
+
+function personCalls(
+  fetchMock: ReturnType<typeof stubFetch>["fetchMock"],
+  method: string,
+) {
+  return fetchMock.mock.calls.filter(
+    ([url, init]) =>
+      typeof url === "string" &&
+      url.includes(`/api/cases/${CASE_ID}/persons`) &&
+      (init as RequestInit | undefined)?.method === method,
+  ) as [string, RequestInit][];
+}
+
+async function peopleSectionEl() {
+  const heading = await screen.findByRole("heading", { name: "Kişiler" });
+  return heading.closest("section") as HTMLElement;
+}
+
+async function addDraftPerson(name: string) {
+  fireEvent.click(screen.getByRole("button", { name: "+ Kişi Ekle" }));
+  const dialog = await screen.findByRole("dialog");
+  fireEvent.change(within(dialog).getByLabelText(/ad soyad/i), {
+    target: { value: name },
+  });
+  fireEvent.click(
+    within(dialog).getByRole("button", { name: "Kişiyi Kullan" }),
+  );
+}
+
+describe("Vaka detayı Kişiler bölümü", () => {
+  it("(a) eski kişi satırları yok; ad+tür rozeti+ilişki+etiketler görünür", async () => {
+    stubFetch();
+    renderPage();
+
+    const detail = await screen.findByRole("region", { name: "Vaka detayı" });
+    const people = await peopleSectionEl();
+    expect(await within(people).findByText("Ayşe Yılmaz")).toBeTruthy();
+    expect(within(people).getByText("Maktül")).toBeTruthy();
+    expect(within(people).getByText("Mehmet Demir")).toBeTruthy();
+    expect(within(people).getByText("Şüpheli")).toBeTruthy();
+    expect(within(people).getByText("Tanık")).toBeTruthy();
+    expect(within(people).getByText(/İlişkili Maktül: Ayşe Yılmaz \(eşi\)/)).toBeTruthy();
+    expect(within(people).getByText(/İlişkili Maktül: Ayşe Yılmaz \(komşusu\)/)).toBeTruthy();
+    expect(within(people).getByText("Kimliği Tespit Edilemedi")).toBeTruthy();
+    expect(within(people).getByText("Ulaşıldı")).toBeTruthy();
+    expect(within(people).getByText("Ulaşılamadı")).toBeTruthy();
+    expect(within(people).getByText("maktul notu")).toBeTruthy();
+    // Eski tekil kişi satırları ve değerleri gösterilmez.
+    expect(within(detail).queryByText(/Memur:/)).toBeNull();
+    expect(within(detail).queryByText(/Maktul yaşı:/)).toBeNull();
+    expect(within(detail).queryByText(/Maktul cinsiyeti:/)).toBeNull();
+    expect(within(detail).queryByText(/Şüpheliler:/)).toBeNull();
+    expect(within(detail).queryByText(/Tanıklar:/)).toBeNull();
+    expect(within(detail).queryByText("Eski Memur Adı")).toBeNull();
+    expect(within(detail).queryByText("Eski Şüpheli Metni")).toBeNull();
+    expect(within(detail).queryByText("Eski Tanık Metni")).toBeNull();
+  });
+
+  it("(b) taslak kişi Kaydet olmadan POST yapmaz; Vazgeç satırı kaldırır", async () => {
+    const { fetchMock } = stubFetch();
+    renderPage();
+
+    const people = await peopleSectionEl();
+    await addDraftPerson("Yeni Kişi");
+
+    expect(await within(people).findByText("Yeni Kişi")).toBeTruthy();
+    expect(personCalls(fetchMock, "POST")).toHaveLength(0);
+
+    fireEvent.click(
+      within(people).getByRole("button", { name: "Vazgeç" }),
+    );
+
+    await waitFor(() => {
+      expect(within(people).queryByText("Yeni Kişi")).toBeNull();
+    });
+    expect(personCalls(fetchMock, "POST")).toHaveLength(0);
+    expect(within(people).getByText("Ayşe Yılmaz")).toBeTruthy();
+  });
+
+  it("(c) Kaydet POST/PATCH/DELETE farkını uygular", async () => {
+    const { fetchMock } = stubFetch();
+    renderPage();
+
+    const people = await peopleSectionEl();
+    await addDraftPerson("Yeni Kişi");
+
+    const editItem = (await within(people).findByText("Mehmet Demir")).closest("li");
+    fireEvent.click(
+      within(editItem as HTMLElement).getByRole("button", { name: "Düzenle" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/ad soyad/i), {
+      target: { value: "Mehmet Demir güncel" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Kaydet" }));
+    expect(await within(people).findByText("Mehmet Demir güncel")).toBeTruthy();
+
+    const deleteItem = within(people).getByText("tanık notu").closest("li");
+    fireEvent.click(
+      within(deleteItem as HTMLElement).getByRole("button", { name: "Sil" }),
+    );
+    await waitFor(() => {
+      expect(within(people).queryByText("tanık notu")).toBeNull();
+    });
+    expect(personCalls(fetchMock, "POST")).toHaveLength(0);
+    expect(personCalls(fetchMock, "PATCH")).toHaveLength(0);
+    expect(personCalls(fetchMock, "DELETE")).toHaveLength(0);
+
+    fireEvent.click(within(people).getByRole("button", { name: "Kaydet" }));
+
+    await waitFor(() => {
+      expect(personCalls(fetchMock, "POST")).toHaveLength(1);
+      expect(personCalls(fetchMock, "PATCH")).toHaveLength(1);
+      expect(personCalls(fetchMock, "DELETE")).toHaveLength(1);
+    });
+    const [, postInit] = personCalls(fetchMock, "POST")[0];
+    expect(JSON.parse(postInit.body as string)).toMatchObject({
+      name: "Yeni Kişi",
+      type: "maktul",
+    });
+    const [patchUrl, patchInit] = personCalls(fetchMock, "PATCH")[0];
+    expect(patchUrl).toBe(`/api/cases/${CASE_ID}/persons/kisi-2`);
+    expect(JSON.parse(patchInit.body as string)).toMatchObject({
+      name: "Mehmet Demir güncel",
+    });
+    const [deleteUrl] = personCalls(fetchMock, "DELETE")[0];
+    expect(deleteUrl).toBe(`/api/cases/${CASE_ID}/persons/kisi-3`);
+
+    await waitFor(() => {
+      expect(
+        within(people).queryByRole("button", { name: "Kaydet" }),
+      ).toBeNull();
+    });
+    expect(within(people).getByText("Yeni Kişi")).toBeTruthy();
+    expect(within(people).getByText("Mehmet Demir güncel")).toBeTruthy();
+  });
+
+  it("(d) kapalı vakada kişi kontrolleri yoktur", async () => {
+    stubFetch(false, { status: "closed" });
+    renderPage();
+
+    const people = await peopleSectionEl();
+    expect(await within(people).findByText("Ayşe Yılmaz")).toBeTruthy();
+    expect(
+      within(people).queryByRole("button", { name: "+ Kişi Ekle" }),
+    ).toBeNull();
+    expect(
+      within(people).queryByRole("button", { name: "Düzenle" }),
+    ).toBeNull();
+    expect(within(people).queryByRole("button", { name: "Sil" })).toBeNull();
+    expect(
+      within(people).queryByRole("button", { name: "Kaydet" }),
+    ).toBeNull();
+    expect(
+      within(people).queryByRole("button", { name: "Vazgeç" }),
+    ).toBeNull();
+  });
+
+  it("(e) kirli kişi taslağıyla kapatınca taslak satır kaybolur", async () => {
+    const { fetchMock } = stubFetch();
+    renderPage();
+
+    const people = await peopleSectionEl();
+    await addDraftPerson("Kapanış Kişisi");
+    expect(
+      within(people).getByRole("button", { name: "Kaydet" }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Vakayı Kapat" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Vakayı Aç" }),
+    ).toBeTruthy();
+    expect(within(people).queryByText("Kapanış Kişisi")).toBeNull();
+    expect(within(people).getByText("Ayşe Yılmaz")).toBeTruthy();
+    expect(
+      within(people).queryByRole("button", { name: "Kaydet" }),
+    ).toBeNull();
+    expect(
+      within(people).queryByRole("button", { name: "+ Kişi Ekle" }),
+    ).toBeNull();
+    expect(personCalls(fetchMock, "POST")).toHaveLength(0);
+    expect(personCalls(fetchMock, "PATCH")).toHaveLength(0);
+    expect(personCalls(fetchMock, "DELETE")).toHaveLength(0);
+  });
+
+  it("(f) Kaydet hatasında taslak korunur", async () => {
+    const { fetchMock } = stubFetch(false, { failPersonSave: true });
+    renderPage();
+
+    const people = await peopleSectionEl();
+    await addDraftPerson("Hata Kişisi");
+    fireEvent.click(within(people).getByRole("button", { name: "Kaydet" }));
+
+    expect(
+      await within(people).findByText(/Kişiler kaydedilemedi/),
+    ).toBeTruthy();
+    expect(personCalls(fetchMock, "POST")).toHaveLength(1);
+    expect(within(people).getByText("Hata Kişisi")).toBeTruthy();
+    expect(
+      within(people).getByRole("button", { name: "Kaydet" }),
+    ).toBeTruthy();
+    expect(
+      within(people).getByRole("button", { name: "Vazgeç" }),
+    ).toBeTruthy();
   });
 });
