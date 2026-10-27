@@ -3,6 +3,19 @@ export type ContactStatus = "ulasildi" | "ulasilamadi";
 
 export const PERSON_GENDERS = ["kadın", "erkek", "bilinmiyor"] as const;
 
+export interface CasePersonDraft {
+  id: string;
+  name: string;
+  age: string;
+  gender: string;
+  note: string;
+  type: PersonType;
+  relatedVictimId: string;
+  relationship: string;
+  unidentified: boolean;
+  contactStatus: string;
+}
+
 export interface NormalizedPerson {
   id?: string;
   name: string | null;
