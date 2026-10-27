@@ -6,6 +6,16 @@ export interface LocationLike {
   priority?: LocationPriority | string | null;
 }
 
+export interface CaseLocationDraft {
+  id: string;
+  title: string;
+  note: string;
+  kind: LocationKind;
+  priority: LocationPriority | null;
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface GeoPoint {
   latitude: number;
   longitude: number;
