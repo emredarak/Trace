@@ -170,6 +170,9 @@ describe("public/sw.js", () => {
   it("POST /api/* isteklerini yakalar ve kuyruk mekanizması içerir", () => {
     const sw = readFileSync(join(__dirname, "..", "public", "sw.js"), "utf8");
     expect(sw).toMatch(/POST/);
+    expect(sw).toMatch(/PATCH/);
+    expect(sw).toMatch(/DELETE/);
+    expect(sw).toMatch(/locations/);
     expect(sw).toMatch(/\/api\//);
     expect(sw).toMatch(/fetch/);
     // Kuyruk sinyali: 202 kabul yanıtı + sync/flush mantığı.

@@ -1,6 +1,7 @@
 /* Trace MVP service worker.
  *
- * POST /api/* isteklerini çevrimdışıyken IndexedDB kuyruğuna alır (202 ile),
+ * POST /api/* isteklerini ve /api/cases/<id>/locations[/<locId>] yolundaki
+ * PATCH/DELETE isteklerini çevrimdışıyken IndexedDB kuyruğuna alır (202 ile),
  * bağlantı dönünce sırayla tekrar gönderir. Çakışmada (HTTP 409) sunucu kaydı
  * esas alınır: kuyruktaki kopya silinir.
  *
@@ -129,9 +130,12 @@ self.addEventListener("fetch", (event) => {
   } catch (err) {
     return;
   }
-  if (req.method !== "POST") return;
   if (url.origin !== self.location.origin) return;
   if (!url.pathname.startsWith("/api/")) return;
+  const isLocationMutation =
+    (req.method === "PATCH" || req.method === "DELETE") &&
+    /^\/api\/cases\/[^/]+\/locations(?:\/[^/]+)?\/?$/.test(url.pathname);
+  if (req.method !== "POST" && !isLocationMutation) return;
 
   event.respondWith(
     (async () => {
@@ -142,7 +146,7 @@ self.addEventListener("fetch", (event) => {
       const contentType = req.headers.get("content-type") || "";
       const entry = {
         url: url.pathname + url.search,
-        method: "POST",
+        method: req.method,
         headers,
         enqueuedAt: Date.now(),
         attempts: 0,

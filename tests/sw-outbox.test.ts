@@ -81,14 +81,24 @@ function createFakeIdb() {
   };
 }
 
-function fakePost(
+function fakeRequest(
+  method: string,
   path: string,
-  opts: { text?: string; bytes?: Uint8Array; contentType?: string; unreadable?: boolean } = {},
+  opts: {
+    text?: string;
+    bytes?: Uint8Array;
+    contentType?: string | null;
+    unreadable?: boolean;
+  } = {},
 ) {
-  const contentType = opts.contentType ?? "application/json";
-  const headers = new Map([["content-type", contentType]]);
+  const contentType =
+    opts.contentType === null
+      ? null
+      : (opts.contentType ?? "application/json");
+  const headers = new Map<string, string>();
+  if (contentType) headers.set("content-type", contentType);
   return {
-    method: "POST",
+    method,
     url: `http://localhost${path}`,
     headers: {
       forEach: (cb: (v: string, k: string) => void) =>
@@ -107,6 +117,18 @@ function fakePost(
       },
     }),
   };
+}
+
+function fakePost(
+  path: string,
+  opts: {
+    text?: string;
+    bytes?: Uint8Array;
+    contentType?: string;
+    unreadable?: boolean;
+  } = {},
+) {
+  return fakeRequest("POST", path, opts);
 }
 
 function loadSw(fetchMock: FetchMock) {
@@ -235,6 +257,75 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(Array.from(new Uint8Array(photoInit.body as ArrayBuffer))).toEqual(
       [9, 8, 7, 6],
     );
+    expect(idb.count()).toBe(0);
+  });
+
+  it("çevrimdışı PATCH konum isteği kuyruğa girer ve aynı yöntem/gövdeyle oynatılır", async () => {
+    const { listeners, idb, sandbox } = loadSw(offline());
+
+    const res = await dispatchFetch(
+      listeners,
+      fakeRequest("PATCH", "/api/cases/abc/locations/l1", {
+        text: JSON.stringify({ label: "yeni etiket" }),
+      }),
+    );
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ queued: true });
+    expect(idb.count()).toBe(1);
+
+    const calls: { url: string; init?: RequestInit }[] = [];
+    sandbox.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as FetchMock;
+    await dispatchSync(listeners);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/cases/abc/locations/l1");
+    expect(calls[0].init?.method).toBe("PATCH");
+    expect(JSON.parse(calls[0].init?.body as string)).toMatchObject({
+      label: "yeni etiket",
+    });
+    expect(idb.count()).toBe(0);
+  });
+
+  it("çevrimdışı DELETE konum isteği (gövdesiz) kuyruğa girer ve DELETE olarak oynatılır", async () => {
+    const { listeners, idb, sandbox } = loadSw(offline());
+
+    const res = await dispatchFetch(
+      listeners,
+      fakeRequest("DELETE", "/api/cases/abc/locations/l1", {
+        contentType: null,
+      }),
+    );
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ queued: true });
+    expect(idb.count()).toBe(1);
+
+    const calls: { url: string; init?: RequestInit }[] = [];
+    sandbox.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as FetchMock;
+    await dispatchSync(listeners);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/cases/abc/locations/l1");
+    expect(calls[0].init?.method).toBe("DELETE");
+    expect(calls[0].init?.body ?? undefined).toBeFalsy();
+    expect(idb.count()).toBe(0);
+  });
+
+  it("konum dışı PATCH yakalanmaz", async () => {
+    const { listeners, idb } = loadSw(offline());
+    const res = await dispatchFetch(
+      listeners,
+      fakeRequest("PATCH", "/api/cases/abc", {
+        text: JSON.stringify({ summary: "güncelle" }),
+      }),
+    );
+    // respondWith çağrılmadı: SW isteğe dokunmadı, tarayıcı normal gönderir.
+    expect(res).toBeUndefined();
     expect(idb.count()).toBe(0);
   });
 
