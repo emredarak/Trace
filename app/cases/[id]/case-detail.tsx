@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CaseRecord, Evidence } from "../../../lib/case-schema";
 import type { RankedCase } from "../../../lib/rerank";
 import type { CaseLocation } from "../../api/cases/[id]/route";
@@ -200,6 +200,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     [],
   );
   const [locationStatus, setLocationStatus] = useState("");
+  const savingLocationsRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -248,9 +249,15 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   }, [id]);
 
   async function saveLocations() {
+    // Yeniden giriş koruması: çift tık yinelenen POST yaratmaz.
+    if (savingLocationsRef.current) return;
+    savingLocationsRef.current = true;
     setLocationStatus("");
     // Başarılı işlemler ara tabana işlenir; kısmi hatada taslak korunur.
     let working = [...baselineLocations];
+    // Kimliği sunucudan dönen kopyalarla ilerleyen etkin taslak;
+    // state nesneleri doğrudan değiştirilmez.
+    let effectiveDraft = draftLocations.map((l) => ({ ...l }));
     let queued = false;
     async function readQueued(res: Response): Promise<string | null> {
       try {
@@ -268,7 +275,8 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       const baselineById = new Map(baselineLocations.map((l) => [l.id, l]));
       const currentIds = new Set(draftLocations.map((l) => l.id));
 
-      for (const loc of draftLocations) {
+      for (let i = 0; i < effectiveDraft.length; i++) {
+        const loc = effectiveDraft[i];
         if (!baselineById.has(loc.id)) {
           const locRes = await fetch(`/api/cases/${id}/locations`, {
             method: "POST",
@@ -278,15 +286,17 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           const createdId = await readQueued(locRes);
           if (!locRes.ok) {
             setBaselineLocations(working);
+            setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
             setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
             return;
           }
-          if (createdId) loc.id = createdId;
-          working = [...working, { ...loc }];
+          const savedLoc = createdId ? { ...loc, id: createdId } : { ...loc };
+          effectiveDraft[i] = savedLoc;
+          working = [...working, { ...savedLoc }];
         }
       }
 
-      for (const loc of draftLocations) {
+      for (const loc of effectiveDraft) {
         const original = baselineById.get(loc.id);
         if (original && !sameLocation(original, loc)) {
           const locRes = await fetch(
@@ -300,6 +310,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           await readQueued(locRes);
           if (!locRes.ok) {
             setBaselineLocations(working);
+            setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
             setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
             return;
           }
@@ -316,6 +327,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           await readQueued(locRes);
           if (!locRes.ok) {
             setBaselineLocations(working);
+            setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
             setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
             return;
           }
@@ -333,7 +345,10 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       );
     } catch {
       setBaselineLocations(working);
+      setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
       setLocationStatus("Bağlantı hatası, tekrar deneyin.");
+    } finally {
+      savingLocationsRef.current = false;
     }
   }
 
@@ -456,7 +471,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             }}
             idPrefix="detay"
             readOnly={caseItem.status === "closed"}
-            dirty={locationsDirty}
+            dirty={caseItem.status !== "closed" && locationsDirty}
             status={locationStatus}
             onSave={saveLocations}
             onReset={() => {

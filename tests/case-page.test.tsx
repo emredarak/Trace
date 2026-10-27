@@ -123,7 +123,12 @@ const RESULTS = [
 
 function stubFetch(
   fresh = false,
-  opts: { status?: string; locations?: unknown[]; queued?: boolean } = {},
+  opts: {
+    status?: string;
+    locations?: unknown[];
+    queued?: boolean;
+    failLocationSave?: boolean;
+  } = {},
 ) {
   const calls: { url: string; init?: RequestInit }[] = [];
   const caseBody = {
@@ -136,10 +141,25 @@ function stubFetch(
     if (url === `/api/cases/${CASE_ID}` && !init?.method) {
       return { ok: true, status: 200, json: async () => caseBody };
     }
+    if (url === `/api/cases/${CASE_ID}` && init?.method === "PATCH") {
+      const body = JSON.parse(init.body as string);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ...caseBody, status: body.status }),
+      };
+    }
     if (
       url === `/api/cases/${CASE_ID}/locations` &&
       init?.method === "POST"
     ) {
+      if (opts.failLocationSave) {
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "sunucu hatası" }),
+        };
+      }
       if (opts.queued) {
         return {
           ok: true,
@@ -443,5 +463,68 @@ describe("Vaka detayı Konumlar bölümü", () => {
       expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
     });
     expect(screen.getByText("Kuyruk noktası")).toBeTruthy();
+  });
+
+  it("(g) kirli taslakla vaka kapatılınca Kaydet/Vazgeç ve konum kontrolleri kalkar", async () => {
+    const { fetchMock } = stubFetch();
+    renderPage();
+
+    await screen.findByText("Merdiven girişi");
+    await addDraftLocation("Kapanış taslağı");
+    expect(screen.getByRole("button", { name: "Kaydet" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Vazgeç" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Vakayı Kapat" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Vakayı Aç" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Vazgeç" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "+ Konum Ekle" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Düzenle" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sil" })).toBeNull();
+    expect(locationCalls(fetchMock, "POST")).toHaveLength(0);
+    expect(locationCalls(fetchMock, "PATCH")).toHaveLength(0);
+    expect(locationCalls(fetchMock, "DELETE")).toHaveLength(0);
+  });
+
+  it("(h) Kaydet hata verirse taslak satır ve Kaydet düğmesi korunur", async () => {
+    const { fetchMock } = stubFetch(false, { failLocationSave: true });
+    renderPage();
+
+    await screen.findByText("Merdiven girişi");
+    await addDraftLocation("Hata taslağı");
+    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+
+    expect(
+      await screen.findByText(/Konumlar kaydedilemedi/),
+    ).toBeTruthy();
+    expect(locationCalls(fetchMock, "POST")).toHaveLength(1);
+    // Taslak silinmedi, kullanıcı tekrar deneyebilir.
+    expect(screen.getByText("Hata taslağı")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Kaydet" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Vazgeç" })).toBeTruthy();
+  });
+
+  it("(i) Kaydet'e çift tıklama yinelenen POST yapmaz", async () => {
+    const { fetchMock } = stubFetch();
+    renderPage();
+
+    await screen.findByText("Merdiven girişi");
+    await addDraftLocation("Tek kayıt");
+    const saveButton = screen.getByRole("button", { name: "Kaydet" });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(locationCalls(fetchMock, "POST")).toHaveLength(1);
+    });
+    expect(await screen.findByText(/Konumlar kaydedildi/)).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
+    });
   });
 });

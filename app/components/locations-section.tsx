@@ -173,7 +173,7 @@ export function LocationsSection({
         </p>
       ) : null}
 
-      {dirty ? (
+      {dirty && !readOnly ? (
         <div
           style={{
             display: "flex",
