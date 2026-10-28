@@ -6,6 +6,7 @@ import {
 } from "./transcribe";
 import { markPhoto, type Marking, type MarkingClient } from "./mark-photo";
 import { readUpload } from "./uploads";
+import { enqueueJob } from "./db";
 
 // Enrichment job processing (Task 3).
 //
@@ -103,12 +104,17 @@ function text(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+// Returns true when the result was discarded as stale (file replaced or
+// removed while the model call was in flight) AND the record now points at
+// a different file that still needs processing. The caller then marks this
+// job done first (so enqueueJob dedupe no longer sees it as pending) and
+// re-enqueues a fresh job for the new file.
 async function runJob(
   db: Database.Database,
   job: JobRow,
   transcribeClient: TranscriptionClient | undefined,
   markingClient: MarkingClient | undefined,
-): Promise<void> {
+): Promise<boolean> {
   if (!job.refId) throw new Error("is referansi (refId) yok");
   if (job.kind === "transcribe") {
     const person = db
@@ -120,12 +126,16 @@ async function runJob(
       const audio = readUpload(file);
       if (!audio) throw new Error(`ses dosyasi diskte yok: ${file}`);
       const transcript = await transcribe(audio, file, transcribeClient);
-      db.prepare("UPDATE case_persons SET transcript = ? WHERE id = ? AND caseId = ?").run(
-        JSON.stringify(transcript),
-        job.refId,
-        job.caseId,
-      );
-      return;
+      const res = db
+        .prepare(
+          "UPDATE case_persons SET transcript = ? WHERE id = ? AND caseId = ? AND audioFile = ?",
+        )
+        .run(JSON.stringify(transcript), job.refId, job.caseId, file);
+      if (res.changes > 0) return false;
+      const now = db
+        .prepare("SELECT audioFile FROM case_persons WHERE id = ? AND caseId = ?")
+        .get(job.refId, job.caseId) as { audioFile: unknown } | undefined;
+      return Boolean(now && text(now.audioFile) && text(now.audioFile) !== file);
     }
     const evidence = db
       .prepare("SELECT audioFile FROM evidences WHERE id = ? AND caseId = ?")
@@ -136,12 +146,16 @@ async function runJob(
       const audio = readUpload(file);
       if (!audio) throw new Error(`ses dosyasi diskte yok: ${file}`);
       const transcript = await transcribe(audio, file, transcribeClient);
-      db.prepare("UPDATE evidences SET transcript = ? WHERE id = ? AND caseId = ?").run(
-        JSON.stringify(transcript),
-        job.refId,
-        job.caseId,
-      );
-      return;
+      const res = db
+        .prepare(
+          "UPDATE evidences SET transcript = ? WHERE id = ? AND caseId = ? AND audioFile = ?",
+        )
+        .run(JSON.stringify(transcript), job.refId, job.caseId, file);
+      if (res.changes > 0) return false;
+      const now = db
+        .prepare("SELECT audioFile FROM evidences WHERE id = ? AND caseId = ?")
+        .get(job.refId, job.caseId) as { audioFile: unknown } | undefined;
+      return Boolean(now && text(now.audioFile) && text(now.audioFile) !== file);
     }
     throw new Error("transcribe hedefi bulunamadi (kisi/delil kaydi yok)");
   }
@@ -158,12 +172,16 @@ async function runJob(
     if (!image) throw new Error(`gorsel dosyasi diskte yok: ${file}`);
     const hint = text(evidence.title) ?? text(evidence.note) ?? "delil";
     const marking = await markPhoto(image, hint, markingClient);
-    db.prepare("UPDATE evidences SET marking = ? WHERE id = ? AND caseId = ?").run(
-      JSON.stringify(marking),
-      job.refId,
-      job.caseId,
-    );
-    return;
+    const res = db
+      .prepare(
+        "UPDATE evidences SET marking = ? WHERE id = ? AND caseId = ? AND imageFile = ?",
+      )
+      .run(JSON.stringify(marking), job.refId, job.caseId, file);
+    if (res.changes > 0) return false;
+    const now = db
+      .prepare("SELECT imageFile FROM evidences WHERE id = ? AND caseId = ?")
+      .get(job.refId, job.caseId) as { imageFile: unknown } | undefined;
+    return Boolean(now && text(now.imageFile) && text(now.imageFile) !== file);
   }
   throw new Error(`desteklenmeyen is turu: ${job.kind}`);
 }
@@ -186,10 +204,13 @@ export async function processPendingJobs(
     clients.markPhoto ?? clients.markPhotoClient ?? clients.mark ?? clients.marking ?? clients.markingClient ?? clients.sam,
   );
   // 'dossier' jobs belong to Task 4; leave them pending here.
+  // Retry contract (controller ruling): failed jobs with attempts < 3 are
+  // retried in place by later calls; at attempts >= 3 they stay failed.
   const jobs = db
     .prepare(
       `SELECT id, caseId, kind, refId FROM enrichment_jobs
-       WHERE status = 'pending' AND kind IN ('transcribe', 'sam')
+       WHERE kind IN ('transcribe', 'sam')
+         AND (status = 'pending' OR (status = 'failed' AND attempts < 3))
        ORDER BY createdAt ASC LIMIT ?`,
     )
     .all(safeLimit) as JobRow[];
@@ -198,14 +219,24 @@ export async function processPendingJobs(
   for (const job of jobs) {
     const now = new Date().toISOString();
     try {
-      await runJob(db, job, transcribeClient, markingClient);
+      const needsRequeue = await runJob(db, job, transcribeClient, markingClient);
       db.prepare(
         "UPDATE enrichment_jobs SET status = 'done', attempts = attempts + 1, lastError = NULL, updatedAt = ? WHERE id = ?",
       ).run(now, job.id);
       done++;
+      if (needsRequeue && job.refId) {
+        // Stale result discarded; the record's new file still needs work.
+        // Enqueued only after this job is 'done' so dedupe does not
+        // collapse it into the just-finished job.
+        enqueueJob(db, {
+          caseId: job.caseId,
+          kind: job.kind as "transcribe" | "sam",
+          refId: job.refId,
+        });
+      }
     } catch (err) {
-      // Record (person/evidence) is never deleted; job stays retryable by
-      // re-enqueueing (enqueueJob opens a new job once this one is failed).
+      // Record (person/evidence) is never deleted; the job is retried by a
+      // later processPendingJobs call while attempts < 3.
       db.prepare(
         "UPDATE enrichment_jobs SET status = 'failed', attempts = attempts + 1, lastError = ?, updatedAt = ? WHERE id = ?",
       ).run(err instanceof Error ? err.message : String(err), now, job.id);

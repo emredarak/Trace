@@ -85,17 +85,6 @@ export async function PATCH(req: Request, { params }: Params) {
         evidenceId,
         id,
       );
-    if (hasNewImage) enqueueJob(getDb(), { caseId: id, kind: "sam", refId: evidenceId });
-    if (hasNewAudio) enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: evidenceId });
-    if ((hasNewImage || removeImage) && current.imageFile) {
-      deleteUpload(current.imageFile);
-    }
-    if ((hasNewAudio || removeAudio) && current.audioFile) {
-      deleteUpload(current.audioFile);
-    }
-    getDb().prepare("UPDATE cases SET needsRerank = 1 WHERE id = ?").run(id);
-    const updated = findRow(id, evidenceId);
-    return NextResponse.json(updated ? toEvidenceResponse(updated) : null);
   } catch {
     for (const name of saved) deleteUpload(name);
     return NextResponse.json(
@@ -103,6 +92,19 @@ export async function PATCH(req: Request, { params }: Params) {
       { status: 500 },
     );
   }
+  // After commit, outside the cleanup catch: enqueue failures or old-file
+  // cleanup must never delete files the committed row now references.
+  if (hasNewImage) enqueueJob(getDb(), { caseId: id, kind: "sam", refId: evidenceId });
+  if (hasNewAudio) enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: evidenceId });
+  if ((hasNewImage || removeImage) && current.imageFile) {
+    deleteUpload(current.imageFile);
+  }
+  if ((hasNewAudio || removeAudio) && current.audioFile) {
+    deleteUpload(current.audioFile);
+  }
+  getDb().prepare("UPDATE cases SET needsRerank = 1 WHERE id = ?").run(id);
+  const updated = findRow(id, evidenceId);
+  return NextResponse.json(updated ? toEvidenceResponse(updated) : null);
 }
 
 export async function DELETE(_req: Request, { params }: Params) {

@@ -88,12 +88,15 @@ export async function POST(req: Request, { params }: Params) {
     );
   }
   const saved: string[] = [];
+  let evidenceId = "";
+  let imageFile: string | null = null;
+  let audioFile: string | null = null;
   try {
-    const imageFile = hasImage ? await saveUpload(image as File, id) : null;
+    imageFile = hasImage ? await saveUpload(image as File, id) : null;
     if (imageFile) saved.push(imageFile);
-    const audioFile = hasAudio ? await saveUpload(audio as File, id) : null;
+    audioFile = hasAudio ? await saveUpload(audio as File, id) : null;
     if (audioFile) saved.push(audioFile);
-    const evidenceId = clientId ?? randomUUID();
+    evidenceId = clientId ?? randomUUID();
     getDb()
       .prepare(
         "INSERT INTO evidences (id, caseId, type, title, note, imageFile, audioFile, createdAt) VALUES (?, ?, 'evidence', ?, ?, ?, ?, ?)",
@@ -107,10 +110,6 @@ export async function POST(req: Request, { params }: Params) {
         audioFile,
         new Date().toISOString(),
       );
-    if (imageFile) enqueueJob(getDb(), { caseId: id, kind: "sam", refId: evidenceId });
-    if (audioFile) enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: evidenceId });
-    getDb().prepare("UPDATE cases SET needsRerank = 1 WHERE id = ?").run(id);
-    return NextResponse.json(findEvidence(evidenceId), { status: 201 });
   } catch {
     for (const name of saved) deleteUpload(name);
     return NextResponse.json(
@@ -118,4 +117,10 @@ export async function POST(req: Request, { params }: Params) {
       { status: 500 },
     );
   }
+  // Enqueue after the row is committed and outside the file-cleanup catch:
+  // an enqueue failure must never delete files the committed row references.
+  if (imageFile) enqueueJob(getDb(), { caseId: id, kind: "sam", refId: evidenceId });
+  if (audioFile) enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: evidenceId });
+  getDb().prepare("UPDATE cases SET needsRerank = 1 WHERE id = ?").run(id);
+  return NextResponse.json(findEvidence(evidenceId), { status: 201 });
 }
