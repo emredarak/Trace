@@ -8,6 +8,7 @@ import {
   victimLabel,
   type CasePersonDraft,
 } from "../../lib/persons";
+import { evidenceFileUrl } from "../../lib/evidences";
 
 export interface PeopleSectionProps {
   persons: CasePersonDraft[];
@@ -166,6 +167,15 @@ export function PeopleSection({
                   Ulaşılamadı
                 </span>
               ) : null}{" "}
+              {person.type !== "maktul" && person.audioFile && !person.removeAudio ? (
+                <audio
+                  controls
+                  src={evidenceFileUrl(person.audioFile)}
+                  style={{ display: "block", margin: "0.5rem 0" }}
+                />
+              ) : person.type !== "maktul" && person.audio ? (
+                <span>Sorgu sesi (kaydedilmedi): {person.audio.name} </span>
+              ) : null}
               {!readOnly ? (
                 <>
                   <button type="button" onClick={() => setEditor(person)} style={buttonStyle}>

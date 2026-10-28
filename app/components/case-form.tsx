@@ -3,8 +3,10 @@
 import { useState, type ReactNode } from "react";
 import LocationsSection from "./locations-section";
 import PeopleSection from "./people-section";
+import EvidenceSection from "./evidence-section";
 import type { CaseLocationDraft } from "../../lib/locations";
 import type { CasePersonDraft } from "../../lib/persons";
+import type { CaseEvidenceDraft } from "../../lib/evidences";
 
 export type { CaseLocationDraft } from "../../lib/locations";
 export type { CasePersonDraft } from "../../lib/persons";
@@ -99,6 +101,7 @@ interface CaseFormProps {
   initial: CaseFormValues;
   initialLocations?: CaseLocationDraft[];
   initialPersons?: CasePersonDraft[];
+  initialEvidences?: CaseEvidenceDraft[];
   header?: ReactNode;
   submitLabel: string;
   saving?: boolean;
@@ -107,6 +110,7 @@ interface CaseFormProps {
     payload: CaseFormPayload,
     locations: CaseLocationDraft[],
     persons: CasePersonDraft[],
+    evidences: CaseEvidenceDraft[],
   ) => Promise<void>;
 }
 
@@ -115,6 +119,7 @@ export default function CaseForm({
   initial,
   initialLocations = [],
   initialPersons = [],
+  initialEvidences = [],
   header,
   submitLabel,
   saving = false,
@@ -126,6 +131,8 @@ export default function CaseForm({
   const [locations, setLocations] =
     useState<CaseLocationDraft[]>(initialLocations);
   const [persons, setPersons] = useState<CasePersonDraft[]>(initialPersons);
+  const [evidences, setEvidences] =
+    useState<CaseEvidenceDraft[]>(initialEvidences);
 
   const set = (key: keyof CaseFormValues) => (e: { target: { value: string } }) =>
     setValues((v) => ({ ...v, [key]: e.target.value }));
@@ -151,6 +158,7 @@ export default function CaseForm({
       },
       locations,
       persons,
+      evidences,
     );
   }
 
@@ -231,6 +239,12 @@ export default function CaseForm({
         <LocationsSection
           locations={locations}
           onChange={setLocations}
+          idPrefix={idPrefix}
+        />
+
+        <EvidenceSection
+          evidences={evidences}
+          onChange={setEvidences}
           idPrefix={idPrefix}
         />
 

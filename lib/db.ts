@@ -124,6 +124,32 @@ export function initDb(): void {
   if (!locationColumns.has("priority")) {
     database.exec("ALTER TABLE case_locations ADD COLUMN priority TEXT");
   }
+  const evidenceColumns = new Set(
+    (
+      database.prepare("PRAGMA table_info(evidences)").all() as {
+        name: string;
+      }[]
+    ).map((c) => c.name),
+  );
+  if (!evidenceColumns.has("title")) {
+    database.exec("ALTER TABLE evidences ADD COLUMN title TEXT");
+  }
+  if (!evidenceColumns.has("imageFile")) {
+    database.exec("ALTER TABLE evidences ADD COLUMN imageFile TEXT");
+  }
+  if (!evidenceColumns.has("audioFile")) {
+    database.exec("ALTER TABLE evidences ADD COLUMN audioFile TEXT");
+  }
+  const personColumns = new Set(
+    (
+      database.prepare("PRAGMA table_info(case_persons)").all() as {
+        name: string;
+      }[]
+    ).map((c) => c.name),
+  );
+  if (!personColumns.has("audioFile")) {
+    database.exec("ALTER TABLE case_persons ADD COLUMN audioFile TEXT");
+  }
 }
 
 function nextCaseNo(database: Database.Database): string {

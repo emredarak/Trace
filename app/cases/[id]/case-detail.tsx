@@ -6,8 +6,13 @@ import type { RankedCase } from "../../../lib/rerank";
 import type { CaseLocation, CasePerson } from "../../api/cases/[id]/route";
 import { LocationsSection } from "../../components/locations-section";
 import { PeopleSection } from "../../components/people-section";
+import { EvidenceSection } from "../../components/evidence-section";
 import type { CaseLocationDraft } from "../../../lib/locations";
 import type { CasePersonDraft } from "../../../lib/persons";
+import {
+  toEvidenceResponse,
+  type CaseEvidenceDraft,
+} from "../../../lib/evidences";
 
 type CaseWithEntries = CaseRecord & {
   entries?: Evidence[];
@@ -18,19 +23,6 @@ type CaseWithEntries = CaseRecord & {
 interface SimilarResponse {
   results: RankedCase[];
   fresh: boolean;
-}
-
-interface PhotoMarking {
-  hint?: unknown;
-  boxes?: unknown;
-}
-
-interface Box {
-  x?: unknown;
-  y?: unknown;
-  w?: unknown;
-  h?: unknown;
-  label?: unknown;
 }
 
 const layoutCss = [
@@ -70,67 +62,54 @@ const approveButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-function entryNote(entry: Evidence): string {
-  return typeof entry.note === "string" ? entry.note : "";
+function toEvidenceDraft(e: Evidence): CaseEvidenceDraft {
+  const view = toEvidenceResponse(e as unknown as Record<string, unknown>);
+  return {
+    id: view.id,
+    title: view.title,
+    note: view.note ?? "",
+    type: view.type,
+    imageFile: view.imageFile,
+    audioFile: view.audioFile,
+    image: null,
+    audio: null,
+    removeImage: false,
+    removeAudio: false,
+  };
 }
 
-function parsePhotoMarking(note: string): PhotoMarking | null {
-  try {
-    const parsed: unknown = JSON.parse(note);
-    if (typeof parsed === "object" && parsed !== null) return parsed as PhotoMarking;
-    return null;
-  } catch {
-    return null;
-  }
+function evidenceForm(e: CaseEvidenceDraft, includeId: boolean): FormData {
+  const form = new FormData();
+  if (includeId) form.append("id", e.id);
+  form.append("title", e.title);
+  form.append("note", e.note);
+  if (e.image) form.append("image", e.image);
+  if (e.audio) form.append("audio", e.audio);
+  if (e.removeImage) form.append("removeImage", "1");
+  if (e.removeAudio) form.append("removeAudio", "1");
+  return form;
 }
 
-function boxesOf(marking: PhotoMarking): Box[] {
-  return Array.isArray(marking.boxes) ? (marking.boxes as Box[]) : [];
-}
-
-function EntryView({ entry }: { entry: Evidence }) {
-  const note = entryNote(entry);
-  if (entry.type === "transcript") {
-    return (
-      <li>
-        <strong>İfade: </strong>
-        {note || "(boş çözüm metni)"}
-      </li>
-    );
-  }
-  if (entry.type === "photo-marking") {
-    const marking = parsePhotoMarking(note);
-    if (!marking) {
-      return (
-        <li>
-          <strong>Fotoğraf: </strong>
-          {note || "(işaret bilgisi okunamadı)"}
-        </li>
-      );
-    }
-    const hint = typeof marking.hint === "string" ? marking.hint : "";
-    const boxes = boxesOf(marking);
-    return (
-      <li>
-        <strong>Fotoğraf{hint ? `: ${hint}` : ""} </strong>({boxes.length} kutu)
-        {boxes.length > 0 ? (
-          <ul>
-            {boxes.map((b, i) => (
-              <li key={i}>
-                {typeof b.label === "string" && b.label ? b.label : `kutu ${i + 1}`}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </li>
-    );
-  }
+function sameEvidence(a: CaseEvidenceDraft, b: CaseEvidenceDraft): boolean {
   return (
-    <li>
-      <strong>{entry.type}: </strong>
-      {note}
-    </li>
+    a.id === b.id &&
+    a.title === b.title &&
+    a.note === b.note &&
+    (a.type ?? "evidence") === (b.type ?? "evidence") &&
+    (a.imageFile ?? null) === (b.imageFile ?? null) &&
+    (a.audioFile ?? null) === (b.audioFile ?? null) &&
+    (a.image ?? null) === (b.image ?? null) &&
+    (a.audio ?? null) === (b.audio ?? null) &&
+    Boolean(a.removeImage) === Boolean(b.removeImage) &&
+    Boolean(a.removeAudio) === Boolean(b.removeAudio)
   );
+}
+
+function sameEvidences(
+  a: CaseEvidenceDraft[],
+  b: CaseEvidenceDraft[],
+): boolean {
+  return a.length === b.length && a.every((e, i) => sameEvidence(e, b[i]));
 }
 
 function toDraft(l: CaseLocation): CaseLocationDraft {
@@ -187,6 +166,9 @@ function toPersonDraft(p: CasePerson): CasePersonDraft {
     relationship: p.relationship ?? "",
     unidentified: Boolean(p.unidentified),
     contactStatus: p.contactStatus ?? "",
+    audioFile: p.audioFile ?? null,
+    audio: null,
+    removeAudio: false,
   };
 }
 
@@ -217,7 +199,10 @@ function samePerson(a: CasePersonDraft, b: CasePersonDraft): boolean {
     a.relatedVictimId === b.relatedVictimId &&
     a.relationship === b.relationship &&
     a.unidentified === b.unidentified &&
-    a.contactStatus === b.contactStatus
+    a.contactStatus === b.contactStatus &&
+    (a.audioFile ?? null) === (b.audioFile ?? null) &&
+    (a.audio ?? null) === (b.audio ?? null) &&
+    Boolean(a.removeAudio) === Boolean(b.removeAudio)
   );
 }
 
@@ -265,6 +250,13 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   const [personStatus, setPersonStatus] = useState("");
   const [savingPersons, setSavingPersons] = useState(false);
   const savingPersonsRef = useRef(false);
+  const [baselineEvidences, setBaselineEvidences] = useState<
+    CaseEvidenceDraft[]
+  >([]);
+  const [draftEvidences, setDraftEvidences] = useState<CaseEvidenceDraft[]>([]);
+  const [evidenceStatus, setEvidenceStatus] = useState("");
+  const [savingEvidences, setSavingEvidences] = useState(false);
+  const savingEvidencesRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,6 +281,11 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             ).map(toPersonDraft);
             setBaselinePersons(personDrafts);
             setDraftPersons(personDrafts.map((p) => ({ ...p })));
+            const evidenceDrafts = (
+              Array.isArray(found.entries) ? found.entries : []
+            ).map(toEvidenceDraft);
+            setBaselineEvidences(evidenceDrafts);
+            setDraftEvidences(evidenceDrafts.map((e) => ({ ...e })));
           } else setCaseMissing(true);
         }
       } catch {
@@ -423,6 +420,144 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     }
   }
 
+  async function saveEvidences() {
+    if (savingEvidencesRef.current) return;
+    savingEvidencesRef.current = true;
+    setSavingEvidences(true);
+    setEvidenceStatus("");
+    let working = [...baselineEvidences];
+    let effectiveDraft = draftEvidences.map((e) => ({ ...e }));
+    let queued = false;
+    async function readBody(res: Response): Promise<{
+      queued?: boolean;
+      id?: unknown;
+      imageFile?: unknown;
+      audioFile?: unknown;
+    } | null> {
+      try {
+        const body = (await res.json()) as {
+          queued?: boolean;
+          id?: unknown;
+          imageFile?: unknown;
+          audioFile?: unknown;
+        } | null;
+        if (body?.queued === true) queued = true;
+        return body;
+      } catch {
+        return null;
+      }
+    }
+    function failSave() {
+      setBaselineEvidences(working);
+      setDraftEvidences(effectiveDraft.map((e) => ({ ...e })));
+      setEvidenceStatus("Deliller kaydedilemedi, tekrar deneyin.");
+    }
+    try {
+      const baselineById = new Map(baselineEvidences.map((e) => [e.id, e]));
+      const currentIds = new Set(draftEvidences.map((e) => e.id));
+
+      for (let i = 0; i < effectiveDraft.length; i++) {
+        const evidence = effectiveDraft[i];
+        if (baselineById.has(evidence.id)) continue;
+        const res = await fetch(`/api/cases/${id}/evidences`, {
+          method: "POST",
+          body: evidenceForm(evidence, true),
+        });
+        const body = await readBody(res);
+        if (!res.ok) {
+          failSave();
+          return;
+        }
+        const saved: CaseEvidenceDraft = {
+          ...evidence,
+          id: typeof body?.id === "string" ? body.id : evidence.id,
+          imageFile:
+            typeof body?.imageFile === "string"
+              ? body.imageFile
+              : (evidence.imageFile ?? null),
+          audioFile:
+            typeof body?.audioFile === "string"
+              ? body.audioFile
+              : (evidence.audioFile ?? null),
+          image: null,
+          audio: null,
+          removeImage: false,
+          removeAudio: false,
+        };
+        effectiveDraft[i] = saved;
+        working = [...working, { ...saved }];
+      }
+
+      for (const evidence of effectiveDraft) {
+        const original = baselineById.get(evidence.id);
+        if (original && !sameEvidence(original, evidence)) {
+          const res = await fetch(
+            `/api/cases/${id}/evidences/${evidence.id}`,
+            { method: "PATCH", body: evidenceForm(evidence, false) },
+          );
+          const body = await readBody(res);
+          if (!res.ok) {
+            failSave();
+            return;
+          }
+          const saved: CaseEvidenceDraft = {
+            ...evidence,
+            imageFile:
+              typeof body?.imageFile === "string"
+                ? body.imageFile
+                : evidence.removeImage
+                  ? null
+                  : (evidence.imageFile ?? null),
+            audioFile:
+              typeof body?.audioFile === "string"
+                ? body.audioFile
+                : evidence.removeAudio
+                  ? null
+                  : (evidence.audioFile ?? null),
+            image: null,
+            audio: null,
+            removeImage: false,
+            removeAudio: false,
+          };
+          const idx = effectiveDraft.findIndex((e) => e.id === evidence.id);
+          if (idx >= 0) effectiveDraft[idx] = saved;
+          working = working.map((e) => (e.id === evidence.id ? { ...saved } : e));
+        }
+      }
+
+      for (const original of baselineEvidences) {
+        if (!currentIds.has(original.id)) {
+          const res = await fetch(
+            `/api/cases/${id}/evidences/${original.id}`,
+            { method: "DELETE" },
+          );
+          await readBody(res);
+          if (!res.ok) {
+            failSave();
+            return;
+          }
+          working = working.filter((e) => e.id !== original.id);
+        }
+      }
+
+      const persisted = working.map((e) => ({ ...e }));
+      setBaselineEvidences(persisted);
+      setDraftEvidences(persisted.map((e) => ({ ...e })));
+      setEvidenceStatus(
+        queued
+          ? "Kuyruğa alındı, bağlantı gelince gönderilecek."
+          : "Deliller kaydedildi.",
+      );
+    } catch {
+      setBaselineEvidences(working);
+      setDraftEvidences(effectiveDraft.map((e) => ({ ...e })));
+      setEvidenceStatus("Bağlantı hatası, tekrar deneyin.");
+    } finally {
+      savingEvidencesRef.current = false;
+      setSavingEvidences(false);
+    }
+  }
+
   async function savePersons() {
     // Yeniden giriş koruması: çift tık yinelenen POST yaratmaz.
     if (savingPersonsRef.current) return;
@@ -450,6 +585,44 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       setDraftPersons(effectiveDraft.map((p) => ({ ...p })));
       setPersonStatus("Kişiler kaydedilemedi, tekrar deneyin.");
     }
+    // Sorgu sesini kişi kaydından sonra ayrı uçla eşitler; güncel
+    // audioFile değerini döndürür, hata durumunda throw eder.
+    async function syncAudio(
+      personId: string,
+      person: CasePersonDraft,
+    ): Promise<string | null> {
+      if (person.type === "maktul") return null;
+      if (person.audio) {
+        const form = new FormData();
+        form.append("file", person.audio);
+        const res = await fetch(`/api/cases/${id}/persons/${personId}/audio`, {
+          method: "POST",
+          body: form,
+        });
+        let audioFile: string | null = person.audioFile ?? null;
+        try {
+          const body = (await res.json()) as {
+            queued?: boolean;
+            audioFile?: unknown;
+          } | null;
+          if (body?.queued === true) queued = true;
+          if (typeof body?.audioFile === "string") audioFile = body.audioFile;
+        } catch {
+          // gövde okunamazsa eski değer korunur
+        }
+        if (!res.ok) throw new Error("audio upload failed");
+        return audioFile;
+      }
+      if (person.removeAudio && person.audioFile) {
+        const res = await fetch(`/api/cases/${id}/persons/${personId}/audio`, {
+          method: "DELETE",
+        });
+        await readQueued(res);
+        if (!res.ok) throw new Error("audio delete failed");
+        return null;
+      }
+      return person.audioFile ?? null;
+    }
     try {
       const baselineById = new Map(baselinePersons.map((p) => [p.id, p]));
       const currentIds = new Set(draftPersons.map((p) => p.id));
@@ -470,9 +643,23 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             failSave();
             return;
           }
-          const savedPerson = createdId
+          let savedPerson = createdId
             ? { ...person, id: createdId }
             : { ...person };
+          try {
+            const audioFile = await syncAudio(savedPerson.id, savedPerson);
+            savedPerson = {
+              ...savedPerson,
+              audioFile,
+              audio: null,
+              removeAudio: false,
+            };
+          } catch {
+            effectiveDraft[i] = savedPerson;
+            working = [...working, { ...savedPerson }];
+            failSave();
+            return;
+          }
           effectiveDraft[i] = savedPerson;
           if (savedPerson.id !== person.id) {
             effectiveDraft = effectiveDraft.map((p) =>
@@ -501,8 +688,23 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             failSave();
             return;
           }
+          let savedPerson = { ...person };
+          try {
+            const audioFile = await syncAudio(person.id, person);
+            savedPerson = {
+              ...savedPerson,
+              audioFile,
+              audio: null,
+              removeAudio: false,
+            };
+          } catch {
+            failSave();
+            return;
+          }
+          const idx = effectiveDraft.findIndex((p) => p.id === person.id);
+          if (idx >= 0) effectiveDraft[idx] = savedPerson;
           working = working.map((p) =>
-            p.id === person.id ? { ...person } : p,
+            p.id === person.id ? { ...savedPerson } : p,
           );
         }
       }
@@ -558,6 +760,8 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             setLocationStatus("");
             setDraftPersons(baselinePersons.map((p) => ({ ...p })));
             setPersonStatus("");
+            setDraftEvidences(baselineEvidences.map((e) => ({ ...e })));
+            setEvidenceStatus("");
           }
           setCaseItem({ ...caseItem, status: body.status });
         }
@@ -611,9 +815,9 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   }
 
   const showFreshBadge = similar?.fresh === false || caseItem.needsRerank === true;
-  const entries = Array.isArray(caseItem.entries) ? caseItem.entries : [];
   const locationsDirty = !sameLocations(baselineLocations, draftLocations);
   const personsDirty = !samePersons(baselinePersons, draftPersons);
+  const evidencesDirty = !sameEvidences(baselineEvidences, draftEvidences);
 
   return (
     <main style={mainStyle}>
@@ -639,20 +843,22 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           {fieldRow("Yöntem", caseItem.mo)}
           {fieldRow("Silah", caseItem.weapon)}
           {fieldRow("Durum", caseItem.status === "closed" ? "Kapalı" : "Açık")}
-          <h3>Deliller ({entries.length})</h3>          {caseItem.status !== "closed" ? (
-            <p>
-              <a href={`/cases/${caseItem.id}/edit`}>Vakayı Düzenle</a>
-            </p>
-          ) : null}
-          {entries.length === 0 ? (
-            <p>Delil yok.</p>
-          ) : (
-            <ul>
-              {entries.map((e) => (
-                <EntryView key={e.id} entry={e} />
-              ))}
-            </ul>
-          )}
+          <EvidenceSection
+            evidences={draftEvidences}
+            onChange={(evidences) => {
+              setDraftEvidences(evidences);
+              setEvidenceStatus("");
+            }}
+            idPrefix="detay"
+            readOnly={caseItem.status === "closed" || savingEvidences}
+            dirty={caseItem.status !== "closed" && evidencesDirty}
+            status={evidenceStatus}
+            onSave={saveEvidences}
+            onReset={() => {
+              setDraftEvidences(baselineEvidences.map((e) => ({ ...e })));
+              setEvidenceStatus("");
+            }}
+          />
           <LocationsSection
             locations={draftLocations}
             onChange={(locs) => {

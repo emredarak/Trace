@@ -14,6 +14,9 @@ export interface CasePersonDraft {
   relationship: string;
   unidentified: boolean;
   contactStatus: string;
+  audioFile?: string | null;
+  audio?: File | null;
+  removeAudio?: boolean;
 }
 
 export interface NormalizedPerson {
@@ -182,6 +185,7 @@ export interface CasePerson {
   relationship: string | null;
   unidentified: boolean;
   contactStatus: ContactStatus | null;
+  audioFile: string | null;
   createdAt: string;
 }
 
@@ -206,6 +210,7 @@ export function toPersonResponse(row: Record<string, unknown>): CasePerson {
       row.contactStatus === "ulasildi" || row.contactStatus === "ulasilamadi"
         ? row.contactStatus
         : null,
+    audioFile: text(row.audioFile),
     createdAt: String(row.createdAt),
   };
 }

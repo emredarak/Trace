@@ -4,6 +4,7 @@ import {
   normalizePersonInput,
   toPersonResponse,
 } from "../../../../../../lib/persons";
+import { deleteUpload } from "../../../../../../lib/uploads";
 
 type Params = { params: Promise<{ id: string; personId: string }> };
 
@@ -59,9 +60,10 @@ export async function PATCH(req: Request, { params }: Params) {
     );
   }
   const db = getDb();
+  const clearAudio = normalized.type === "maktul";
   db.transaction(() => {
     db.prepare(
-      "UPDATE case_persons SET name = ?, age = ?, gender = ?, note = ?, type = ?, relatedVictimId = ?, relationship = ?, unidentified = ?, contactStatus = ? WHERE id = ? AND caseId = ?",
+      `UPDATE case_persons SET name = ?, age = ?, gender = ?, note = ?, type = ?, relatedVictimId = ?, relationship = ?, unidentified = ?, contactStatus = ?${clearAudio ? ", audioFile = NULL" : ""} WHERE id = ? AND caseId = ?`,
     ).run(
       normalized.name,
       normalized.age,
@@ -81,6 +83,7 @@ export async function PATCH(req: Request, { params }: Params) {
       ).run(personId, id);
     }
   })();
+  if (clearAudio) deleteUpload(toPersonResponse(existing).audioFile);
   const updated = findRow(id, personId);
   if (!updated) {
     return NextResponse.json({ error: "person not found" }, { status: 404 });
@@ -91,7 +94,8 @@ export async function PATCH(req: Request, { params }: Params) {
 export async function DELETE(_req: Request, { params }: Params) {
   initDb();
   const { id, personId } = await params;
-  if (!findRow(id, personId)) {
+  const existingRow = findRow(id, personId);
+  if (!existingRow) {
     return NextResponse.json({ error: "person not found" }, { status: 404 });
   }
   const db = getDb();
@@ -103,5 +107,6 @@ export async function DELETE(_req: Request, { params }: Params) {
       "DELETE FROM case_persons WHERE id = ? AND caseId = ?",
     ).run(personId, id);
   })();
+  deleteUpload(toPersonResponse(existingRow).audioFile);
   return NextResponse.json({ deleted: true });
 }

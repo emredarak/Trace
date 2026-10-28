@@ -7,6 +7,7 @@ import CaseForm, {
 } from "../components/case-form";
 import type { CaseLocationDraft } from "../../lib/locations";
 import type { CasePersonDraft } from "../../lib/persons";
+import type { CaseEvidenceDraft } from "../../lib/evidences";
 
 const wrap: React.CSSProperties = {
   maxWidth: "28rem",
@@ -34,6 +35,7 @@ export default function NewCasePage() {
     payload: CaseFormPayload,
     locations: CaseLocationDraft[],
     persons: CasePersonDraft[],
+    evidences: CaseEvidenceDraft[],
   ) {
     setError("");
     setSaving(true);
@@ -88,6 +90,46 @@ export default function NewCasePage() {
         typeof body.id === "string" &&
         typeof body.caseNo === "string"
       ) {
+        // Dosyalar (delil görsel/ses, kişi sorgu sesi) vaka açıldıktan
+        // sonra ayrı uçlardan yüklenir; biri başarısız olursa vaka
+        // yine de açılmış sayılır, kullanıcıya bilgi verilir.
+        let uploadFailed = false;
+        for (const evidence of evidences) {
+          try {
+            const form = new FormData();
+            form.append("id", evidence.id);
+            form.append("title", evidence.title);
+            form.append("note", evidence.note);
+            if (evidence.image) form.append("image", evidence.image);
+            if (evidence.audio) form.append("audio", evidence.audio);
+            const evRes = await fetch(`/api/cases/${body.id}/evidences`, {
+              method: "POST",
+              body: form,
+            });
+            if (!evRes.ok) uploadFailed = true;
+          } catch {
+            uploadFailed = true;
+          }
+        }
+        for (const person of persons) {
+          if (!person.audio || person.type === "maktul") continue;
+          try {
+            const form = new FormData();
+            form.append("file", person.audio);
+            const audioRes = await fetch(
+              `/api/cases/${body.id}/persons/${person.id}/audio`,
+              { method: "POST", body: form },
+            );
+            if (!audioRes.ok) uploadFailed = true;
+          } catch {
+            uploadFailed = true;
+          }
+        }
+        if (uploadFailed) {
+          setError(
+            "Vaka açıldı ancak bazı dosyalar yüklenemedi; vaka detayından tekrar ekleyebilirsiniz.",
+          );
+        }
         setCreated({ id: body.id, caseNo: body.caseNo });
       } else {
         setError("Kayıt açılamadı, tekrar deneyin.");

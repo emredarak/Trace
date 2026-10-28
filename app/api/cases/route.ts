@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb, initDb, insertCase } from "../../../lib/db";
 import type { CaseRecord, Evidence } from "../../../lib/case-schema";
+import { toEvidenceResponse } from "../../../lib/evidences";
 
 interface CaseRow {
   id: string;
@@ -49,9 +50,11 @@ export async function GET() {
   const rows = db
     .prepare("SELECT * FROM cases ORDER BY createdAt ASC")
     .all() as CaseRow[];
-  const evidences = db
-    .prepare("SELECT * FROM evidences ORDER BY createdAt ASC")
-    .all() as Evidence[];
+  const evidences = (
+    db
+      .prepare("SELECT * FROM evidences ORDER BY createdAt ASC")
+      .all() as Record<string, unknown>[]
+  ).map(toEvidenceResponse) as Evidence[];
   const byCase = new Map<string, Evidence[]>();
   for (const ev of evidences) {
     const list = byCase.get(ev.caseId) ?? [];

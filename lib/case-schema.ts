@@ -8,7 +8,10 @@ export interface Evidence {
   id: string;
   caseId: string;
   type: string;
-  note?: string;
+  title?: string;
+  note?: string | null;
+  imageFile?: string | null;
+  audioFile?: string | null;
   createdAt: string;
 }
 

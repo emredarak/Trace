@@ -300,6 +300,48 @@ function stubFetch(
     ) {
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }
+    if (url === `/api/cases/${CASE_ID}/evidences` && init?.method === "POST") {
+      const form = init.body as FormData;
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({
+          id: "delil-yeni",
+          caseId: CASE_ID,
+          type: "evidence",
+          title: form.get("title"),
+          note: form.get("note") || null,
+          imageFile: null,
+          audioFile: null,
+          createdAt: "2026-10-26T00:04:00.000Z",
+        }),
+      };
+    }
+    if (
+      url.startsWith(`/api/cases/${CASE_ID}/evidences/`) &&
+      init?.method === "PATCH"
+    ) {
+      const form = init.body as FormData;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: url.split("/").pop(),
+          caseId: CASE_ID,
+          type: "evidence",
+          title: form.get("title"),
+          note: form.get("note") || null,
+          imageFile: null,
+          audioFile: null,
+        }),
+      };
+    }
+    if (
+      url.startsWith(`/api/cases/${CASE_ID}/evidences/`) &&
+      init?.method === "DELETE"
+    ) {
+      return { ok: true, status: 200, json: async () => ({ ok: true }) };
+    }
     if (url === `/api/cases/${CASE_ID}/similar`) {
       return {
         ok: true,
@@ -390,6 +432,68 @@ describe("Vaka detay + benzer liste", () => {
       targetId: "vaka-2",
     });
     expect(await within(list).findByText(/onaylandı/i)).toBeTruthy();
+  });
+});
+
+describe("Vaka detayı Deliller bölümü", () => {
+  it("Vakayı Düzenle bağlantısı yoktur", async () => {
+    stubFetch();
+    renderPage();
+    expect(await screen.findByText("gece hırsızlık olayı")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /vakayı düzenle/i })).toBeNull();
+    expect(document.querySelector('a[href$="/edit"]')).toBeNull();
+  });
+
+  it("taslak delil Kaydet olmadan gitmez; Kaydet multipart POST yapar", async () => {
+    const { fetchMock } = stubFetch();
+    renderPage();
+
+    const heading = await screen.findByRole("heading", { name: "Deliller" });
+    const section = heading.closest("section") as HTMLElement;
+    fireEvent.click(within(section).getByRole("button", { name: "+ Delil Ekle" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/başlı/i), {
+      target: { value: "Yeni delil" },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/not/i), {
+      target: { value: "delil notu" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Delili Kullan" }));
+    expect(await within(section).findByText("Yeni delil")).toBeTruthy();
+
+    const postsBefore = fetchMock.mock.calls.filter(
+      ([url, init]) =>
+        url === `/api/cases/${CASE_ID}/evidences` &&
+        (init as RequestInit)?.method === "POST",
+    );
+    expect(postsBefore).toHaveLength(0);
+
+    fireEvent.click(within(section).getByRole("button", { name: "Kaydet" }));
+    await waitFor(() => {
+      const posts = fetchMock.mock.calls.filter(
+        ([url, init]) =>
+          url === `/api/cases/${CASE_ID}/evidences` &&
+          (init as RequestInit)?.method === "POST",
+      );
+      expect(posts).toHaveLength(1);
+      const body = (posts[0][1] as RequestInit).body as FormData;
+      expect(body.get("title")).toBe("Yeni delil");
+      expect(body.get("note")).toBe("delil notu");
+    });
+    expect(await within(section).findByText(/Deliller kaydedildi/)).toBeTruthy();
+  });
+
+  it("kapalı vakada delil kontrolleri yoktur", async () => {
+    stubFetch(false, { status: "closed" });
+    renderPage();
+    const heading = await screen.findByRole("heading", { name: "Deliller" });
+    const section = heading.closest("section") as HTMLElement;
+    expect(
+      within(section).queryByRole("button", { name: "+ Delil Ekle" }),
+    ).toBeNull();
+    expect(
+      within(section).queryByRole("button", { name: "Düzenle" }),
+    ).toBeNull();
   });
 });
 

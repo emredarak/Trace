@@ -10,6 +10,7 @@ import type {
   LocationPriority,
 } from "../../../../lib/locations";
 import { toPersonResponse, type CasePerson } from "../../../../lib/persons";
+import { toEvidenceResponse } from "../../../../lib/evidences";
 
 export type { CasePerson };
 
@@ -61,9 +62,11 @@ export async function GET(_req: Request, { params }: Params) {
   if (!row) {
     return NextResponse.json({ error: "case not found" }, { status: 404 });
   }
-  const entries = db
-    .prepare("SELECT * FROM evidences WHERE caseId = ? ORDER BY createdAt ASC")
-    .all(id) as Evidence[];
+  const entries = (
+    db
+      .prepare("SELECT * FROM evidences WHERE caseId = ? ORDER BY createdAt ASC")
+      .all(id) as Record<string, unknown>[]
+  ).map(toEvidenceResponse) as Evidence[];
   const locations = (
     db
       .prepare(

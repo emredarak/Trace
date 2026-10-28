@@ -8,6 +8,7 @@ import {
   type CasePersonDraft,
   type PersonType,
 } from "../../lib/persons";
+import { evidenceFileUrl } from "../../lib/evidences";
 
 interface PersonEditorProps {
   initial: CasePersonDraft | null;
@@ -92,6 +93,10 @@ export function PersonEditor({
   const [contactStatus, setContactStatus] = useState(
     initial?.contactStatus ?? "",
   );
+  const [audio, setAudio] = useState<File | null>(initial?.audio ?? null);
+  const [removeAudio, setRemoveAudio] = useState(
+    initial?.removeAudio ?? false,
+  );
   const [error, setError] = useState("");
 
   const typeColor = personTypeColor(type);
@@ -128,6 +133,9 @@ export function PersonEditor({
       relationship: related ? relationship.trim() : "",
       unidentified,
       contactStatus,
+      audioFile: type === "maktul" ? null : (initial?.audioFile ?? null),
+      audio: type === "maktul" ? null : audio,
+      removeAudio: type === "maktul" ? true : removeAudio,
     });
   }
 
@@ -347,6 +355,42 @@ export function PersonEditor({
               {contactBadge.label}
             </span>
           </p>
+        ) : null}
+
+        {type !== "maktul" ? (
+          <>
+            <label htmlFor={id("audio")} style={textStyle}>
+              Sorgu Ses Kaydı
+            </label>
+            <input
+              id={id("audio")}
+              type="file"
+              accept="audio/*"
+              onChange={(e) => {
+                setAudio(e.target.files?.[0] ?? null);
+                setRemoveAudio(false);
+              }}
+              style={fieldStyle}
+            />
+            {audio ? (
+              <p style={textStyle}>Seçili ses: {audio.name}</p>
+            ) : initial?.audioFile && !removeAudio ? (
+              <p style={textStyle}>
+                <audio
+                  controls
+                  src={evidenceFileUrl(initial.audioFile)}
+                  style={{ display: "block", margin: "0.5rem 0" }}
+                />{" "}
+                <button
+                  type="button"
+                  onClick={() => setRemoveAudio(true)}
+                  style={buttonStyle}
+                >
+                  Ses Kaydını Kaldır
+                </button>
+              </p>
+            ) : null}
+          </>
         ) : null}
 
         {error ? (
