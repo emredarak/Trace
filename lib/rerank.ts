@@ -1,5 +1,5 @@
 import type { CaseRecord } from "./case-schema";
-import { chatCompletion as defaultChatCompletion } from "./meta-client";
+import { sparkChat as defaultChatCompletion } from "./spark-client";
 import type { CaseFeatures } from "./prefilter";
 
 export interface RankedCase {
@@ -11,7 +11,7 @@ export interface RankedCase {
   matchedFields: string[];
 }
 
-// Injectable client seam: tests pass a fake, production uses meta-client.
+// Injectable client seam: tests pass a fake, production uses Spark (spark-client).
 export interface ChatClient {
   chatCompletion(prompt: string): Promise<string>;
 }

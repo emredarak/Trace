@@ -1,17 +1,17 @@
 // Muse Glimmer field-note brief (one-sentence summary of voice transcripts).
 //
 // Mirrors the transcribe.ts injectable-client pattern: tests inject a fake
-// client, production POSTs to the Glimmer chat endpoint via meta-client.
+// client, production POSTs to the Glimmer chat endpoint via glimmer-client.
 // Credentials come from environment variables only, never hardcoded
-// (see meta-client.ts: META_API_KEY / LLAMA_API_KEY, META_API_URL, META_MODEL).
+// (see glimmer-client.ts: GLIMMER_* env, falling back to META_* env).
 //
 // Standalone function for later wiring; never throws — on empty input or any
 // failure it resolves to "" so the record is never lost.
 
 import type { Evidence } from "./case-schema";
-import { chatCompletion } from "./meta-client";
+import { glimmerChat } from "./glimmer-client";
 
-// Injectable client seam: tests pass a fake, production uses chatCompletion.
+// Injectable client seam: tests pass a fake, production uses glimmerChat.
 export interface FieldBriefClient {
   summarize(prompt: string): Promise<string>;
 }
@@ -26,7 +26,7 @@ export function __setFieldBriefClientForTests(
 }
 
 const defaultFieldBriefClient: FieldBriefClient = {
-  summarize: (prompt: string) => chatCompletion(prompt),
+  summarize: (prompt: string) => glimmerChat(prompt),
 };
 
 function collectTranscripts(

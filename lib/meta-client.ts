@@ -1,4 +1,4 @@
-// Meta Model API (OpenAI-compatible) chat client.
+// Meta Model API (OpenAI-compatible) chat client — shared chat layer.
 //
 // Credentials come from environment variables only, never hardcoded:
 //   META_API_KEY (or LLAMA_API_KEY fallback) - required secret
@@ -6,10 +6,26 @@
 //                   (e.g. https://host/.../chat/completions), not a base URL,
 //                   since it is POSTed to directly
 //   META_MODEL    - optional model name override
+//
+// Callers (spark-client, glimmer-client) may pass explicit url/model/apiKey
+// and multimodal image parts; explicit options win over the META_* env vars.
 
 const DEFAULT_API_URL =
   "https://api.llama.com/compat/v1/chat/completions";
 const DEFAULT_MODEL = "Llama-4-Maverick-17B-128E-Instruct-FP8";
+
+export interface ChatCompletionImage {
+  caseId: string;
+  evidenceId: string;
+  dataUrl: string;
+}
+
+export interface ChatCompletionOptions {
+  apiKey?: string;
+  url?: string;
+  model?: string;
+  images?: ChatCompletionImage[];
+}
 
 interface ChatMessagePart {
   text?: unknown;
@@ -26,13 +42,28 @@ function extractText(content: unknown): string {
   throw new Error("Meta Model API returned no text content");
 }
 
-export async function chatCompletion(prompt: string): Promise<string> {
-  const apiKey = process.env.META_API_KEY ?? process.env.LLAMA_API_KEY;
+export async function chatCompletion(
+  prompt: string,
+  options: ChatCompletionOptions = {},
+): Promise<string> {
+  const apiKey =
+    options.apiKey ?? process.env.META_API_KEY ?? process.env.LLAMA_API_KEY;
   if (!apiKey) {
     throw new Error("META_API_KEY is not set");
   }
-  const url = process.env.META_API_URL ?? DEFAULT_API_URL;
-  const model = process.env.META_MODEL ?? DEFAULT_MODEL;
+  const url = options.url ?? process.env.META_API_URL ?? DEFAULT_API_URL;
+  const model = options.model ?? process.env.META_MODEL ?? DEFAULT_MODEL;
+
+  const content =
+    options.images && options.images.length > 0
+      ? [
+          { type: "text", text: prompt },
+          ...options.images.map((img) => ({
+            type: "image_url",
+            image_url: { url: img.dataUrl },
+          })),
+        ]
+      : prompt;
 
   const res = await fetch(url, {
     method: "POST",
@@ -42,7 +73,7 @@ export async function chatCompletion(prompt: string): Promise<string> {
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content }],
       temperature: 0,
     }),
   });
