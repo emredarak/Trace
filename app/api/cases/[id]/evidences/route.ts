@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getDb, initDb } from "../../../../../lib/db";
+import { enqueueJob, getDb, initDb } from "../../../../../lib/db";
 import {
   normalizeEvidenceInput,
   toEvidenceResponse,
@@ -107,6 +107,8 @@ export async function POST(req: Request, { params }: Params) {
         audioFile,
         new Date().toISOString(),
       );
+    if (imageFile) enqueueJob(getDb(), { caseId: id, kind: "sam", refId: evidenceId });
+    if (audioFile) enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: evidenceId });
     getDb().prepare("UPDATE cases SET needsRerank = 1 WHERE id = ?").run(id);
     return NextResponse.json(findEvidence(evidenceId), { status: 201 });
   } catch {

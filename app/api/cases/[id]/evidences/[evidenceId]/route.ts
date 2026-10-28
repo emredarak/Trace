@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, initDb } from "../../../../../../lib/db";
+import { enqueueJob, getDb, initDb } from "../../../../../../lib/db";
 import {
   normalizeEvidenceInput,
   toEvidenceResponse,
@@ -70,9 +70,23 @@ export async function PATCH(req: Request, { params }: Params) {
     if (hasNewAudio && audioFile) saved.push(audioFile);
     getDb()
       .prepare(
-        "UPDATE evidences SET title = ?, note = ?, imageFile = ?, audioFile = ? WHERE id = ? AND caseId = ?",
+        `UPDATE evidences SET title = ?, note = ?, imageFile = ?, audioFile = ?,
+           marking = CASE WHEN ? THEN NULL ELSE marking END,
+           transcript = CASE WHEN ? THEN NULL ELSE transcript END
+         WHERE id = ? AND caseId = ?`,
       )
-      .run(normalized.title, normalized.note, imageFile ?? null, audioFile ?? null, evidenceId, id);
+      .run(
+        normalized.title,
+        normalized.note,
+        imageFile ?? null,
+        audioFile ?? null,
+        hasNewImage || removeImage ? 1 : 0,
+        hasNewAudio || removeAudio ? 1 : 0,
+        evidenceId,
+        id,
+      );
+    if (hasNewImage) enqueueJob(getDb(), { caseId: id, kind: "sam", refId: evidenceId });
+    if (hasNewAudio) enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: evidenceId });
     if ((hasNewImage || removeImage) && current.imageFile) {
       deleteUpload(current.imageFile);
     }

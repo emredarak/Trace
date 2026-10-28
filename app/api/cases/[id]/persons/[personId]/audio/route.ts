@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, initDb } from "../../../../../../../lib/db";
+import { enqueueJob, getDb, initDb } from "../../../../../../../lib/db";
 import { toPersonResponse } from "../../../../../../../lib/persons";
 import { deleteUpload, saveUpload } from "../../../../../../../lib/uploads";
 
@@ -49,8 +49,9 @@ export async function POST(req: Request, { params }: Params) {
   const old = toPersonResponse(existing).audioFile;
   const stored = await saveUpload(file, id);
   getDb()
-    .prepare("UPDATE case_persons SET audioFile = ? WHERE id = ? AND caseId = ?")
+    .prepare("UPDATE case_persons SET audioFile = ?, transcript = NULL WHERE id = ? AND caseId = ?")
     .run(stored, personId, id);
+  enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: personId });
   if (old && old !== stored) deleteUpload(old);
   const updated = findRow(id, personId);
   return NextResponse.json(updated ? toPersonResponse(updated) : null);
@@ -65,7 +66,7 @@ export async function DELETE(_req: Request, { params }: Params) {
   }
   const old = toPersonResponse(existing).audioFile;
   getDb()
-    .prepare("UPDATE case_persons SET audioFile = NULL WHERE id = ? AND caseId = ?")
+    .prepare("UPDATE case_persons SET audioFile = NULL, transcript = NULL WHERE id = ? AND caseId = ?")
     .run(personId, id);
   deleteUpload(old);
   const updated = findRow(id, personId);

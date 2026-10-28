@@ -174,6 +174,12 @@ export function initDb(): void {
   if (!evidenceColumns.has("audioFile")) {
     database.exec("ALTER TABLE evidences ADD COLUMN audioFile TEXT");
   }
+  if (!evidenceColumns.has("transcript")) {
+    database.exec("ALTER TABLE evidences ADD COLUMN transcript TEXT");
+  }
+  if (!evidenceColumns.has("marking")) {
+    database.exec("ALTER TABLE evidences ADD COLUMN marking TEXT");
+  }
   const personColumns = new Set(
     (
       database.prepare("PRAGMA table_info(case_persons)").all() as {
@@ -183,6 +189,9 @@ export function initDb(): void {
   );
   if (!personColumns.has("audioFile")) {
     database.exec("ALTER TABLE case_persons ADD COLUMN audioFile TEXT");
+  }
+  if (!personColumns.has("transcript")) {
+    database.exec("ALTER TABLE case_persons ADD COLUMN transcript TEXT");
   }
 }
 
