@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CaseRecord, Evidence } from "../../../lib/case-schema";
-import type { RankedCase } from "../../../lib/rerank";
+import type { ScoredCase } from "../../../lib/similarity";
 import type { CaseLocation, CasePerson } from "../../api/cases/[id]/route";
 import { LocationsSection } from "../../components/locations-section";
 import { PeopleSection } from "../../components/people-section";
@@ -21,8 +21,10 @@ type CaseWithEntries = CaseRecord & {
 };
 
 interface SimilarResponse {
-  results: RankedCase[];
+  results: ScoredCase[];
   fresh: boolean;
+  limit?: number;
+  pendingEnrichment?: boolean;
 }
 
 const layoutCss = [
@@ -299,9 +301,15 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
         }
         const body = (await res.json()) as SimilarResponse;
         if (!cancelled) {
+          const all = Array.isArray(body.results) ? body.results : [];
           setSimilar({
-            results: Array.isArray(body.results) ? body.results : [],
+            results:
+              typeof body.limit === "number" && body.limit > 0
+                ? all.slice(0, body.limit)
+                : all,
             fresh: body.fresh !== false,
+            limit: body.limit,
+            pendingEnrichment: body.pendingEnrichment === true,
           });
         }
       } catch {
@@ -895,6 +903,12 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
         <section aria-label="Benzer vakalar" style={cardStyle}>
           <h2>Benzer vakalar</h2>
           {similarError ? <p role="alert">{similarError}</p> : null}
+          {similar?.pendingEnrichment ? (
+            <p style={badgeStyle}>
+              Bekleyen zenginleştirme işleri var; sonuçlar eksik veriyle
+              hesaplanmış olabilir.
+            </p>
+          ) : null}
           {!similar && !similarError ? <p>Yükleniyor…</p> : null}
           {similar && similar.results.length === 0 ? (
             <p>Benzer vaka yok.</p>
@@ -905,7 +919,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 <li key={r.caseId} style={cardStyle}>
                   <p>
                     <strong>Vaka: </strong>
-                    <a href={`/cases/${r.caseId}`}>{r.caseId}</a>
+                    <a href={`/cases/${r.caseId}`}>{r.caseNo || r.caseId}</a>
                   </p>
                   <p>
                     <strong>skor: </strong>
@@ -915,17 +929,21 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                     <strong>gerekçe: </strong>
                     {r.reason}
                   </p>
-                  {typeof r.quote === "string" && r.quote.trim().length > 0 ? (
-                    <p>
-                      <strong>alıntı: </strong>
-                      {r.quote}
-                    </p>
-                  ) : null}
-                  {Array.isArray(r.matchedFields) && r.matchedFields.length > 0 ? (
-                    <p>
-                      <strong>eşleşen alanlar: </strong>
-                      {r.matchedFields.join(", ")}
-                    </p>
+                  {Array.isArray(r.similarities) && r.similarities.length > 0 ? (
+                    <ul>
+                      {r.similarities.map((s, i) => (
+                        <li key={`${s.kind}-${i}`}>
+                          <strong>{s.kind}: </strong>
+                          {s.description} ({s.strength}/10)
+                          {s.evidence ? (
+                            <>
+                              {" — "}
+                              <span>kanıt: {s.evidence}</span>
+                            </>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
                   ) : null}
                   {approved[r.caseId] ? (
                     <p>onaylandı</p>

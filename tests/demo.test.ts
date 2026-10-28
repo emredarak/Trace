@@ -6,19 +6,23 @@ import { closeDb, initDb } from "../lib/db";
 import { GET as listCases, POST as createCase } from "../app/api/cases/route";
 import { GET as getSimilar } from "../app/api/cases/[id]/similar/route";
 
-// Gerçek zincir: POST /api/cases -> prefilter -> GET /api/cases/[id]/similar.
-// Yalnızca Meta istemcisi sahte: aday kimliklerini prompt'tan okuyup
+// Gerçek zincir: POST /api/cases -> dossier/prefilter -> GET /api/cases/[id]/similar.
+// Yalnızca Meta istemcisi sahte: aday kimliklerini Spark prompt'undaki
+// vaka dosyası başlıklarından (ilk başlık sorgu vakasıdır) okuyup
 // listeleme sırasına göre azalan puan verir.
 vi.mock("../lib/meta-client", () => ({
   chatCompletion: async (prompt: string) => {
-    const ids = [...prompt.matchAll(/^-\s*id:\s*(\S+)/gm)].map((m) => m[1]);
-    const unique = [...new Set(ids)];
+    const ids = [...prompt.matchAll(/Vaka \S+ \(id: ([^,]+),/g)].map((m) => m[1]);
+    const unique = [...new Set(ids)].slice(1);
     return JSON.stringify(
       unique.map((caseId, i) => ({
         caseId,
         score: Math.max(1, 10 - i),
         reason: "demo: su kenarı bıçaklı gece MO eşleşmesi",
-        quote: "demo alıntı",
+        similarities: [
+          { kind: "silah", description: "ikisinde de bıçak", strength: 9, evidence: "bıçak" },
+          { kind: "yontem", description: "gece arkadan yaklaşma", strength: 8, evidence: "gece arkadan yaklaşma" },
+        ],
       })),
     );
   },
@@ -94,12 +98,13 @@ describe("demo provası: kayıt -> ön filtre -> sahte yeniden sıralama -> list
     const body = (await res.json()) as {
       results: {
         caseId: string;
+        caseNo: string;
         score: number;
         reason: string;
-        quote: string;
-        matchedFields: string[];
+        similarities: { kind: string; description: string; strength: number; evidence: string }[];
       }[];
       fresh: boolean;
+      limit: number;
     };
 
     expect(Array.isArray(body.results)).toBe(true);
@@ -111,10 +116,12 @@ describe("demo provası: kayıt -> ön filtre -> sahte yeniden sıralama -> list
       expect(r.score).toBeGreaterThanOrEqual(1);
       expect(r.score).toBeLessThanOrEqual(10);
       expect(r.reason.trim().length).toBeGreaterThan(0);
-      expect(r.quote.trim().length).toBeGreaterThan(0);
-      expect(r.matchedFields.length).toBeGreaterThan(0);
+      expect(typeof r.caseNo).toBe("string");
+      expect(r.caseNo.length).toBeGreaterThan(0);
+      expect(r.similarities.length).toBeGreaterThan(0);
     }
-    expect(hits[0].matchedFields).toContain("weapon");
+    expect(hits[0].similarities.map((s) => s.kind)).toContain("silah");
+    expect(body.limit).toBe(5);
     expect(typeof body.fresh).toBe("boolean");
   });
 });

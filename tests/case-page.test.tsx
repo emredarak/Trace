@@ -135,38 +135,45 @@ const CASE_ITEM = {
 const RESULTS = [
   {
     caseId: "vaka-2",
+    caseNo: "TR-0002",
     score: 9,
     reason: "aynı suç türü ve silah",
-    quote: "gece bıçaklı hırsızlık",
-    matchedFields: ["crimeType", "weapon"],
+    similarities: [
+      { kind: "suc-tipi", description: "ikisi de hırsızlık", strength: 9, evidence: "hırsızlık" },
+      { kind: "silah", description: "ikisinde de bıçak", strength: 8, evidence: "bıçak" },
+    ],
   },
   {
     caseId: "vaka-3",
+    caseNo: "TR-0003",
     score: 7,
     reason: "benzer yöntem",
-    quote: "gece yaklaşma ile gasp",
-    matchedFields: ["mo"],
+    similarities: [
+      { kind: "yontem", description: "gece yaklaşma yöntemi ortak", strength: 7, evidence: "gece yaklaşma" },
+    ],
   },
   {
     caseId: "vaka-4",
+    caseNo: "TR-0004",
     score: 5,
     reason: "konum türü uyuyor",
-    quote: "sokakta yankesicilik",
-    matchedFields: ["locationType"],
+    similarities: [
+      { kind: "konum", description: "sokak konumu ortak", strength: 5, evidence: "sokak" },
+    ],
   },
   {
     caseId: "vaka-5",
+    caseNo: "TR-0005",
     score: 3,
     reason: "zayıf benzerlik",
-    quote: "gündüz hırsızlık",
-    matchedFields: [],
+    similarities: [],
   },
   {
     caseId: "vaka-6",
+    caseNo: "TR-0006",
     score: 0,
     reason: "model listesinde yok",
-    quote: "alakasız kayıt",
-    matchedFields: [],
+    similarities: [],
   },
 ];
 
@@ -179,6 +186,7 @@ function stubFetch(
     queued?: boolean;
     failLocationSave?: boolean;
     failPersonSave?: boolean;
+    pendingEnrichment?: boolean;
   } = {},
 ) {
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -346,7 +354,7 @@ function stubFetch(
       return {
         ok: true,
         status: 200,
-        json: async () => ({ results: RESULTS, fresh }),
+        json: async () => ({ results: RESULTS, fresh, limit: 5, pendingEnrichment: opts.pendingEnrichment ?? false }),
       };
     }
     if (url === `/api/cases/${CASE_ID}/links` && init?.method === "POST") {
@@ -373,8 +381,8 @@ describe("Vaka detay + benzer liste", () => {
     renderPage();
 
     const list = await screen.findByRole("list", { name: /benzer/i });
-    const items = within(list).getAllByRole("listitem");
-    expect(items).toHaveLength(5);
+    // Üst düzey sonuç kartları (iç benzerlik maddeleri hariç).
+    expect(list.children).toHaveLength(5);
 
     for (const r of RESULTS) {
       expect(
@@ -382,8 +390,35 @@ describe("Vaka detay + benzer liste", () => {
       ).toBeTruthy();
       const item = within(list).getByText(r.reason).closest("li");
       expect(item).toBeTruthy();
-      expect(within(item as HTMLElement).getByText(new RegExp(`${r.score}`))).toBeTruthy();
+      expect((item as HTMLElement).textContent).toContain(String(r.score));
     }
+  });
+
+  it("kartta ham id yerine vaka numarası bağlantısı ve benzerlik maddeleri görünür", async () => {
+    stubFetch();
+    renderPage();
+
+    const list = await screen.findByRole("list", { name: /benzer/i });
+    for (const r of RESULTS) {
+      const link = within(list).getByRole("link", { name: new RegExp(r.caseNo) });
+      expect(link.getAttribute("href")).toBe(`/cases/${r.caseId}`);
+      expect(link.textContent).not.toContain(r.caseId);
+    }
+    const first = within(list).getByText(RESULTS[0].reason).closest("li") as HTMLElement;
+    expect(within(first).getByText(/suc-tipi/)).toBeTruthy();
+    expect(first.textContent).toContain("ikisi de hırsızlık");
+    expect(first.textContent).toContain("9/10");
+    expect(within(first).getByText(/^silah:/)).toBeTruthy();
+    expect(first.textContent).toContain("ikisinde de bıçak");
+    expect(first.textContent).toContain("8/10");
+  });
+
+  it("bekleyen zenginleştirme varsa bilgi notu görünür", async () => {
+    stubFetch(false, { pendingEnrichment: true });
+    renderPage();
+
+    const section = await screen.findByRole("region", { name: /benzer vakalar/i });
+    expect(await within(section).findByText(/bekleyen zenginleştirme|zenginleştirme.*bekliyor/i)).toBeTruthy();
   });
 
   it("vaka detayı ve deliller (transcript + foto işareti) görünür", async () => {
