@@ -55,7 +55,10 @@ export async function chatCompletion(
   options: ChatCompletionOptions = {},
 ): Promise<string> {
   const apiKey =
-    options.apiKey ?? process.env.META_API_KEY ?? process.env.LLAMA_API_KEY;
+    options.apiKey ??
+    process.env.MODEL_API_KEY ??
+    process.env.META_API_KEY ??
+    process.env.LLAMA_API_KEY;
   if (!apiKey) {
     throw new Error("META_API_KEY is not set");
   }

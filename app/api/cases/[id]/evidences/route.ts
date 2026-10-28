@@ -48,7 +48,7 @@ export async function POST(req: Request, { params }: Params) {
     form = await req.formData();
   } catch {
     return NextResponse.json(
-      { error: "form-data gerekli" },
+      { error: "form-data required" },
       { status: 400 },
     );
   }
@@ -113,7 +113,7 @@ export async function POST(req: Request, { params }: Params) {
   } catch {
     for (const name of saved) deleteUpload(name);
     return NextResponse.json(
-      { error: "delil kaydedilemedi" },
+      { error: "could not save evidence" },
       { status: 500 },
     );
   }

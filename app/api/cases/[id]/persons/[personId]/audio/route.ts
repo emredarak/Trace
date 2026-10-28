@@ -18,9 +18,9 @@ export async function POST(req: Request, { params }: Params) {
   if (!existing) {
     return NextResponse.json({ error: "person not found" }, { status: 404 });
   }
-  if (existing.type === "maktul") {
+  if (existing.type === "victim") {
     return NextResponse.json(
-      { error: "sorgu sesi yalnızca tanık ya da şüpheli için yüklenebilir" },
+      { error: "interview audio can only be uploaded for a witness or suspect" },
       { status: 400 },
     );
   }
@@ -29,20 +29,20 @@ export async function POST(req: Request, { params }: Params) {
     form = await req.formData();
   } catch {
     return NextResponse.json(
-      { error: "ses dosyası gerekli (form-data 'file')" },
+      { error: "audio file required (form-data 'file')" },
       { status: 400 },
     );
   }
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json(
-      { error: "ses dosyası gerekli (form-data 'file')" },
+      { error: "audio file required (form-data 'file')" },
       { status: 400 },
     );
   }
   if (file.type && !file.type.startsWith("audio/")) {
     return NextResponse.json(
-      { error: "dosya ses dosyası olmalıdır" },
+      { error: "file must be an audio file" },
       { status: 400 },
     );
   }

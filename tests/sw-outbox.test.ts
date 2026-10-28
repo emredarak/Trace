@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runInNewContext } from "node:vm";
 
-// public/sw.js davranış testi: sahte fetch + sahte IndexedDB ile
-// yakala → kuyruğa al → boşalt döngüsü node:vm içinde çalıştırılır.
+// public/sw.js behavior test: fake fetch + fake IndexedDB with
+// capture -> queue -> drain loop run inside node:vm.
 
 type FetchMock = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -181,14 +181,14 @@ function offline(): FetchMock {
   };
 }
 
-describe("sw.js çevrimdışı kuyruk döngüsü", () => {
-  it("yakala → 202 kuyruk → bağlantıda sırayla boşalt", async () => {
+describe("sw.js offline queue loop", () => {
+  it("capture -> 202 queue -> drain in order when connected", async () => {
     const { listeners, idb, sandbox } = loadSw(offline());
 
     const res = await dispatchFetch(
       listeners,
       fakePost("/api/cases/abc/entries", {
-        text: JSON.stringify({ type: "note", note: "saha notu" }),
+        text: JSON.stringify({ type: "note", note: "field note" }),
       }),
     );
     expect(res.status).toBe(202);
@@ -204,11 +204,11 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe("/api/cases/abc/entries");
-    expect(JSON.parse(calls[0].body)).toMatchObject({ note: "saha notu" });
+    expect(JSON.parse(calls[0].body)).toMatchObject({ note: "field note" });
     expect(idb.count()).toBe(0);
   });
 
-  it("multipart gövde birebir oynatılır, ilk hatada durulur (katı FIFO)", async () => {
+  it("multipart bodies replayed verbatim, stops at first error (strict FIFO)", async () => {
     const { listeners, idb, sandbox } = loadSw(offline());
     const photo = new Uint8Array([9, 8, 7, 6]);
     const boundary = "multipart/form-data; boundary=----sinir123";
@@ -216,7 +216,7 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     await dispatchFetch(
       listeners,
       fakePost("/api/cases/abc/entries", {
-        text: JSON.stringify({ type: "note", note: "önce" }),
+        text: JSON.stringify({ type: "note", note: "first" }),
       }),
     );
     await dispatchFetch(
@@ -228,7 +228,7 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     );
     expect(idb.count()).toBe(2);
 
-    // İlk kayıt 500 verirse ikinci denenmez.
+    // If the first record returns 500, the second is not attempted.
     const calls: { url: string; init?: RequestInit }[] = [];
     sandbox.fetch = (async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
@@ -238,13 +238,13 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(calls).toHaveLength(1);
     expect(idb.count()).toBe(2);
 
-    // Bağlantı düzelince ikisi de sırayla, fotoğraf baytları aynen gider.
+    // When connectivity returns both go in order, photo bytes identical.
     sandbox.fetch = (async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
       return new Response(JSON.stringify({ ok: true }), { status: 201 });
     }) as FetchMock;
     await dispatchSync(listeners);
-    // 1 (önceki deneme) + 2 (not + foto) = 3 çağrı, son ikisi sırayla.
+    // 1 (previous attempt) + 2 (note + photo) = 3 calls, last two in order.
     expect(calls.map((c) => c.url).slice(1)).toEqual([
       "/api/cases/abc/entries",
       "/api/cases/abc/mark-photo",
@@ -260,13 +260,13 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
-  it("çevrimdışı PATCH konum isteği kuyruğa girer ve aynı yöntem/gövdeyle oynatılır", async () => {
+  it("offline PATCH location request is queued and replayed with the same method/body", async () => {
     const { listeners, idb, sandbox } = loadSw(offline());
 
     const res = await dispatchFetch(
       listeners,
       fakeRequest("PATCH", "/api/cases/abc/locations/l1", {
-        text: JSON.stringify({ label: "yeni etiket" }),
+        text: JSON.stringify({ label: "new label" }),
       }),
     );
     expect(res.status).toBe(202);
@@ -284,12 +284,12 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(calls[0].url).toBe("/api/cases/abc/locations/l1");
     expect(calls[0].init?.method).toBe("PATCH");
     expect(JSON.parse(calls[0].init?.body as string)).toMatchObject({
-      label: "yeni etiket",
+      label: "new label",
     });
     expect(idb.count()).toBe(0);
   });
 
-  it("çevrimdışı DELETE konum isteği (gövdesiz) kuyruğa girer ve DELETE olarak oynatılır", async () => {
+  it("offline DELETE location request (bodiless) is queued and replayed as DELETE", async () => {
     const { listeners, idb, sandbox } = loadSw(offline());
 
     const res = await dispatchFetch(
@@ -316,13 +316,13 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
-  it("çevrimdışı PATCH kişi isteği kuyruğa girer ve aynı yöntem/gövdeyle oynatılır", async () => {
+  it("offline PATCH person request is queued and replayed with the same method/body", async () => {
     const { listeners, idb, sandbox } = loadSw(offline());
 
     const res = await dispatchFetch(
       listeners,
       fakeRequest("PATCH", "/api/cases/abc/persons/p1", {
-        text: JSON.stringify({ name: "Ayşe" }),
+        text: JSON.stringify({ name: "Alice" }),
       }),
     );
     expect(res.status).toBe(202);
@@ -340,12 +340,12 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(calls[0].url).toBe("/api/cases/abc/persons/p1");
     expect(calls[0].init?.method).toBe("PATCH");
     expect(JSON.parse(calls[0].init?.body as string)).toMatchObject({
-      name: "Ayşe",
+      name: "Alice",
     });
     expect(idb.count()).toBe(0);
   });
 
-  it("çevrimdışı DELETE kişi isteği (gövdesiz) kuyruğa girer ve DELETE olarak oynatılır", async () => {
+  it("offline DELETE person request (bodiless) is queued and replayed as DELETE", async () => {
     const { listeners, idb, sandbox } = loadSw(offline());
 
     const res = await dispatchFetch(
@@ -372,7 +372,7 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
-  it("kişi koleksiyon yolundaki PATCH (personId yok) yakalanmaz", async () => {
+  it("PATCH on the person collection path (no personId) is not captured", async () => {
     const { listeners, idb } = loadSw(offline());
     const res = await dispatchFetch(
       listeners,
@@ -384,7 +384,7 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
-  it("koleksiyon yolundaki PATCH/DELETE (locId yok) yakalanmaz", async () => {
+  it("PATCH/DELETE on the collection path (no locId) is not captured", async () => {
     const { listeners, idb } = loadSw(offline());
     for (const method of ["PATCH", "DELETE"] as const) {
       const res = await dispatchFetch(
@@ -399,20 +399,20 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
-  it("konum dışı PATCH yakalanmaz", async () => {
+  it("PATCH outside locations is not captured", async () => {
     const { listeners, idb } = loadSw(offline());
     const res = await dispatchFetch(
       listeners,
       fakeRequest("PATCH", "/api/cases/abc", {
-        text: JSON.stringify({ summary: "güncelle" }),
+        text: JSON.stringify({ summary: "update" }),
       }),
     );
-    // respondWith çağrılmadı: SW isteğe dokunmadı, tarayıcı normal gönderir.
+    // respondWith not called: SW left the request alone, browser sends normally.
     expect(res).toBeUndefined();
     expect(idb.count()).toBe(0);
   });
 
-  it("gövde okunamazsa 503 {queued:false} döner, kayıt kaybolmaz", async () => {
+  it("unreadable body returns 503 {queued:false}, record not lost", async () => {
     const { listeners, idb } = loadSw(offline());
     const res = await dispatchFetch(
       listeners,
@@ -423,7 +423,7 @@ describe("sw.js çevrimdışı kuyruk döngüsü", () => {
     expect(idb.count()).toBe(0);
   });
 
-  it("kuyruğa yazılamazsa 503 {queued:false} döner", async () => {
+  it("unwritable queue returns 503 {queued:false}", async () => {
     const { listeners, idb } = loadSw(offline());
     idb.setFailing(true);
     const res = await dispatchFetch(

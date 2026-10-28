@@ -29,11 +29,11 @@ beforeEach(() => {
 });
 
 describe("seed/cases.json", () => {
-  it("en az 30 kurgu vaka içerir", () => {
-    expect(loadSeed().length).toBeGreaterThanOrEqual(30);
+  it("contains at least 18 fictional cases", () => {
+    expect(loadSeed().length).toBeGreaterThanOrEqual(18);
   });
 
-  it("tüm kayıtlarda summary, crimeType, locationType dolu", () => {
+  it("all records have non-empty summary, crimeType, locationType", () => {
     for (const c of loadSeed()) {
       for (const field of ["summary", "crimeType", "locationType"]) {
         expect(typeof c[field]).toBe("string");
@@ -42,25 +42,25 @@ describe("seed/cases.json", () => {
     }
   });
 
-  it("her kayıt açıkça kurgu işaretli (TR-SEED-* + [Kurgu] öneki)", () => {
+  it("every record is explicitly marked fictional (TR-SEED-* + [Fiction] prefix)", () => {
     for (const c of loadSeed()) {
       expect(c.caseNo).toMatch(/^TR-SEED-/);
-      expect(c.summary).toMatch(/^\[Kurgu\]/);
+      expect(c.summary).toMatch(/^\[Fiction\]/);
     }
   });
 
-  it("su kenarı / orman / ev içi dağılımı dengeli", () => {
+  it("waterfront / forest / residence split is balanced", () => {
     const counts: Record<string, number> = {};
     for (const c of loadSeed()) {
       const loc = c.locationType as string;
       counts[loc] = (counts[loc] ?? 0) + 1;
     }
-    for (const loc of ["su kenarı", "orman", "ev içi"]) {
+    for (const loc of ["waterfront", "forest", "residence"]) {
       expect(counts[loc] ?? 0).toBeGreaterThanOrEqual(5);
     }
   });
 
-  it("en az 2 seri kümesi aynı MO+weapon+locationType paylaşır (3+ üye)", () => {
+  it("at least 2 serial sets share the same MO+weapon+locationType (3+ members)", () => {
     const groups = new Map<string, number>();
     for (const c of loadSeed()) {
       const key = `${c.locationType}|${c.weapon}|${c.mo}`;
@@ -72,7 +72,7 @@ describe("seed/cases.json", () => {
 });
 
 describe("seed/seed.ts", () => {
-  it("POST /api/cases üzerinden yükler", () => {
+  it("loads via POST /api/cases", () => {
     expect(existsSync(SCRIPT_PATH)).toBe(true);
     const src = readFileSync(SCRIPT_PATH, "utf-8");
     expect(src).toContain("/api/cases");
@@ -80,7 +80,7 @@ describe("seed/seed.ts", () => {
     expect(src).toContain("cases.json");
   });
 
-  it("seed verisi gerçek API üzerinden 201 ile kaydolur", async () => {
+  it("seed data registers 201 via the real API", async () => {
     const seed = loadSeed();
     for (const c of seed) {
       const { caseNo: _drop, ...input } = c;

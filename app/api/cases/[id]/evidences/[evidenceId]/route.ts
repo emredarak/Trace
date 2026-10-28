@@ -25,7 +25,7 @@ export async function PATCH(req: Request, { params }: Params) {
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json({ error: "form-data gerekli" }, { status: 400 });
+    return NextResponse.json({ error: "form-data required" }, { status: 400 });
   }
   const current = toEvidenceResponse(existing);
   const image = form.get("image");
@@ -88,7 +88,7 @@ export async function PATCH(req: Request, { params }: Params) {
   } catch {
     for (const name of saved) deleteUpload(name);
     return NextResponse.json(
-      { error: "delil güncellenemedi" },
+      { error: "could not update evidence" },
       { status: 500 },
     );
   }

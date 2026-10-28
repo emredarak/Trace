@@ -23,13 +23,13 @@ beforeEach(() => {
 });
 
 describe("GET /api/cases/[id]", () => {
-  it("kayıtlı vakayı delilleriyle döndürür", async () => {
+  it("returns the stored case with its evidences", async () => {
     const created = (await (
       await createCase(
         new Request("http://localhost/api/cases", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ summary: "tek vaka" }),
+          body: JSON.stringify({ summary: "single case" }),
         }),
       )
     ).json()) as { id: string };
@@ -40,20 +40,20 @@ describe("GET /api/cases/[id]", () => {
     expect(body.entries).toEqual([]);
   });
 
-  it("bilinmeyen vakada 404 döner", async () => {
+  it("returns 404 for an unknown case", async () => {
     const res = await getCase(req("GET"), paramsOf("yok"));
     expect(res.status).toBe(404);
   });
 });
 
 describe("PATCH /api/cases/[id]", () => {
-  it("durumu closed yapar", async () => {
+  it("sets status to closed", async () => {
     const created = (await (
       await createCase(
         new Request("http://localhost/api/cases", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ summary: "kapatılacak" }),
+          body: JSON.stringify({ summary: "to be closed" }),
         }),
       )
     ).json()) as { id: string };
@@ -65,7 +65,7 @@ describe("PATCH /api/cases/[id]", () => {
     expect(check.status).toBe("closed");
   });
 
-  it("geçersiz durumda 400 döner", async () => {
+  it("returns 400 for an invalid status", async () => {
     const created = (await (
       await createCase(
         new Request("http://localhost/api/cases", {
@@ -79,7 +79,7 @@ describe("PATCH /api/cases/[id]", () => {
     expect(res.status).toBe(400);
   });
 
-  it("bilinmeyen vakada 404 döner", async () => {
+  it("returns 404 for an unknown case", async () => {
     const res = await patchCase(req("PATCH", { status: "closed" }), paramsOf("yok"));
     expect(res.status).toBe(404);
   });

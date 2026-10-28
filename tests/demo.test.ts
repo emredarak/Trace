@@ -6,22 +6,22 @@ import { closeDb, initDb } from "../lib/db";
 import { GET as listCases, POST as createCase } from "../app/api/cases/route";
 import { GET as getSimilar } from "../app/api/cases/[id]/similar/route";
 
-// Gerçek zincir: POST /api/cases -> dossier/prefilter -> GET /api/cases/[id]/similar.
-// Yalnızca Meta istemcisi sahte: aday kimliklerini Spark prompt'undaki
-// vaka dosyası başlıklarından (ilk başlık sorgu vakasıdır) okuyup
-// listeleme sırasına göre azalan puan verir.
+// Real chain: POST /api/cases -> dossier/prefilter -> GET /api/cases/[id]/similar.
+// Only the Meta client is faked: it reads candidate IDs from the Spark prompt's
+// case-file headers (first header is the query case) and scores them
+// in listing order, descending.
 vi.mock("../lib/meta-client", () => ({
   chatCompletion: async (prompt: string) => {
-    const ids = [...prompt.matchAll(/Vaka \S+ \(id: ([^,]+),/g)].map((m) => m[1]);
+    const ids = [...prompt.matchAll(/Case \S+ \(id: ([^,]+),/g)].map((m) => m[1]);
     const unique = [...new Set(ids)].slice(1);
     return JSON.stringify(
       unique.map((caseId, i) => ({
         caseId,
         score: Math.max(1, 10 - i),
-        reason: "demo: su kenarı bıçaklı gece MO eşleşmesi",
+        reason: "demo: waterfront knife night MO match",
         similarities: [
-          { kind: "silah", description: "ikisinde de bıçak", strength: 9, evidence: "bıçak" },
-          { kind: "yontem", description: "gece arkadan yaklaşma", strength: 8, evidence: "gece arkadan yaklaşma" },
+          { kind: "weapon", description: "knife in both", strength: 9, evidence: "knife" },
+          { kind: "method", description: "approaching from behind at night", strength: 8, evidence: "approaching from behind at night" },
         ],
       })),
     );
@@ -36,29 +36,29 @@ function postRequest(body: unknown): Request {
   });
 }
 
-// Tohum arşivindeki 5'li seri kümesiyle aynı MO'yu paylaşan yeni sorgu vakası.
+// New query case sharing the same MO as the 5-case serial set in the seed archive.
 const QUERY_CASE = {
   summary:
-    "[Kurgu] Gece göl kıyısında olta takımları çalındı; mağdur arkadan yaklaşan bıçaklı şüpheliyi tarif etti.",
-  crimeType: "hırsızlık",
-  locationType: "su kenarı",
-  locationText: "demo göl kıyısı, 4 No'lu iskele (kurgu adres)",
+    "[Fiction] At night fishing gear was stolen on the lake shore; the victim described a suspect with a knife approaching from behind.",
+  crimeType: "theft",
+  locationType: "waterfront",
+  locationText: "demo lake shore, Pier 4 (fictional address)",
   occurredAt: "2026-08-02T23:30:00",
-  officer: "Demo Memur (kurgu)",
+  officer: "Demo Officer (fictional)",
   victimAge: 40,
-  victimGender: "erkek",
-  suspects: "kimliği belirsiz erkek (kurgu)",
-  witnesses: "yok",
-  mo: "gece arkadan yaklaşma, olta takımı çalma",
-  weapon: "bıçak",
+  victimGender: "male",
+  suspects: "unidentified man (fictional)",
+  witnesses: "none",
+  mo: "approaching from behind at night, stealing fishing gear",
+  weapon: "knife",
   status: "open",
 };
 
 function isClusterMember(c: Record<string, unknown>): boolean {
   return (
-    c.locationType === "su kenarı" &&
-    c.weapon === "bıçak" &&
-    c.mo === "gece arkadan yaklaşma, olta takımı çalma"
+    c.locationType === "waterfront" &&
+    c.weapon === "knife" &&
+    c.mo === "approaching from behind at night, stealing fishing gear"
   );
 }
 
@@ -68,9 +68,9 @@ beforeEach(() => {
   initDb();
 });
 
-describe("demo provası: kayıt -> ön filtre -> sahte yeniden sıralama -> liste", () => {
-  it("yeni sorgu vakası seri kümesinden en az 2 sonuç döndürür", async () => {
-    // Fixture: 32 kurgu vakalık tohum arşivini gerçek API üzerinden yükle.
+describe("demo rehearsal: record -> prefilter -> fake rerank -> list", () => {
+  it("new query case returns at least 2 results from the serial set", async () => {
+    // Fixture: load the 18-case fictional seed archive via the real API.
     const seedDir = dirname(fileURLToPath(import.meta.url));
     const seed = JSON.parse(
       readFileSync(join(seedDir, "..", "seed", "cases.json"), "utf-8"),
@@ -120,7 +120,7 @@ describe("demo provası: kayıt -> ön filtre -> sahte yeniden sıralama -> list
       expect(r.caseNo.length).toBeGreaterThan(0);
       expect(r.similarities.length).toBeGreaterThan(0);
     }
-    expect(hits[0].similarities.map((s) => s.kind)).toContain("silah");
+    expect(hits[0].similarities.map((s) => s.kind)).toContain("weapon");
     expect(body.limit).toBe(5);
     expect(typeof body.fresh).toBe("boolean");
   });

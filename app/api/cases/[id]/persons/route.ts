@@ -29,7 +29,7 @@ function isRelatedVictim(caseId: string, personId: string): boolean {
   return Boolean(
     getDb()
       .prepare(
-        "SELECT id FROM case_persons WHERE id = ? AND caseId = ? AND type = 'maktul'",
+        "SELECT id FROM case_persons WHERE id = ? AND caseId = ? AND type = 'victim'",
       )
       .get(personId, caseId),
   );
@@ -93,7 +93,7 @@ export async function POST(req: Request, { params }: Params) {
     return NextResponse.json(
       {
         error:
-          "person.relatedVictimId must reference a maktul person in the same case",
+          "person.relatedVictimId must reference a victim person in the same case",
       },
       { status: 400 },
     );

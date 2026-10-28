@@ -120,7 +120,7 @@ export function EvidenceEditor({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={isEdit ? "Delili Düzenle" : "Delil Ekle"}
+        aria-label={isEdit ? "Edit Evidence" : "Add Evidence"}
         style={{
           background: "#ffffff",
           color: "#111111",
@@ -135,11 +135,11 @@ export function EvidenceEditor({
         }}
       >
         <h2 style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}>
-          {isEdit ? "Delili Düzenle" : "Delil Ekle"}
+          {isEdit ? "Edit Evidence" : "Add Evidence"}
         </h2>
 
         <label htmlFor={id("title")} style={textStyle}>
-          Delil Başlığı *
+          Evidence Title *
         </label>
         <input
           id={id("title")}
@@ -153,7 +153,7 @@ export function EvidenceEditor({
         />
 
         <label htmlFor={id("image")} style={textStyle}>
-          Görsel
+          Image
         </label>
         <input
           id={id("image")}
@@ -167,7 +167,7 @@ export function EvidenceEditor({
           style={fieldStyle}
         />
         {image ? (
-          <p style={textStyle}>Seçili görsel: {image.name}</p>
+          <p style={textStyle}>Selected image: {image.name}</p>
         ) : initial?.imageFile && !removeImage ? (
           <p style={textStyle}>
             <img
@@ -176,13 +176,13 @@ export function EvidenceEditor({
               style={{ maxWidth: "100%", maxHeight: "12rem", display: "block" }}
             />{" "}
             <button type="button" onClick={() => setRemoveImage(true)} style={buttonStyle}>
-              Görseli Kaldır
+              Remove Image
             </button>
           </p>
         ) : null}
 
         <label htmlFor={id("audio")} style={textStyle}>
-          Ses
+          Audio
         </label>
         <input
           id={id("audio")}
@@ -196,18 +196,18 @@ export function EvidenceEditor({
           style={fieldStyle}
         />
         {audio ? (
-          <p style={textStyle}>Seçili ses: {audio.name}</p>
+          <p style={textStyle}>Selected audio: {audio.name}</p>
         ) : initial?.audioFile && !removeAudio ? (
           <p style={textStyle}>
             <audio controls src={evidenceFileUrl(initial.audioFile)} />{" "}
             <button type="button" onClick={() => setRemoveAudio(true)} style={buttonStyle}>
-              Sesi Kaldır
+              Remove Audio
             </button>
           </p>
         ) : null}
 
         <label htmlFor={id("note")} style={textStyle}>
-          Not
+          Note
         </label>
         <textarea
           id={id("note")}
@@ -228,10 +228,10 @@ export function EvidenceEditor({
 
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <button type="button" onClick={onClose} style={buttonStyle}>
-            Vazgeç
+            Cancel
           </button>
           <button type="button" onClick={handleConfirm} style={buttonStyle}>
-            {isEdit ? "Kaydet" : "Delili Kullan"}
+            {isEdit ? "Save" : "Use Evidence"}
           </button>
         </div>
       </div>

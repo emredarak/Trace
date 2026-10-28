@@ -152,7 +152,7 @@ export function initDb(): void {
   }
   if (!locationColumns.has("kind")) {
     database.exec(
-      "ALTER TABLE case_locations ADD COLUMN kind TEXT NOT NULL DEFAULT 'iliskili'",
+      "ALTER TABLE case_locations ADD COLUMN kind TEXT NOT NULL DEFAULT 'related'",
     );
   }
   if (!locationColumns.has("priority")) {
@@ -299,10 +299,10 @@ export function insertCase(input: CreateCaseInput): CaseRecord {
       insertLocation.run(
         randomUUID(),
         record.id,
-        loc.title ?? "Konum",
+        loc.title ?? "Location",
         loc.note ?? null,
         loc.note ?? null,
-        loc.kind ?? "iliskili",
+        loc.kind ?? "related",
         loc.priority ?? null,
         loc.latitude ?? null,
         loc.longitude ?? null,

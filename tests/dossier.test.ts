@@ -10,18 +10,18 @@ beforeEach(() => {
 
 const fakeGlimmer = {
   summarize: vi.fn(async (prompt: string) =>
-    prompt.includes("beyaz araci gordum")
-      ? "Supheli beyaz aracla kactigini anlatti."
-      : "Transkript ozeti.",
+    prompt.includes("I saw the white car")
+      ? "The suspect said he fled in the white car."
+      : "Transcript summary.",
   ),
 };
 
 function seedFullCase() {
   const rec = insertCase({
-    summary: "Gece market onunde bicakli saldiri",
-    crimeType: "yaralama",
-    weapon: "bicak",
-    mo: "gece yaklasma",
+    summary: "Night knife attack in front of the market",
+    crimeType: "assault",
+    weapon: "knife",
+    mo: "night approach",
     occurredAt: "2026-01-15T22:30:00.000Z",
     status: "open",
   });
@@ -29,35 +29,35 @@ function seedFullCase() {
   const now = rec.createdAt;
   db.prepare(
     "INSERT INTO case_locations (id, caseId, title, note, locationText, kind, priority, latitude, longitude, createdAt) VALUES (?,?,?,?,?,?,?,?,?,?)",
-  ).run("loc-1", rec.id, "Market onu", "kapi zorlanmis", "kapi zorlanmis", "olay-yeri", null, 41.01, 28.97, now);
+  ).run("loc-1", rec.id, "Market front", "door forced", "door forced", "crime-scene", null, 41.01, 28.97, now);
   const personTranscript = JSON.stringify({
-    text: "memur: ne gordun. supheli: beyaz araci gordum, plakayi aldim.",
+    text: "officer: what did you see. suspect: I saw the white car, I took the plate.",
     segments: [
-      { speaker: "memur", text: "ne gordun", start: 0, end: 2 },
-      { speaker: "supheli", text: "beyaz araci gordum", start: 2, end: 5 },
-      { speaker: "supheli", text: "plakayi aldim", start: 5, end: 7 },
+      { speaker: "officer", text: "what did you see", start: 0, end: 2 },
+      { speaker: "suspect", text: "I saw the white car", start: 2, end: 5 },
+      { speaker: "suspect", text: "I took the plate", start: 5, end: 7 },
     ],
   });
   db.prepare(
     "INSERT INTO case_persons (id, caseId, name, age, gender, note, type, relatedVictimId, relationship, unidentified, contactStatus, transcript, createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-  ).run("per-1", rec.id, "Ahmet Yilmaz", 34, "erkek", "market calisani", "supheli", null, null, 0, "ulasildi", personTranscript, now);
+  ).run("per-1", rec.id, "James Miller", 34, "male", "market employee", "suspect", null, null, 0, "reached", personTranscript, now);
   db.prepare(
     "INSERT INTO case_persons (id, caseId, name, age, gender, note, type, relatedVictimId, relationship, unidentified, contactStatus, transcript, createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-  ).run("per-2", rec.id, "Ayse Demir", 28, "kadın", null, "tanik", null, null, 0, null, null, now);
+  ).run("per-2", rec.id, "Alice Brown", 28, "female", null, "witness", null, null, 0, null, null, now);
   const evTranscript = JSON.stringify({
-    text: "kamera kaydi sesi: motor sesi duyuldu",
-    segments: [{ speaker: "kayit", text: "motor sesi duyuldu", start: 0, end: 3 }],
+    text: "camera audio: engine sound heard",
+    segments: [{ speaker: "recording", text: "engine sound heard", start: 0, end: 3 }],
   });
   const marking = JSON.stringify({
     boxes: [
-      { x: 0.1, y: 0.2, w: 0.3, h: 0.4, label: "bicak" },
-      { x: 0.5, y: 0.5, w: 0.2, h: 0.2, label: "beyaz arac" },
-      { x: 0.6, y: 0.6, w: 0.1, h: 0.1, label: "bicak" },
+      { x: 0.1, y: 0.2, w: 0.3, h: 0.4, label: "knife" },
+      { x: 0.5, y: 0.5, w: 0.2, h: 0.2, label: "white car" },
+      { x: 0.6, y: 0.6, w: 0.1, h: 0.1, label: "knife" },
     ],
   });
   db.prepare(
     "INSERT INTO evidences (id, caseId, type, title, note, transcript, marking, createdAt) VALUES (?,?,?,?,?,?,?,?)",
-  ).run("ev-1", rec.id, "evidence", "Olay yeri bicagi", "mutfak tezgahi", evTranscript, marking, now);
+  ).run("ev-1", rec.id, "evidence", "Crime scene knife", "kitchen counter", evTranscript, marking, now);
   return rec;
 }
 
@@ -68,7 +68,7 @@ function dossierRow(caseId: string) {
 }
 
 describe("buildDossier", () => {
-  it("bilinen vakadan beklenen bolumleri kaynak id'leriyle derler ve DB'ye yazar", async () => {
+  it("compiles expected sections with source ids from a known case and writes them to the DB", async () => {
     const rec = seedFullCase();
     fakeGlimmer.summarize.mockClear();
     const d = await buildDossier(getDb(), rec.id, fakeGlimmer);
@@ -80,17 +80,17 @@ describe("buildDossier", () => {
     expect(d.hash).toBeTruthy();
     expect(d.event).toMatchObject({
       sourceId: rec.id,
-      summary: "Gece market onunde bicakli saldiri",
-      crimeType: "yaralama",
-      weapon: "bicak",
-      mo: "gece yaklasma",
+      summary: "Night knife attack in front of the market",
+      crimeType: "assault",
+      weapon: "knife",
+      mo: "night approach",
       occurredAt: "2026-01-15T22:30:00.000Z",
     });
     expect(d.locations).toEqual([
       expect.objectContaining({
         sourceId: "loc-1",
-        title: "Market onu",
-        kind: "olay-yeri",
+        title: "Market front",
+        kind: "crime-scene",
         latitude: 41.01,
         longitude: 28.97,
       }),
@@ -98,21 +98,21 @@ describe("buildDossier", () => {
     expect(d.persons).toHaveLength(2);
     const suspect = d.persons.find((p) => p.sourceId === "per-1")!;
     expect(suspect).toMatchObject({
-      name: "Ahmet Yilmaz",
-      type: "supheli",
+      name: "James Miller",
+      type: "suspect",
       age: 34,
-      gender: "erkek",
+      gender: "male",
       unidentified: false,
     });
-    // Transkript one cikanlari: kaynak id'li ve kaynak metinden birebir alinti
+    // Transcript highlights: with source id and verbatim quote from the source text
     expect(suspect.transcriptHighlights.length).toBeGreaterThan(0);
-    const sourceSegments = ["ne gordun", "beyaz araci gordum", "plakayi aldim"];
+    const sourceSegments = ["what did you see", "I saw the white car", "I took the plate"];
     for (const h of suspect.transcriptHighlights) {
       expect(h.sourceId).toBe("per-1");
       expect(sourceSegments).toContain(h.text);
     }
-    expect(suspect.transcriptHighlights.map((h) => h.text)).toContain("beyaz araci gordum");
-    expect(suspect.transcriptSummary).toBe("Supheli beyaz aracla kactigini anlatti.");
+    expect(suspect.transcriptHighlights.map((h) => h.text)).toContain("I saw the white car");
+    expect(suspect.transcriptSummary).toBe("The suspect said he fled in the white car.");
     const witness = d.persons.find((p) => p.sourceId === "per-2")!;
     expect(witness.transcriptHighlights).toEqual([]);
     expect(witness.transcriptSummary ?? null).toBeNull();
@@ -120,11 +120,11 @@ describe("buildDossier", () => {
     expect(d.evidences).toHaveLength(1);
     expect(d.evidences[0]).toMatchObject({
       sourceId: "ev-1",
-      title: "Olay yeri bicagi",
-      note: "mutfak tezgahi",
+      title: "Crime scene knife",
+      note: "kitchen counter",
     });
-    expect(d.evidences[0].samLabels).toEqual(["bicak", "beyaz arac"]);
-    expect(d.evidences[0].transcriptHighlights.map((h) => h.text)).toContain("motor sesi duyuldu");
+    expect(d.evidences[0].samLabels).toEqual(["knife", "white car"]);
+    expect(d.evidences[0].transcriptHighlights.map((h) => h.text)).toContain("engine sound heard");
     expect(d.evidences[0].transcriptHighlights[0].sourceId).toBe("ev-1");
 
     const row = dossierRow(rec.id);
@@ -133,7 +133,7 @@ describe("buildDossier", () => {
     expect(JSON.parse(row.json)).toEqual(d);
   });
 
-  it("icerik ayniysa hash ayni kalir ve satir yeniden yazilmaz; degisince hash degisir", async () => {
+  it("same content keeps the same hash without rewriting the row; hash changes when content changes", async () => {
     const rec = seedFullCase();
     const first = await buildDossier(getDb(), rec.id, fakeGlimmer);
     getDb().prepare("UPDATE case_dossiers SET updatedAt = '2000-01-01T00:00:00.000Z' WHERE caseId = ?").run(rec.id);
@@ -142,20 +142,20 @@ describe("buildDossier", () => {
     expect(second.hash).toBe(first.hash);
     expect(dossierRow(rec.id).updatedAt).toBe("2000-01-01T00:00:00.000Z");
 
-    getDb().prepare("UPDATE cases SET summary = 'Degisen ozet metni' WHERE id = ?").run(rec.id);
+    getDb().prepare("UPDATE cases SET summary = 'Changed summary text' WHERE id = ?").run(rec.id);
     const third = await buildDossier(getDb(), rec.id, fakeGlimmer);
     expect(third.hash).not.toBe(first.hash);
     expect(dossierRow(rec.id).hash).toBe(third.hash);
-    expect(JSON.parse(dossierRow(rec.id).json).event.summary).toBe("Degisen ozet metni");
+    expect(JSON.parse(dossierRow(rec.id).json).event.summary).toBe("Changed summary text");
   });
 
-  it("kisi/konum/delil yoklugu ve bozuk zenginlestirme JSON'u dosyayi bozmaz", async () => {
-    const rec = insertCase({ summary: "sade vaka" });
+  it("missing persons/locations/evidence and corrupt enrichment JSON do not break the file", async () => {
+    const rec = insertCase({ summary: "plain case" });
     const db = getDb();
     db.prepare(
       "INSERT INTO case_persons (id, caseId, name, type, unidentified, transcript, createdAt) VALUES (?,?,?,?,?,?,?)",
-    ).run("per-x", rec.id, "Bozuk Kayit", "tanik", 0, "{bozuk json", rec.createdAt);
-    const summarize = vi.fn(async () => "cagrilmamali");
+    ).run("per-x", rec.id, "Corrupt Record", "witness", 0, "{broken json", rec.createdAt);
+    const summarize = vi.fn(async () => "must not be called");
     const d = await buildDossier(db, rec.id, { summarize });
     expect(d.locations).toEqual([]);
     expect(d.evidences).toEqual([]);
@@ -165,24 +165,24 @@ describe("buildDossier", () => {
     expect(dossierRow(rec.id).hash).toBe(d.hash);
   });
 
-  it("Glimmer hatasinda dosya yine derlenir; ozet bos, one cikanlar deterministik kalir", async () => {
+  it("file still compiles on Glimmer error; summary empty, highlights stay deterministic", async () => {
     const rec = seedFullCase();
     const failing = {
       summarize: async () => {
-        throw new Error("glimmer coktu");
+        throw new Error("glimmer crashed");
       },
     };
     const d = await buildDossier(getDb(), rec.id, failing);
     const suspect = d.persons.find((p) => p.sourceId === "per-1")!;
     expect(suspect.transcriptSummary ?? null).toBeNull();
-    expect(suspect.transcriptHighlights.map((h) => h.text)).toContain("beyaz araci gordum");
+    expect(suspect.transcriptHighlights.map((h) => h.text)).toContain("I saw the white car");
   });
 
-  it("istemci hatasinda (enjekte sahte) dosya derlenir, ag basarisizligi dosyayi bozmaz", async () => {
+  it("file compiles on client error (injected fake); network failure does not break the file", async () => {
     const rec = seedFullCase();
     const throwing = {
       summarize: vi.fn(async () => {
-        throw new Error("ag yok");
+        throw new Error("no network");
       }),
     };
     const d = await buildDossier(getDb(), rec.id, throwing);
@@ -191,10 +191,10 @@ describe("buildDossier", () => {
     expect(d.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary ?? null).toBeNull();
   });
 
-  it("deterministik olmayan Glimmer ciktisi hash'i degistirmez: ikinci derlemede Glimmer cagrilmaz, ozet korunur", async () => {
+  it("non-deterministic Glimmer output does not change the hash: Glimmer is not called on rebuild, summary preserved", async () => {
     const rec = seedFullCase();
     let n = 0;
-    const changing = { summarize: vi.fn(async () => `degisken ozet ${++n}`) };
+    const changing = { summarize: vi.fn(async () => `variable summary ${++n}`) };
     const first = await buildDossier(getDb(), rec.id, changing);
     const callsAfterFirst = changing.summarize.mock.calls.length;
     expect(callsAfterFirst).toBeGreaterThan(0);
@@ -209,66 +209,66 @@ describe("buildDossier", () => {
     expect(dossierRow(rec.id).updatedAt).toBe("2000-01-01T00:00:00.000Z");
   });
 
-  it("kaynak kismen degisince degismeyen transkriptin ozeti onbellekten gelir, Glimmer cagrilmaz", async () => {
+  it("when the source partially changes, the unchanged transcript summary comes from cache, Glimmer not called", async () => {
     const rec = seedFullCase();
     const first = await buildDossier(getDb(), rec.id, fakeGlimmer);
-    getDb().prepare("UPDATE cases SET summary = 'Sadece olay ozeti degisti' WHERE id = ?").run(rec.id);
+    getDb().prepare("UPDATE cases SET summary = 'Only the incident summary changed' WHERE id = ?").run(rec.id);
 
-    const other = { summarize: vi.fn(async () => "BAMASKA OZET") };
+    const other = { summarize: vi.fn(async () => "COMPLETELY DIFFERENT SUMMARY") };
     const second = await buildDossier(getDb(), rec.id, other);
     expect(second.hash).not.toBe(first.hash);
     expect(other.summarize).not.toHaveBeenCalled();
     expect(second.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary).toBe(
-      "Supheli beyaz aracla kactigini anlatti.",
+      "The suspect said he fled in the white car.",
     );
     expect(dossierRow(rec.id).hash).toBe(second.hash);
   });
 
-  it("transkript degisince yalniz o transkript icin Glimmer yeniden cagrilir", async () => {
+  it("when a transcript changes, Glimmer is re-called only for that transcript", async () => {
     const rec = seedFullCase();
     await buildDossier(getDb(), rec.id, fakeGlimmer);
     const changedTranscript = JSON.stringify({
-      text: "yeni ifade: kirmizi motor goruldu",
-      segments: [{ speaker: "supheli", text: "kirmizi motor goruldu" }],
+      text: "new statement: red motorcycle seen",
+      segments: [{ speaker: "suspect", text: "red motorcycle seen" }],
     });
     getDb().prepare("UPDATE case_persons SET transcript = ? WHERE id = 'per-1'").run(changedTranscript);
-    const spy = { summarize: vi.fn(async () => "yeni ozet") };
+    const spy = { summarize: vi.fn(async () => "new summary") };
     const d = await buildDossier(getDb(), rec.id, spy);
-    // per-1 degisti (1 cagri); ev-1 transkripti ayni, ozeti onbellekten (cagri yok)
+    // per-1 changed (1 call); ev-1 transcript unchanged, summary from cache (no call)
     expect(spy.summarize).toHaveBeenCalledTimes(1);
-    expect(d.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary).toBe("yeni ozet");
-    expect(d.evidences[0].transcriptSummary).toBe("Transkript ozeti.");
+    expect(d.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary).toBe("new summary");
+    expect(d.evidences[0].transcriptSummary).toBe("Transcript summary.");
   });
 
-  it("one cikanlar en uzun segmentlerden secilir, asil sirada sunulur (en fazla 5)", async () => {
-    const rec = insertCase({ summary: "uzun transkriptli vaka" });
+  it("highlights are picked from the longest segments, shown in original order (max 5)", async () => {
+    const rec = insertCase({ summary: "case with long transcript" });
     const db = getDb();
     const segments = [
-      { speaker: "a", text: "kisa" },
-      { speaker: "a", text: "bu cok daha uzun bir ifade segmentidir bir" },
-      { speaker: "a", text: "orta uzunlukta segment" },
-      { speaker: "a", text: "en uzun segment budur ve oldukca detayli bilgi icerir evet" },
+      { speaker: "a", text: "short" },
+      { speaker: "a", text: "this is a much longer statement segment number one" },
+      { speaker: "a", text: "medium-length segment" },
+      { speaker: "a", text: "this is the longest segment with quite detailed information yes" },
       { speaker: "a", text: "k" },
-      { speaker: "a", text: "ikinci uzun segment de burada yer aliyor iste" },
-      { speaker: "a", text: "bir baska orta boy segment daha burada" },
+      { speaker: "a", text: "the second long segment is right here" },
+      { speaker: "a", text: "another medium-size segment right here" },
     ];
     db.prepare(
       "INSERT INTO case_persons (id, caseId, name, type, unidentified, transcript, createdAt) VALUES (?,?,?,?,?,?,?)",
-    ).run("per-long", rec.id, "Uzun Anlatan", "tanik", 0, JSON.stringify({ text: segments.map((s) => s.text).join(" "), segments }), rec.createdAt);
-    const d = await buildDossier(db, rec.id, { summarize: async () => "ozet" });
+    ).run("per-long", rec.id, "Lengthy Speaker", "witness", 0, JSON.stringify({ text: segments.map((s) => s.text).join(" "), segments }), rec.createdAt);
+    const d = await buildDossier(db, rec.id, { summarize: async () => "summary" });
     const highlights = d.persons[0].transcriptHighlights;
     expect(highlights).toHaveLength(5);
-    // En kisa iki segment ("kisa", "k") disarida; kalanlar asil sirada
+    // The shortest two segments ("short", "k") are out; the rest in original order
     expect(highlights.map((h) => h.text)).toEqual([
-      "bu cok daha uzun bir ifade segmentidir bir",
-      "orta uzunlukta segment",
-      "en uzun segment budur ve oldukca detayli bilgi icerir evet",
-      "ikinci uzun segment de burada yer aliyor iste",
-      "bir baska orta boy segment daha burada",
+      "this is a much longer statement segment number one",
+      "medium-length segment",
+      "this is the longest segment with quite detailed information yes",
+      "the second long segment is right here",
+      "another medium-size segment right here",
     ]);
   });
 
-  it("hic cevap vermeyen Glimmer kisa timeout ile ozetsiz derler; one cikanlar kalir, kayit yazilir", async () => {
+  it("unresponsive Glimmer compiles without a summary via short timeout; highlights remain, record written", async () => {
     const rec = seedFullCase();
     process.env.GLIMMER_TIMEOUT_MS = "20";
     try {
@@ -277,7 +277,7 @@ describe("buildDossier", () => {
       const suspect = d.persons.find((p) => p.sourceId === "per-1")!;
       expect(suspect.transcriptSummary ?? null).toBeNull();
       expect(suspect.transcriptHighlights.map((h) => h.text)).toContain(
-        "beyaz araci gordum",
+        "I saw the white car",
       );
       expect(dossierRow(rec.id).hash).toBe(d.hash);
     } finally {
@@ -285,34 +285,34 @@ describe("buildDossier", () => {
     }
   });
 
-  it("olmayan vaka icin hata firlatir", async () => {
-    await expect(buildDossier(getDb(), "yok-boyle-id", fakeGlimmer)).rejects.toThrow();
+  it("throws for a missing case", async () => {
+    await expect(buildDossier(getDb(), "missing-id", fakeGlimmer)).rejects.toThrow();
   });
 });
 
 describe("dossierText", () => {
-  it("Spark paketine giden duz metin tum bolumleri ve kaynak id'lerini tasir", async () => {
+  it("plain text for the Spark package carries all sections and source ids", async () => {
     const rec = seedFullCase();
     const d = await buildDossier(getDb(), rec.id, fakeGlimmer);
     const text = dossierText(d);
     expect(text).toContain(rec.caseNo);
-    expect(text).toContain("Gece market onunde bicakli saldiri");
-    expect(text).toContain("Market onu");
-    expect(text).toContain("Ahmet Yilmaz");
-    expect(text).toContain("beyaz araci gordum");
-    expect(text).toContain("Supheli beyaz aracla kactigini anlatti.");
-    expect(text).toContain("bicak");
-    expect(text).toContain("motor sesi duyuldu");
+    expect(text).toContain("Night knife attack in front of the market");
+    expect(text).toContain("Market front");
+    expect(text).toContain("James Miller");
+    expect(text).toContain("I saw the white car");
+    expect(text).toContain("The suspect said he fled in the white car.");
+    expect(text).toContain("knife");
+    expect(text).toContain("engine sound heard");
     expect(text).toContain("per-1");
     expect(text).toContain("loc-1");
     expect(text).toContain("ev-1");
   });
 
-  it("bos bolumlu dosyada da metin uretir", async () => {
-    const rec = insertCase({ summary: "sadece ozet" });
+  it("also produces text for a file with empty sections", async () => {
+    const rec = insertCase({ summary: "summary only" });
     const d = await buildDossier(getDb(), rec.id, fakeGlimmer);
     const text = dossierText(d);
     expect(text).toContain(rec.caseNo);
-    expect(text).toContain("sadece ozet");
+    expect(text).toContain("summary only");
   });
 });

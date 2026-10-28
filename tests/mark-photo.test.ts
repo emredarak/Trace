@@ -10,10 +10,10 @@ import {
 } from "../app/api/cases/route";
 import { POST as markPhotoRoute } from "../app/api/cases/[id]/mark-photo/route";
 
-// Sahte işaretleme: "bıçak" ipucuna 2 kutu.
+// Fake marking: 2 boxes for the knife hint.
 const FAKE_BOXES = [
-  { x: 0.1, y: 0.2, w: 0.3, h: 0.25, label: "bıçak" },
-  { x: 0.55, y: 0.4, w: 0.2, h: 0.15, label: "bıçak" },
+  { x: 0.1, y: 0.2, w: 0.3, h: 0.25, label: "knife" },
+  { x: 0.55, y: 0.4, w: 0.2, h: 0.15, label: "knife" },
 ];
 
 const fakeClient = {
@@ -23,8 +23,8 @@ const fakeClient = {
 function photoRequest(
   id: string,
   bytes: Uint8Array<ArrayBuffer> = new Uint8Array([1, 2, 3, 4]),
-  name = "delil.jpg",
-  hint = "bıçak",
+  name = "evidence.jpg",
+  hint = "knife",
 ): Request {
   const form = new FormData();
   form.append("file", new File([bytes], name, { type: "image/jpeg" }));
@@ -64,45 +64,45 @@ afterEach(() => {
 });
 
 describe("markPhoto (lib)", () => {
-  it("'bıçak' ipucuyla sahte yanıt 2 kutu döndürür", async () => {
+  it("fake response for the knife hint returns 2 boxes", async () => {
     const out = await markPhoto(
-      Buffer.from("sahte-fotograf"),
-      "bıçak",
+      Buffer.from("fake-photo"),
+      "knife",
       fakeClient,
     );
     expect(out.boxes).toHaveLength(2);
-    expect(out.boxes[0]).toMatchObject({ label: "bıçak" });
+    expect(out.boxes[0]).toMatchObject({ label: "knife" });
   });
 
-  it("boş görüntü verisi hata verir", async () => {
-    await expect(markPhoto(Buffer.alloc(0), "bıçak", fakeClient)).rejects.toThrow();
+  it("empty image data throws", async () => {
+    await expect(markPhoto(Buffer.alloc(0), "knife", fakeClient)).rejects.toThrow();
   });
 
-  it("istemci hatası aynen iletilir", async () => {
+  it("client errors are passed through", async () => {
     const failing = {
       markImage: async () => {
-        throw new Error("sam çöktü");
+        throw new Error("sam crashed");
       },
     };
     await expect(
-      markPhoto(Buffer.from("foto"), "bıçak", failing),
-    ).rejects.toThrow("sam çöktü");
+      markPhoto(Buffer.from("photo"), "knife", failing),
+    ).rejects.toThrow("sam crashed");
   });
 
-  it("hic cevap vermeyen istemci kisa timeout ile reddeder", async () => {
+  it("unresponsive client rejects with a short timeout", async () => {
     const hanging = {
       markImage: () => new Promise<never>(() => {}),
     };
     await expect(
-      markPhoto(Buffer.from("foto"), "bıçak", hanging, 20),
-    ).rejects.toThrow(/zaman asimi|timeout/i);
+      markPhoto(Buffer.from("photo"), "knife", hanging, 20),
+    ).rejects.toThrow(/timeout/i);
   });
 });
 
 describe("POST /api/cases/[id]/mark-photo", () => {
-  it("'bıçak' ipucuyla 2 kutu girişe yazılır", async () => {
+  it("2 boxes for the knife hint are written to the entry", async () => {
     __setMarkPhotoClientForTests(fakeClient);
-    const id = await create("fotoğraflı vaka");
+    const id = await create("photo case");
 
     const res = await markPhotoRoute(photoRequest(id), {
       params: Promise.resolve({ id }),
@@ -112,24 +112,24 @@ describe("POST /api/cases/[id]/mark-photo", () => {
     expect(body.boxes).toHaveLength(2);
     expect(body.entry).toMatchObject({ caseId: id });
 
-    // Giriş vaka listesine yansır.
+    // Entry is reflected in the case list.
     const list = await (await listCases()).json();
     const record = list.find((c: { id: string }) => c.id === id) as {
       entries: { type: string; note: string }[];
     };
     expect(record.entries).toHaveLength(1);
 
-    // Yüklenen dosya diskte saklanır.
+    // Uploaded file is stored on disk.
     expect(readdirSync(uploadDir)).toHaveLength(1);
   });
 
-  it("servis hatasında 502 döner, dosya yine saklanır, giriş yazılmaz", async () => {
+  it("on service error returns 502, file still stored, no entry written", async () => {
     __setMarkPhotoClientForTests({
       markImage: async () => {
-        throw new Error("sam çöktü");
+        throw new Error("sam crashed");
       },
     });
-    const id = await create("bozuk fotoğraflı vaka");
+    const id = await create("corrupt photo case");
 
     const res = await markPhotoRoute(photoRequest(id), {
       params: Promise.resolve({ id }),
@@ -139,11 +139,11 @@ describe("POST /api/cases/[id]/mark-photo", () => {
     expect(typeof body.error).toBe("string");
     expect(body.error.length).toBeGreaterThan(0);
 
-    // Dosya saklanmıştır.
+    // File was stored.
     expect(readdirSync(uploadDir)).toHaveLength(1);
     expect(existsSync(join(uploadDir, readdirSync(uploadDir)[0]))).toBe(true);
 
-    // Giriş yazılmamıştır.
+    // No entry was written.
     const count = (
       getDb().prepare("SELECT COUNT(*) AS n FROM evidences").get() as {
         n: number;
@@ -152,11 +152,11 @@ describe("POST /api/cases/[id]/mark-photo", () => {
     expect(count).toBe(0);
   });
 
-  it("dosyasız istek 400 döner", async () => {
+  it("request without a file returns 400", async () => {
     __setMarkPhotoClientForTests(fakeClient);
-    const id = await create("dosyasız vaka");
+    const id = await create("fileless case");
     const form = new FormData();
-    form.append("hint", "bıçak");
+    form.append("hint", "knife");
     const res = await markPhotoRoute(
       new Request(`http://localhost/api/cases/${id}/mark-photo`, {
         method: "POST",
@@ -167,7 +167,7 @@ describe("POST /api/cases/[id]/mark-photo", () => {
     expect(res.status).toBe(400);
   });
 
-  it("olmayan kayda 404 döner", async () => {
+  it("returns 404 for a missing record", async () => {
     __setMarkPhotoClientForTests(fakeClient);
     const res = await markPhotoRoute(photoRequest("yok"), {
       params: Promise.resolve({ id: "yok" }),

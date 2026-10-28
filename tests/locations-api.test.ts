@@ -19,7 +19,7 @@ function createBody(summary: string): Request {
   });
 }
 
-async function makeCase(summary = "konumlu vaka"): Promise<string> {
+async function makeCase(summary = "case with location"): Promise<string> {
   const body = (await (await createCase(createBody(summary))).json()) as {
     id: string;
   };
@@ -45,11 +45,11 @@ beforeEach(() => {
   initDb();
 });
 
-describe("PATCH /api/cases/[id] alan düzenleme", () => {
-  it("özet ve silah güncellenir, benzerlik bayrağı kalkar", async () => {
+describe("PATCH /api/cases/[id] field editing", () => {
+  it("summary and weapon update, similarity flag is raised", async () => {
     const id = await makeCase();
     const res = await patchCase(
-      jsonReq("PATCH", { summary: "yeni özet", weapon: "levye" }),
+      jsonReq("PATCH", { summary: "new summary", weapon: "crowbar" }),
       paramsOf(id),
     );
     expect(res.status).toBe(200);
@@ -58,26 +58,26 @@ describe("PATCH /api/cases/[id] alan düzenleme", () => {
       weapon: string;
       needsRerank: number | boolean;
     };
-    expect(body.summary).toBe("yeni özet");
-    expect(body.weapon).toBe("levye");
+    expect(body.summary).toBe("new summary");
+    expect(body.weapon).toBe("crowbar");
     expect(body.needsRerank ? true : false).toBe(true);
   });
 
-  it("boş özet 400 döner", async () => {
+  it("empty summary returns 400", async () => {
     const id = await makeCase();
     const res = await patchCase(jsonReq("PATCH", { summary: "  " }), paramsOf(id));
     expect(res.status).toBe(400);
   });
 
-  it("alan yoksa 400 döner", async () => {
+  it("returns 400 when no field is given", async () => {
     const id = await makeCase();
     const res = await patchCase(jsonReq("PATCH", {}), paramsOf(id));
     expect(res.status).toBe(400);
   });
 
-  it("boş gönderilen alan temizlenir (silme desteklenir)", async () => {
+  it("empty-sent fields are cleared (deletion supported)", async () => {
     const id = await makeCase();
-    await patchCase(jsonReq("PATCH", { weapon: "levye" }), paramsOf(id));
+    await patchCase(jsonReq("PATCH", { weapon: "crowbar" }), paramsOf(id));
     const res = await patchCase(jsonReq("PATCH", { weapon: "" }), paramsOf(id));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { weapon: string | null };
@@ -85,12 +85,12 @@ describe("PATCH /api/cases/[id] alan düzenleme", () => {
   });
 });
 
-describe("konum uçları", () => {
-  it("notlu + koordinatlı konum eklenir ve listelenir", async () => {
+describe("location endpoints", () => {
+  it("adds a location with note + coordinates and lists it", async () => {
     const id = await makeCase();
     const res = await addLocation(
       jsonReq("POST", {
-        note: "makbulün bulunduğu nokta",
+        note: "where the victim was found",
         latitude: 41.01,
         longitude: 28.97,
       }),
@@ -104,17 +104,17 @@ describe("konum uçları", () => {
       )
     ).json()) as Array<{ title: string; note: string | null; latitude: number }>;
     expect(list).toHaveLength(1);
-    expect(list[0].title).toBe("makbulün bulunduğu nokta");
+    expect(list[0].title).toBe("where the victim was found");
   });
 
-  it("yeni alanlarla konum eklenir; locationText not aliasıdır", async () => {
+  it("adds a location with new fields; locationText is a note alias", async () => {
     const id = await makeCase();
     const res = await addLocation(
       jsonReq("POST", {
-        title: "Delil yeri",
-        note: "kamera kaydı var",
-        kind: "iliskili",
-        priority: "kritik",
+        title: "Evidence site",
+        note: "camera footage available",
+        kind: "related",
+        priority: "critical",
         latitude: 41.01,
         longitude: 28.97,
       }),
@@ -122,11 +122,11 @@ describe("konum uçları", () => {
     );
     expect(res.status).toBe(201);
     const created = (await res.json()) as Record<string, unknown>;
-    expect(created.title).toBe("Delil yeri");
-    expect(created.note).toBe("kamera kaydı var");
-    expect(created.locationText).toBe("kamera kaydı var");
-    expect(created.kind).toBe("iliskili");
-    expect(created.priority).toBe("kritik");
+    expect(created.title).toBe("Evidence site");
+    expect(created.note).toBe("camera footage available");
+    expect(created.locationText).toBe("camera footage available");
+    expect(created.kind).toBe("related");
+    expect(created.priority).toBe("critical");
     expect(created.latitude).toBe(41.01);
     expect(created.longitude).toBe(28.97);
     const list = (await (
@@ -134,43 +134,43 @@ describe("konum uçları", () => {
     ).json()) as Array<Record<string, unknown>>;
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({
-      title: "Delil yeri",
-      note: "kamera kaydı var",
-      locationText: "kamera kaydı var",
-      kind: "iliskili",
-      priority: "kritik",
+      title: "Evidence site",
+      note: "camera footage available",
+      locationText: "camera footage available",
+      kind: "related",
+      priority: "critical",
       latitude: 41.01,
       longitude: 28.97,
     });
   });
 
-  it("eski gövde: note başlık, locationText not olur", async () => {
+  it("legacy body: note becomes the title, locationText becomes the note", async () => {
     const id = await makeCase();
     const res = await addLocation(
-      jsonReq("POST", { note: "maktulün yeri", locationText: "dere yatağı" }),
+      jsonReq("POST", { note: "victim's location", locationText: "creek bed" }),
       paramsOf(id),
     );
     expect(res.status).toBe(201);
     const created = (await res.json()) as Record<string, unknown>;
-    expect(created.title).toBe("maktulün yeri");
-    expect(created.note).toBe("dere yatağı");
-    expect(created.locationText).toBe("dere yatağı");
+    expect(created.title).toBe("victim's location");
+    expect(created.note).toBe("creek bed");
+    expect(created.locationText).toBe("creek bed");
   });
 
-  it("yalnız başlıkla (koordinatsız) konum eklenir", async () => {
+  it("adds a location with title only (no coordinates)", async () => {
     const id = await makeCase();
     const res = await addLocation(
-      jsonReq("POST", { title: "Sadece yazılı yer" }),
+      jsonReq("POST", { title: "Text-only place" }),
       paramsOf(id),
     );
     expect(res.status).toBe(201);
     const created = (await res.json()) as Record<string, unknown>;
-    expect(created.title).toBe("Sadece yazılı yer");
-    expect(created.kind).toBe("iliskili");
+    expect(created.title).toBe("Text-only place");
+    expect(created.kind).toBe("related");
     expect(created.priority).toBeNull();
   });
 
-  it("yalnız koordinatla konum eklenir; başlık Konum olur", async () => {
+  it("adds a location with coordinates only; title becomes Location", async () => {
     const id = await makeCase();
     const res = await addLocation(
       jsonReq("POST", { latitude: 41.01, longitude: 28.97 }),
@@ -178,79 +178,79 @@ describe("konum uçları", () => {
     );
     expect(res.status).toBe(201);
     const created = (await res.json()) as Record<string, unknown>;
-    expect(created.title).toBe("Konum");
+    expect(created.title).toBe("Location");
   });
 
-  it("başlıksız ve koordinatsız istek 400 döner", async () => {
+  it("request without title or coordinates returns 400", async () => {
     const id = await makeCase();
     const res = await addLocation(jsonReq("POST", {}), paramsOf(id));
     expect(res.status).toBe(400);
   });
 
-  it("note artık başlık sayılır (201); boş gövde 400 döner", async () => {
+  it("note now counts as a title (201); empty body returns 400", async () => {
     const id = await makeCase();
-    const res = await addLocation(jsonReq("POST", { note: "boş" }), paramsOf(id));
+    const res = await addLocation(jsonReq("POST", { note: "empty" }), paramsOf(id));
     expect(res.status).toBe(201);
     const created = (await res.json()) as Record<string, unknown>;
-    expect(created.title).toBe("boş");
+    expect(created.title).toBe("empty");
     const empty = await addLocation(jsonReq("POST", {}), paramsOf(id));
     expect(empty.status).toBe(400);
   });
 
-  it("Olay Yeri'nde priority yok sayılır (null döner)", async () => {
+  it("priority is ignored for Crime Scene (returns null)", async () => {
     const id = await makeCase();
     const res = await addLocation(
-      jsonReq("POST", { title: "Olay yeri", kind: "olay-yeri", priority: "kritik" }),
+      jsonReq("POST", { title: "Crime scene", kind: "crime-scene", priority: "critical" }),
       paramsOf(id),
     );
     expect(res.status).toBe(201);
     const created = (await res.json()) as Record<string, unknown>;
-    expect(created.kind).toBe("olay-yeri");
+    expect(created.kind).toBe("crime-scene");
     expect(created.priority).toBeNull();
   });
 
-  it("geçersiz kind/priority ve tek koordinat 400 döner", async () => {
+  it("invalid kind/priority and lone coordinate return 400", async () => {
     const id = await makeCase();
     expect(
-      (await addLocation(jsonReq("POST", { title: "x", kind: "yakin" }), paramsOf(id))).status,
+      (await addLocation(jsonReq("POST", { title: "x", kind: "near" }), paramsOf(id))).status,
     ).toBe(400);
     expect(
-      (await addLocation(jsonReq("POST", { title: "x", priority: "acil" }), paramsOf(id))).status,
+      (await addLocation(jsonReq("POST", { title: "x", priority: "urgent" }), paramsOf(id))).status,
     ).toBe(400);
     expect(
       (await addLocation(jsonReq("POST", { title: "x", latitude: 41.01 }), paramsOf(id))).status,
     ).toBe(400);
   });
 
-  it("eski satır GET'te başlık Konum, tür iliskili döner", async () => {
+  it("legacy rows return title Location and related kind in GET", async () => {
     const id = await makeCase();
     getDb()
       .prepare(
         "INSERT INTO case_locations (id, caseId, note, locationText, latitude, longitude, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
-      .run("eski-1", id, null, "eski metin", null, null, new Date().toISOString());
+      .run("old-1", id, null, "old text", null, null, new Date().toISOString());
     const list = (await (
       await listLocations(new Request("http://localhost/x"), paramsOf(id))
     ).json()) as Array<Record<string, unknown>>;
     expect(list).toHaveLength(1);
-    expect(list[0].title).toBe("Konum");
-    expect(list[0].kind).toBe("iliskili");
-    // Eski veri taşınmaz: locationText note'a yükseltilmez, ikisi de null kalır.
+    expect(list[0].title).toBe("Location");
+    expect(list[0].kind).toBe("related");
+    // Legacy data is not migrated: locationText is not promoted to note, both stay null.
     expect(list[0].note).toBeNull();
     expect(list[0].locationText).toBeNull();
   });
 
-  it("PATCH konum günceller", async () => {
+  it("PATCH updates a location", async () => {
     const id = await makeCase();
     const created = (await (
-      await addLocation(jsonReq("POST", { title: "eski başlık" }), paramsOf(id))
+      await addLocation(jsonReq("POST", { title: "old title" }), paramsOf(id))
     ).json()) as { id: string };
     const res = await patchLocation(
       jsonReq("PATCH", {
-        title: "yeni başlık",
-        note: "yeni not",
-        kind: "olay-yeri",
-        priority: "kritik",
+        title: "new title",
+        note: "new note",
+        kind: "crime-scene",
+        priority: "critical",
         latitude: 40.5,
         longitude: 29.5,
       }),
@@ -261,10 +261,10 @@ describe("konum uçları", () => {
     expect(updated).toMatchObject({
       id: created.id,
       caseId: id,
-      title: "yeni başlık",
-      note: "yeni not",
-      locationText: "yeni not",
-      kind: "olay-yeri",
+      title: "new title",
+      note: "new note",
+      locationText: "new note",
+      kind: "crime-scene",
       priority: null,
       latitude: 40.5,
       longitude: 29.5,
@@ -272,17 +272,17 @@ describe("konum uçları", () => {
     const list = (await (
       await listLocations(new Request("http://localhost/x"), paramsOf(id))
     ).json()) as Array<Record<string, unknown>>;
-    expect(list[0].title).toBe("yeni başlık");
+    expect(list[0].title).toBe("new title");
   });
 
-  it("PATCH yanlış vakaya ait konumda 404 döner", async () => {
+  it("PATCH on another case location returns 404", async () => {
     const id = await makeCase();
-    const otherId = await makeCase("başka vaka");
+    const otherId = await makeCase("other case");
     const created = (await (
-      await addLocation(jsonReq("POST", { title: "yer" }), paramsOf(id))
+      await addLocation(jsonReq("POST", { title: "place" }), paramsOf(id))
     ).json()) as { id: string };
     const res = await patchLocation(
-      jsonReq("PATCH", { title: "sızıntı" }),
+      jsonReq("PATCH", { title: "leak" }),
       locParamsOf(otherId, created.id),
     );
     expect(res.status).toBe(404);
@@ -293,23 +293,23 @@ describe("konum uçları", () => {
     expect(missing.status).toBe(404);
   });
 
-  it("PATCH geçersiz gövdede 400 döner", async () => {
+  it("PATCH with an invalid body returns 400", async () => {
     const id = await makeCase();
     const created = (await (
-      await addLocation(jsonReq("POST", { title: "yer" }), paramsOf(id))
+      await addLocation(jsonReq("POST", { title: "place" }), paramsOf(id))
     ).json()) as { id: string };
     const res = await patchLocation(
-      jsonReq("PATCH", { title: "x", kind: "yakin" }),
+      jsonReq("PATCH", { title: "x", kind: "near" }),
       locParamsOf(id, created.id),
     );
     expect(res.status).toBe(400);
   });
 
-  it("konum silinir", async () => {
+  it("deletes a location", async () => {
     const id = await makeCase();
     const created = (await (
       await addLocation(
-        jsonReq("POST", { locationText: "köprü altı" }),
+        jsonReq("POST", { locationText: "under the bridge" }),
         paramsOf(id),
       )
     ).json()) as { id: string };
@@ -324,36 +324,36 @@ describe("konum uçları", () => {
     expect(list).toHaveLength(0);
   });
 
-  it("POST istemci id'sini kullanır; tekrarı aynı satırı 200 döner, çoğaltmaz", async () => {
+  it("POST uses the client id; a repeat returns the same row with 200, no duplicate", async () => {
     const id = await makeCase();
-    const body = { id: "istemci-1", title: "Çevrimdışı yer" };
+    const body = { id: "client-1", title: "Offline place" };
     const first = await addLocation(jsonReq("POST", body), paramsOf(id));
     expect(first.status).toBe(201);
-    expect(((await first.json()) as { id: string }).id).toBe("istemci-1");
+    expect(((await first.json()) as { id: string }).id).toBe("client-1");
     const dup = await addLocation(jsonReq("POST", body), paramsOf(id));
     expect(dup.status).toBe(200);
-    expect(((await dup.json()) as { id: string }).id).toBe("istemci-1");
+    expect(((await dup.json()) as { id: string }).id).toBe("client-1");
     const list = (await (
       await listLocations(new Request("http://localhost/x"), paramsOf(id))
     ).json()) as unknown[];
     expect(list).toHaveLength(1);
   });
 
-  it("POST başka vakaya ait istemci id'sinde 400 döner", async () => {
+  it("POST with another case client id returns 400", async () => {
     const id = await makeCase();
-    const otherId = await makeCase("başka vaka 2");
+    const otherId = await makeCase("other case 2");
     await addLocation(
-      jsonReq("POST", { id: "paylasilan", title: "yer" }),
+      jsonReq("POST", { id: "shared", title: "place" }),
       paramsOf(id),
     );
     const res = await addLocation(
-      jsonReq("POST", { id: "paylasilan", title: "sızıntı" }),
+      jsonReq("POST", { id: "shared", title: "leak" }),
       paramsOf(otherId),
     );
     expect(res.status).toBe(400);
   });
 
-  it("bilinmeyen vakaya konum eklenemez", async () => {
+  it("cannot add a location to an unknown case", async () => {
     const res = await addLocation(
       jsonReq("POST", { locationText: "x" }),
       paramsOf("yok"),
@@ -362,24 +362,24 @@ describe("konum uçları", () => {
   });
 });
 
-describe("vaka açarken konum ve tüm alanlar", () => {
-  it("POST /api/cases konumları da kaydeder; GET tek vakada döner", async () => {
+describe("opening a case with locations and all fields", () => {
+  it("POST /api/cases also saves locations; single-case GET returns them", async () => {
     const created = (await (
       await createCase(
         jsonReq("POST", {
-          summary: "tam alanlı vaka",
-          crimeType: "gasp",
-          locationType: "su kenarı",
-          mo: "gece arkadan yaklaşma",
-          weapon: "bıçak",
+          summary: "full-field case",
+          crimeType: "robbery",
+          locationType: "waterfront",
+          mo: "approaching from behind at night",
+          weapon: "knife",
           victimAge: 40,
-          victimGender: "erkek",
-          suspects: "bir kişi",
-          witnesses: "bir tanık",
+          victimGender: "male",
+          suspects: "one person",
+          witnesses: "one witness",
           locations: [
             {
-              note: "maktulün bulunduğu nokta",
-              locationText: "dere yatağı",
+              note: "where the victim was found",
+              locationText: "creek bed",
               latitude: 41.01,
               longitude: 28.97,
             },
@@ -396,23 +396,23 @@ describe("vaka açarken konum ve tüm alanlar", () => {
       victimAge: number;
       locations: Array<{ title: string; note: string; latitude: number }>;
     };
-    expect(body.crimeType).toBe("gasp");
+    expect(body.crimeType).toBe("robbery");
     expect(body.victimAge).toBe(40);
     expect(body.locations).toHaveLength(1);
-    expect(body.locations[0].title).toBe("maktulün bulunduğu nokta");
-    expect(body.locations[0].note).toBe("dere yatağı");
+    expect(body.locations[0].title).toBe("where the victim was found");
+    expect(body.locations[0].note).toBe("creek bed");
   });
 
-  it("bilinmeyen alan sessizce kaydedilmez (beyaz liste)", async () => {
+  it("unknown fields are silently dropped (allowlist)", async () => {
     const created = (await (
       await createCase(
-        jsonReq("POST", { summary: "v", gizliAlan: "sızıntı" }),
+        jsonReq("POST", { summary: "v", secretField: "leak" }),
       )
     ).json()) as { id: string };
     const { GET: getCase } = await import("../app/api/cases/[id]/route");
     const body = (await (
       await getCase(new Request("http://localhost/x"), paramsOf(created.id))
     ).json()) as Record<string, unknown>;
-    expect(body.gizliAlan).toBeUndefined();
+    expect(body.secretField).toBeUndefined();
   });
 });

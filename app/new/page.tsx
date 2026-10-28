@@ -61,9 +61,9 @@ export default function NewCasePage() {
             note: p.note.trim() || null,
             type: p.type,
             relatedVictimId:
-              p.type === "maktul" ? null : p.relatedVictimId || null,
+              p.type === "victim" ? null : p.relatedVictimId || null,
             relationship:
-              p.type !== "maktul" && p.relatedVictimId
+              p.type !== "victim" && p.relatedVictimId
                 ? p.relationship.trim() || null
                 : null,
             unidentified: p.unidentified,
@@ -82,7 +82,7 @@ export default function NewCasePage() {
         return;
       }
       if (!res.ok) {
-        setError("Kayıt açılamadı, tekrar deneyin.");
+        setError("Could not create the case, please try again.");
         return;
       }
       if (
@@ -90,9 +90,9 @@ export default function NewCasePage() {
         typeof body.id === "string" &&
         typeof body.caseNo === "string"
       ) {
-        // Dosyalar (delil görsel/ses, kişi sorgu sesi) vaka açıldıktan
-        // sonra ayrı uçlardan yüklenir; biri başarısız olursa vaka
-        // yine de açılmış sayılır, kullanıcıya bilgi verilir.
+        // Files (evidence images/audio, person interview audio) upload through separate
+        // endpoints after the case is opened; if one fails the case still counts as
+        // opened and the user is informed.
         let uploadFailed = false;
         for (const evidence of evidences) {
           try {
@@ -112,7 +112,7 @@ export default function NewCasePage() {
           }
         }
         for (const person of persons) {
-          if (!person.audio || person.type === "maktul") continue;
+          if (!person.audio || person.type === "victim") continue;
           try {
             const form = new FormData();
             form.append("file", person.audio);
@@ -127,15 +127,15 @@ export default function NewCasePage() {
         }
         if (uploadFailed) {
           setError(
-            "Vaka açıldı ancak bazı dosyalar yüklenemedi; vaka detayından tekrar ekleyebilirsiniz.",
+            "Case was created but some files could not be uploaded; you can add them again from the case detail page.",
           );
         }
         setCreated({ id: body.id, caseNo: body.caseNo });
       } else {
-        setError("Kayıt açılamadı, tekrar deneyin.");
+        setError("Could not create the case, please try again.");
       }
     } catch {
-      setError("Bağlantı hatası, tekrar deneyin.");
+      setError("Connection error, please try again.");
     } finally {
       setSaving(false);
     }
@@ -144,8 +144,8 @@ export default function NewCasePage() {
   if (queued) {
     return (
       <main style={wrap}>
-        <h1>Vaka kuyruğa alındı</h1>
-        <p>Bağlantı gelince açılacak.</p>
+        <h1>Case queued</h1>
+        <p>It will be created once you&apos;re back online.</p>
       </main>
     );
   }
@@ -153,12 +153,12 @@ export default function NewCasePage() {
   if (created) {
     return (
       <main style={wrap}>
-        <h1>Vaka açıldı: {created.caseNo}</h1>
+        <h1>Case created: {created.caseNo}</h1>
         <p>
-          <a href={`/cases/${created.id}`}>Vakayı Gör</a>
+          <a href={`/cases/${created.id}`}>View Case</a>
         </p>
         <p>
-          <a href={`/cases/${created.id}/add`}>Delil ekle</a>
+          <a href={`/cases/${created.id}/add`}>Add evidence</a>
         </p>
       </main>
     );
@@ -166,15 +166,15 @@ export default function NewCasePage() {
 
   return (
     <main style={wrap}>
-      <h1>Yeni Vaka</h1>
+      <h1>New Case</h1>
       <p>
-        Vaka numarası ve durum (Açık) sistem tarafından atanır. Yıldızlı alan
-        dışında hepsi isteğe bağlıdır; sonra da düzenleyebilirsiniz.
+        The case number and status (Open) are assigned automatically. Everything
+        except the starred field is optional; you can edit them later.
       </p>
       <CaseForm
         idPrefix="yeni"
         initial={emptyCaseForm()}
-        submitLabel="Vakayı Aç"
+        submitLabel="Create Case"
         saving={saving}
         error={error}
         onSubmit={onSubmit}

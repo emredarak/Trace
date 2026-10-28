@@ -52,10 +52,10 @@ const buttonStyle: React.CSSProperties = {
 };
 
 const PRIORITIES: { value: string; label: string; priority: LocationPriority | null }[] = [
-  { value: "", label: "Etiketsiz", priority: null },
-  { value: "kritik", label: "Kritik", priority: "kritik" },
-  { value: "onemli", label: "Önemli", priority: "onemli" },
-  { value: "rutin", label: "Rutin", priority: "rutin" },
+  { value: "", label: "Untagged", priority: null },
+  { value: "critical", label: "Critical", priority: "critical" },
+  { value: "important", label: "Important", priority: "important" },
+  { value: "routine", label: "Routine", priority: "routine" },
 ];
 
 let fallbackIdCounter = 0;
@@ -72,9 +72,9 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
 
   const [title, setTitle] = useState(initial?.title ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
-  const [kind, setKind] = useState<LocationKind>(initial?.kind ?? "iliskili");
+  const [kind, setKind] = useState<LocationKind>(initial?.kind ?? "related");
   const [priority, setPriority] = useState<LocationPriority | null>(
-    initial?.kind === "olay-yeri" ? null : (initial?.priority ?? null),
+    initial?.kind === "crime-scene" ? null : (initial?.priority ?? null),
   );
   const [pick, setPick] = useState<MapPoint | null>(
     initial && typeof initial.latitude === "number" && typeof initial.longitude === "number"
@@ -88,42 +88,42 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
   const previewLoc = { kind, priority };
   const previewColor = locationColor(previewLoc);
   const previewLabel =
-    kind === "olay-yeri"
-      ? "Olay Yeri"
+    kind === "crime-scene"
+      ? "Crime Scene"
       : priority
         ? locationLabel(previewLoc)
-        : "Etiketsiz";
+        : "Untagged";
 
   async function searchAddress() {
     const q = address.trim();
     if (!q) {
-      setError("Aranacak adres ya da yer adı yazın.");
+      setError("Type an address or place name to search.");
       setResults([]);
       return;
     }
     try {
       const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&accept-language=tr&limit=5&q=${encodeURIComponent(q)}`,
+        `https://nominatim.openstreetmap.org/search?format=json&accept-language=en&limit=5&q=${encodeURIComponent(q)}`,
       );
       if (!res.ok) throw new Error("search failed");
       const data: unknown = await res.json();
       const list = Array.isArray(data) ? (data as NominatimResult[]).slice(0, 5) : [];
       if (list.length === 0) {
         setResults([]);
-        setError("Adres bulunamadı; haritadan tıklayarak seçebilirsiniz.");
+        setError("Address not found; you can select by clicking the map.");
         return;
       }
       setError("");
       setResults(list);
     } catch {
       setResults([]);
-      setError("Adres aranamadı; bağlantıyı kontrol edin, haritadan tıklayarak da seçebilirsiniz.");
+      setError("Could not search the address; check your connection or select by clicking the map.");
     }
   }
 
   function locateMe() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setError("Konum alınamadı; haritadan tıklayarak seçebilirsiniz.");
+      setError("Could not get your location; you can select by clicking the map.");
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -135,7 +135,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
         });
       },
       () => {
-        setError("Konum alınamadı; izin vermeniz gerekir ya da haritadan tıklayarak seçebilirsiniz.");
+        setError("Could not get your location; please grant permission or select by clicking the map.");
       },
       { timeout: 8000 },
     );
@@ -143,7 +143,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
 
   function handleConfirm() {
     if (!title.trim()) {
-      setError("Konum Başlığı zorunludur.");
+      setError("Location Title is required.");
       return;
     }
     setError("");
@@ -152,7 +152,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
       title: title.trim(),
       note: note.trim(),
       kind,
-      priority: kind === "olay-yeri" ? null : priority,
+      priority: kind === "crime-scene" ? null : priority,
       latitude: pick?.latitude,
       longitude: pick?.longitude,
     });
@@ -172,7 +172,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
         if (e.key !== "Enter") return;
         const target = e.target as HTMLElement | null;
         if (!target) return;
-        // Adres aramanın kendi Enter davranışı kalır.
+        // Keep the address search's own Enter behavior.
         if (target.id === id("address")) return;
         if (
           target instanceof HTMLInputElement ||
@@ -197,7 +197,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={isEdit ? "Konumu Düzenle" : "Konum Seç"}
+        aria-label={isEdit ? "Edit Location" : "Select Location"}
         style={{
           background: "#ffffff",
           color: "#111111",
@@ -212,33 +212,33 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
         }}
       >
         <h2 style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}>
-          {isEdit ? "Konumu Düzenle" : "Konum Seç"}
+          {isEdit ? "Edit Location" : "Select Location"}
         </h2>
 
         <fieldset style={{ margin: "0 0 1rem", padding: "0.75rem" }}>
-          <legend style={textStyle}>Tür</legend>
+          <legend style={textStyle}>Type</legend>
           <label style={{ ...textStyle, display: "block", marginBottom: "0.5rem" }}>
             <input
               type="radio"
               name={id("kind")}
-              checked={kind === "olay-yeri"}
-              onChange={() => setKind("olay-yeri")}
+              checked={kind === "crime-scene"}
+              onChange={() => setKind("crime-scene")}
             />{" "}
-            Olay Yeri
+            Crime Scene
           </label>
           <label style={{ ...textStyle, display: "block" }}>
             <input
               type="radio"
               name={id("kind")}
-              checked={kind === "iliskili"}
-              onChange={() => setKind("iliskili")}
+              checked={kind === "related"}
+              onChange={() => setKind("related")}
             />{" "}
-            İlişkili Konum
+            Related Location
           </label>
         </fieldset>
 
         <label htmlFor={id("title")} style={textStyle}>
-          Konum Başlığı *
+          Location Title *
         </label>
         <input
           id={id("title")}
@@ -249,7 +249,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
         />
 
         <label htmlFor={id("note")} style={textStyle}>
-          Konum Not
+          Location Note
         </label>
         <input
           id={id("note")}
@@ -259,10 +259,10 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
           style={fieldStyle}
         />
 
-        {kind === "iliskili" ? (
+        {kind === "related" ? (
           <>
             <label htmlFor={id("priority")} style={textStyle}>
-              Öncelik
+              Priority
             </label>
             <div
               style={{
@@ -323,7 +323,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
         )}
 
         <label htmlFor={id("address")} style={textStyle}>
-          Adres / yer adı ile bul
+          Find by address / place name
         </label>
         <div
           style={{
@@ -347,10 +347,10 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
             style={{ ...fieldStyle, margin: 0, flex: "1 1 14rem", width: "auto" }}
           />
           <button type="button" onClick={() => void searchAddress()} style={buttonStyle}>
-            Ara
+            Search
           </button>
           <button type="button" onClick={locateMe} style={buttonStyle}>
-            Konumuma Git
+            Go to My Location
           </button>
         </div>
 
@@ -381,18 +381,18 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
 
         {pick ? (
           <p style={textStyle}>
-            Seçili koordinat: ({pick.latitude.toFixed(6)}, {pick.longitude.toFixed(6)}){" "}
+            Selected coordinates: ({pick.latitude.toFixed(6)}, {pick.longitude.toFixed(6)}){" "}
             <button
               type="button"
               onClick={() => setPick(null)}
               style={buttonStyle}
             >
-              Harita seçimini temizle
+              Clear map selection
             </button>
           </p>
         ) : (
           <p style={textStyle}>
-            Henüz harita seçimi yok; koordinatsız da kaydedebilirsiniz.
+            No map selection yet; you can save without coordinates.
           </p>
         )}
 
@@ -404,10 +404,10 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
 
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <button type="button" onClick={onClose} style={buttonStyle}>
-            Vazgeç
+            Cancel
           </button>
           <button type="button" onClick={handleConfirm} style={buttonStyle}>
-            {isEdit ? "Kaydet" : "Bu Konumu Kullan"}
+            {isEdit ? "Save" : "Use This Location"}
           </button>
         </div>
       </div>

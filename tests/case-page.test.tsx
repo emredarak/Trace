@@ -16,51 +16,51 @@ beforeEach(() => {
   vi.unstubAllGlobals();
 });
 
-const CASE_ID = "vaka-1";
+const CASE_ID = "case-1";
 
 const CASE_ITEM = {
   id: CASE_ID,
   caseNo: "TR-0001",
-  summary: "gece hırsızlık olayı",
-  crimeType: "hırsızlık",
-  locationType: "sokak",
-  weapon: "bıçak",
-  mo: "gece yaklaşma",
+  summary: "night theft incident",
+  crimeType: "theft",
+  locationType: "street",
+  weapon: "knife",
+  mo: "night approach",
   needsRerank: false,
   createdAt: "2026-10-26T00:00:00.000Z",
   updatedAt: "2026-10-26T00:00:00.000Z",
-  officer: "Eski Memur Adı",
+  officer: "Former Officer Name",
   victimAge: 99,
-  victimGender: "eski-cinsiyet",
-  suspects: "Eski Şüpheli Metni",
-  witnesses: "Eski Tanık Metni",
+  victimGender: "former-gender",
+  suspects: "Former Suspect Text",
+  witnesses: "Former Witness Text",
   persons: [
     {
       id: "kisi-1",
       caseId: CASE_ID,
-      name: "Ayşe Yılmaz",
+      name: "Alice Johnson",
       age: 34,
-      gender: "kadın",
-      note: "maktul notu",
-      type: "maktul",
+      gender: "female",
+      note: "victim note",
+      type: "victim",
       relatedVictimId: null,
       relationship: null,
       unidentified: false,
-      contactStatus: "ulasildi",
+      contactStatus: "reached",
       createdAt: "2026-10-26T00:01:00.000Z",
     },
     {
       id: "kisi-2",
       caseId: CASE_ID,
-      name: "Mehmet Demir",
+      name: "Brian Carter",
       age: 40,
-      gender: "erkek",
-      note: "şüpheli notu",
-      type: "supheli",
+      gender: "male",
+      note: "suspect note",
+      type: "suspect",
       relatedVictimId: "kisi-1",
-      relationship: "eşi",
+      relationship: "spouse",
       unidentified: false,
-      contactStatus: "ulasilamadi",
+      contactStatus: "unreached",
       createdAt: "2026-10-26T00:02:00.000Z",
     },
     {
@@ -69,10 +69,10 @@ const CASE_ITEM = {
       name: null,
       age: null,
       gender: null,
-      note: "tanık notu",
-      type: "tanik",
+      note: "witness note",
+      type: "witness",
       relatedVictimId: "kisi-1",
-      relationship: "komşusu",
+      relationship: "neighbor",
       unidentified: true,
       contactStatus: null,
       createdAt: "2026-10-26T00:03:00.000Z",
@@ -82,10 +82,10 @@ const CASE_ITEM = {
     {
       id: "loc-1",
       caseId: CASE_ID,
-      title: "Merdiven girişi",
-      note: "kamera kör noktası",
-      locationText: "kamera kör noktası",
-      kind: "olay-yeri",
+      title: "Stairwell entrance",
+      note: "camera blind spot",
+      locationText: "camera blind spot",
+      kind: "crime-scene",
       priority: null,
       latitude: 41.015,
       longitude: 28.97,
@@ -94,11 +94,11 @@ const CASE_ITEM = {
     {
       id: "loc-2",
       caseId: CASE_ID,
-      title: "Arka sokak",
-      note: "kaçış yönü",
-      locationText: "kaçış yönü",
-      kind: "iliskili",
-      priority: "kritik",
+      title: "Back street",
+      note: "escape route",
+      locationText: "escape route",
+      kind: "related",
+      priority: "critical",
       latitude: 41.02,
       longitude: 28.98,
       createdAt: "2026-10-26T00:02:00.000Z",
@@ -109,14 +109,14 @@ const CASE_ITEM = {
       id: "e1",
       caseId: CASE_ID,
       type: "note",
-      note: "kısa not",
+      note: "short note",
       createdAt: "2026-10-26T00:01:00.000Z",
     },
     {
       id: "e2",
       caseId: CASE_ID,
       type: "transcript",
-      note: "konuşmacı 1: gece gördüm",
+      note: "speaker 1: I saw it at night",
       createdAt: "2026-10-26T00:02:00.000Z",
     },
     {
@@ -124,8 +124,8 @@ const CASE_ITEM = {
       caseId: CASE_ID,
       type: "photo-marking",
       note: JSON.stringify({
-        hint: "bıçak",
-        boxes: [{ x: 0.1, y: 0.2, w: 0.3, h: 0.25, label: "bıçak" }],
+        hint: "knife",
+        boxes: [{ x: 0.1, y: 0.2, w: 0.3, h: 0.25, label: "knife" }],
       }),
       createdAt: "2026-10-26T00:03:00.000Z",
     },
@@ -134,45 +134,45 @@ const CASE_ITEM = {
 
 const RESULTS = [
   {
-    caseId: "vaka-2",
+    caseId: "case-2",
     caseNo: "TR-0002",
     score: 9,
-    reason: "aynı suç türü ve silah",
+    reason: "same crime type and weapon",
     similarities: [
-      { kind: "suc-tipi", description: "ikisi de hırsızlık", strength: 9, evidence: "hırsızlık" },
-      { kind: "silah", description: "ikisinde de bıçak", strength: 8, evidence: "bıçak" },
+      { kind: "crime-type", description: "theft in both", strength: 9, evidence: "theft" },
+      { kind: "weapon", description: "knife in both", strength: 8, evidence: "knife" },
     ],
   },
   {
-    caseId: "vaka-3",
+    caseId: "case-3",
     caseNo: "TR-0003",
     score: 7,
-    reason: "benzer yöntem",
+    reason: "similar method",
     similarities: [
-      { kind: "yontem", description: "gece yaklaşma yöntemi ortak", strength: 7, evidence: "gece yaklaşma" },
+      { kind: "method", description: "night approach in common", strength: 7, evidence: "night approach" },
     ],
   },
   {
-    caseId: "vaka-4",
+    caseId: "case-4",
     caseNo: "TR-0004",
     score: 5,
-    reason: "konum türü uyuyor",
+    reason: "location type matches",
     similarities: [
-      { kind: "konum", description: "sokak konumu ortak", strength: 5, evidence: "sokak" },
+      { kind: "location", description: "street location in common", strength: 5, evidence: "street" },
     ],
   },
   {
-    caseId: "vaka-5",
+    caseId: "case-5",
     caseNo: "TR-0005",
     score: 3,
-    reason: "zayıf benzerlik",
+    reason: "weak similarity",
     similarities: [],
   },
   {
-    caseId: "vaka-6",
+    caseId: "case-6",
     caseNo: "TR-0006",
     score: 0,
-    reason: "model listesinde yok",
+    reason: "not in model list",
     similarities: [],
   },
 ];
@@ -217,7 +217,7 @@ function stubFetch(
         return {
           ok: false,
           status: 500,
-          json: async () => ({ error: "sunucu hatası" }),
+          json: async () => ({ error: "server error" }),
         };
       }
       if (opts.queued) {
@@ -265,7 +265,7 @@ function stubFetch(
         return {
           ok: false,
           status: 500,
-          json: async () => ({ error: "sunucu hatası" }),
+          json: async () => ({ error: "server error" }),
         };
       }
       if (opts.queued) {
@@ -365,7 +365,7 @@ function stubFetch(
         json: async () => ({ sourceId: CASE_ID, targetId: body.targetId }),
       };
     }
-    throw new Error(`beklenmeyen istek: ${url}`);
+    throw new Error(`unexpected request: ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
   return { fetchMock, calls };
@@ -375,13 +375,13 @@ function renderPage() {
   render(<CaseDetail caseId={CASE_ID} />);
 }
 
-describe("Vaka detay + benzer liste", () => {
-  it("sahte 5 sonuç listelenir, her maddede skor ve gerekçe görünür", async () => {
+describe("Case detail + similar list", () => {
+  it("lists 5 fake results, each item shows score and reason", async () => {
     stubFetch();
     renderPage();
 
-    const list = await screen.findByRole("list", { name: /benzer/i });
-    // Üst düzey sonuç kartları (iç benzerlik maddeleri hariç).
+    const list = await screen.findByRole("list", { name: /similar/i });
+    // Top-level result cards (excluding inner similarity items).
     expect(list.children).toHaveLength(5);
 
     for (const r of RESULTS) {
@@ -394,65 +394,65 @@ describe("Vaka detay + benzer liste", () => {
     }
   });
 
-  it("kartta ham id yerine vaka numarası bağlantısı ve benzerlik maddeleri görünür", async () => {
+  it("card shows case-number link instead of raw id plus similarity items", async () => {
     stubFetch();
     renderPage();
 
-    const list = await screen.findByRole("list", { name: /benzer/i });
+    const list = await screen.findByRole("list", { name: /similar/i });
     for (const r of RESULTS) {
       const link = within(list).getByRole("link", { name: new RegExp(r.caseNo) });
       expect(link.getAttribute("href")).toBe(`/cases/${r.caseId}`);
       expect(link.textContent).not.toContain(r.caseId);
     }
     const first = within(list).getByText(RESULTS[0].reason).closest("li") as HTMLElement;
-    expect(within(first).getByText(/^Suç Tipi:/)).toBeTruthy();
-    expect(within(first).queryByText(/suc-tipi/)).toBeNull();
-    expect(first.textContent).toContain("ikisi de hırsızlık");
+    expect(within(first).getByText(/^Crime Type:/)).toBeTruthy();
+    expect(within(first).queryByText(/crime-type/)).toBeNull();
+    expect(first.textContent).toContain("theft in both");
     expect(first.textContent).toContain("9/10");
-    expect(within(first).getByText(/^Silah:/)).toBeTruthy();
+    expect(within(first).getByText(/^Weapon:/)).toBeTruthy();
     const third = within(list).getByText(RESULTS[1].reason).closest("li") as HTMLElement;
-    expect(within(third).getByText(/^Yöntem:/)).toBeTruthy();
+    expect(within(third).getByText(/^Method:/)).toBeTruthy();
     const fourth = within(list).getByText(RESULTS[2].reason).closest("li") as HTMLElement;
-    expect(within(fourth).getByText(/^Konum:/)).toBeTruthy();
-    expect(first.textContent).toContain("ikisinde de bıçak");
+    expect(within(fourth).getByText(/^Location:/)).toBeTruthy();
+    expect(first.textContent).toContain("knife in both");
     expect(first.textContent).toContain("8/10");
   });
 
-  it("bekleyen zenginleştirme varsa bilgi notu görünür", async () => {
+  it("shows an info note when enrichment is pending", async () => {
     stubFetch(false, { pendingEnrichment: true });
     renderPage();
 
-    const section = await screen.findByRole("region", { name: /benzer vakalar/i });
-    expect(await within(section).findByText(/bekleyen zenginleştirme|zenginleştirme.*bekliyor/i)).toBeTruthy();
+    const section = await screen.findByRole("region", { name: /similar cases/i });
+    expect(await within(section).findByText(/pending|background enrichment/i)).toBeTruthy();
   });
 
-  it("vaka detayı ve deliller (transcript + foto işareti) görünür", async () => {
+  it("case detail and evidence (transcript + photo marking) visible", async () => {
     stubFetch();
     renderPage();
 
-    expect(await screen.findByText("gece hırsızlık olayı")).toBeTruthy();
+    expect(await screen.findByText("night theft incident")).toBeTruthy();
     expect(await screen.findByRole("heading", { name: /TR-0001/ })).toBeTruthy();
     expect(
-      await screen.findByText("konuşmacı 1: gece gördüm"),
+      await screen.findByText("speaker 1: I saw it at night"),
     ).toBeTruthy();
-    const detail = await screen.findByRole("region", { name: "Vaka detayı" });
-    expect(within(detail).getAllByText(/bıçak/).length).toBeGreaterThan(0);
-    expect(within(detail).getByText(/1.*kutu/)).toBeTruthy();
+    const detail = await screen.findByRole("region", { name: "Case detail" });
+    expect(within(detail).getAllByText(/knife/).length).toBeGreaterThan(0);
+    expect(within(detail).getByText(/1.*box/)).toBeTruthy();
   });
 
-  it("fresh false ise 'yeni benzerler' rozeti görünür", async () => {
+  it("shows a 'new similar cases' badge when fresh is false", async () => {
     stubFetch(false);
     renderPage();
 
-    expect(await screen.findByText(/yeni benzerler/i)).toBeTruthy();
+    expect(await screen.findByText(/new similar cases/i)).toBeTruthy();
   });
 
-  it("'alakalı' düğmesi links POST çağrısı yapar ve onayı gösterir", async () => {
+  it("'Relevant' button fires links POST and shows confirmation", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
-    const list = await screen.findByRole("list", { name: /benzer/i });
-    const buttons = within(list).getAllByRole("button", { name: /alakalı/i });
+    const list = await screen.findByRole("list", { name: /similar/i });
+    const buttons = within(list).getAllByRole("button", { name: /relevant/i });
     expect(buttons).toHaveLength(5);
 
     fireEvent.click(buttons[0]);
@@ -469,37 +469,37 @@ describe("Vaka detay + benzer liste", () => {
       ([url]) => url === `/api/cases/${CASE_ID}/links`,
     ) as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toMatchObject({
-      targetId: "vaka-2",
+      targetId: "case-2",
     });
-    expect(await within(list).findByText(/onaylandı/i)).toBeTruthy();
+    expect(await within(list).findByText(/approved/i)).toBeTruthy();
   });
 });
 
-describe("Vaka detayı Deliller bölümü", () => {
-  it("Vakayı Düzenle bağlantısı yoktur", async () => {
+describe("Case detail Evidence section", () => {
+  it("no Edit Case link", async () => {
     stubFetch();
     renderPage();
-    expect(await screen.findByText("gece hırsızlık olayı")).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /vakayı düzenle/i })).toBeNull();
+    expect(await screen.findByText("night theft incident")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /edit case/i })).toBeNull();
     expect(document.querySelector('a[href$="/edit"]')).toBeNull();
   });
 
-  it("taslak delil Kaydet olmadan gitmez; Kaydet multipart POST yapar", async () => {
+  it("draft evidence is not sent without Save; Save does a multipart POST", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
-    const heading = await screen.findByRole("heading", { name: "Deliller" });
+    const heading = await screen.findByRole("heading", { name: "Evidence" });
     const section = heading.closest("section") as HTMLElement;
-    fireEvent.click(within(section).getByRole("button", { name: "+ Delil Ekle" }));
+    fireEvent.click(within(section).getByRole("button", { name: "+ Add Evidence" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/başlı/i), {
-      target: { value: "Yeni delil" },
+    fireEvent.change(within(dialog).getByLabelText(/evidence title/i), {
+      target: { value: "New evidence" },
     });
-    fireEvent.change(within(dialog).getByLabelText(/not/i), {
-      target: { value: "delil notu" },
+    fireEvent.change(within(dialog).getByLabelText(/note/i), {
+      target: { value: "evidence note" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Delili Kullan" }));
-    expect(await within(section).findByText("Yeni delil")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use Evidence" }));
+    expect(await within(section).findByText("New evidence")).toBeTruthy();
 
     const postsBefore = fetchMock.mock.calls.filter(
       ([url, init]) =>
@@ -508,7 +508,7 @@ describe("Vaka detayı Deliller bölümü", () => {
     );
     expect(postsBefore).toHaveLength(0);
 
-    fireEvent.click(within(section).getByRole("button", { name: "Kaydet" }));
+    fireEvent.click(within(section).getByRole("button", { name: "Save" }));
     await waitFor(() => {
       const posts = fetchMock.mock.calls.filter(
         ([url, init]) =>
@@ -517,22 +517,22 @@ describe("Vaka detayı Deliller bölümü", () => {
       );
       expect(posts).toHaveLength(1);
       const body = (posts[0][1] as RequestInit).body as FormData;
-      expect(body.get("title")).toBe("Yeni delil");
-      expect(body.get("note")).toBe("delil notu");
+      expect(body.get("title")).toBe("New evidence");
+      expect(body.get("note")).toBe("evidence note");
     });
-    expect(await within(section).findByText(/Deliller kaydedildi/)).toBeTruthy();
+    expect(await within(section).findByText(/Evidence saved/)).toBeTruthy();
   });
 
-  it("kapalı vakada delil kontrolleri yoktur", async () => {
+  it("no evidence controls for closed cases", async () => {
     stubFetch(false, { status: "closed" });
     renderPage();
-    const heading = await screen.findByRole("heading", { name: "Deliller" });
+    const heading = await screen.findByRole("heading", { name: "Evidence" });
     const section = heading.closest("section") as HTMLElement;
     expect(
-      within(section).queryByRole("button", { name: "+ Delil Ekle" }),
+      within(section).queryByRole("button", { name: "+ Add Evidence" }),
     ).toBeNull();
     expect(
-      within(section).queryByRole("button", { name: "Düzenle" }),
+      within(section).queryByRole("button", { name: "Edit" }),
     ).toBeNull();
   });
 });
@@ -550,88 +550,88 @@ function locationCalls(
 }
 
 async function addDraftLocation(title: string) {
-  fireEvent.click(screen.getByRole("button", { name: "+ Konum Ekle" }));
+  fireEvent.click(screen.getByRole("button", { name: "+ Add Location" }));
   const dialog = await screen.findByRole("dialog");
-  fireEvent.change(within(dialog).getByLabelText(/konum başlığı/i), {
+  fireEvent.change(within(dialog).getByLabelText(/location title/i), {
     target: { value: title },
   });
   fireEvent.click(
-    within(dialog).getByRole("button", { name: "Bu Konumu Kullan" }),
+    within(dialog).getByRole("button", { name: "Use This Location" }),
   );
 }
 
-describe("Vaka detayı Konumlar bölümü", () => {
-  it("(a) eski Konum tipi satırı yok; başlık+not+etiket görünür", async () => {
+describe("Case detail Locations section", () => {
+  it("(a) no legacy Location-type row; title+note+tag visible", async () => {
     stubFetch();
     renderPage();
 
-    const detail = await screen.findByRole("region", { name: "Vaka detayı" });
-    expect(await within(detail).findByText("Merdiven girişi")).toBeTruthy();
-    expect(within(detail).queryByText(/Konum tipi/)).toBeNull();
-    expect(within(detail).getByText("kamera kör noktası")).toBeTruthy();
-    expect(within(detail).getByText("Olay Yeri")).toBeTruthy();
-    expect(within(detail).getByText("Arka sokak")).toBeTruthy();
-    expect(within(detail).getByText("kaçış yönü")).toBeTruthy();
-    expect(within(detail).getByText("Kritik")).toBeTruthy();
-    // Olay Yeri varken uyarı bandı yoktur.
+    const detail = await screen.findByRole("region", { name: "Case detail" });
+    expect(await within(detail).findByText("Stairwell entrance")).toBeTruthy();
+    expect(within(detail).queryByText(/Location type/)).toBeNull();
+    expect(within(detail).getByText("camera blind spot")).toBeTruthy();
+    expect(within(detail).getByText("Crime Scene")).toBeTruthy();
+    expect(within(detail).getByText("Back street")).toBeTruthy();
+    expect(within(detail).getByText("escape route")).toBeTruthy();
+    expect(within(detail).getByText("Critical")).toBeTruthy();
+    // No warning band when a Crime Scene exists.
     expect(
       within(detail).queryByText(
-        /Olay Yeri olarak işaretlenmiş konum yok/,
+        /No location.*Crime Scene/,
       ),
     ).toBeNull();
   });
 
-  it("(b) taslak satır Kaydet olmadan POST yapmaz; Vazgeç satırı kaldırır", async () => {
+  it("(b) draft row does no POST without Save; Cancel removes the row", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
-    await screen.findByText("Merdiven girişi");
-    await addDraftLocation("Yeni nokta");
+    await screen.findByText("Stairwell entrance");
+    await addDraftLocation("New point");
 
-    expect(await screen.findByText("Yeni nokta")).toBeTruthy();
+    expect(await screen.findByText("New point")).toBeTruthy();
     expect(locationCalls(fetchMock, "POST")).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Vazgeç" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() => {
-      expect(screen.queryByText("Yeni nokta")).toBeNull();
+      expect(screen.queryByText("New point")).toBeNull();
     });
     expect(locationCalls(fetchMock, "POST")).toHaveLength(0);
-    expect(screen.getByText("Merdiven girişi")).toBeTruthy();
+    expect(screen.getByText("Stairwell entrance")).toBeTruthy();
   });
 
-  it("(c) Kaydet POST/PATCH/DELETE farkını uygular ve kalıcı hâli gösterir", async () => {
+  it("(c) Save applies POST/PATCH/DELETE deltas and shows the persisted state", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
-    await screen.findByText("Arka sokak");
-    await addDraftLocation("Yeni nokta");
+    await screen.findByText("Back street");
+    await addDraftLocation("New point");
 
-    // Mevcut konumu düzenle (taslak).
-    const editItem = (await screen.findByText("Arka sokak")).closest("li");
+    // Edit the existing location (draft).
+    const editItem = (await screen.findByText("Back street")).closest("li");
     fireEvent.click(
-      within(editItem as HTMLElement).getByRole("button", { name: "Düzenle" }),
+      within(editItem as HTMLElement).getByRole("button", { name: "Edit" }),
     );
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/konum başlığı/i), {
-      target: { value: "Arka sokak güncel" },
+    fireEvent.change(within(dialog).getByLabelText(/location title/i), {
+      target: { value: "Back street (updated)" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Kaydet" }));
-    expect(await screen.findByText("Arka sokak güncel")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Back street (updated)")).toBeTruthy();
 
-    // İlk konumu sil (taslak).
-    const deleteItem = screen.getByText("Merdiven girişi").closest("li");
+    // Delete the first location (draft).
+    const deleteItem = screen.getByText("Stairwell entrance").closest("li");
     fireEvent.click(
-      within(deleteItem as HTMLElement).getByRole("button", { name: "Sil" }),
+      within(deleteItem as HTMLElement).getByRole("button", { name: "Delete" }),
     );
     await waitFor(() => {
-      expect(screen.queryByText("Merdiven girişi")).toBeNull();
+      expect(screen.queryByText("Stairwell entrance")).toBeNull();
     });
     expect(locationCalls(fetchMock, "POST")).toHaveLength(0);
     expect(locationCalls(fetchMock, "PATCH")).toHaveLength(0);
     expect(locationCalls(fetchMock, "DELETE")).toHaveLength(0);
 
-    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(locationCalls(fetchMock, "POST")).toHaveLength(1);
@@ -640,48 +640,48 @@ describe("Vaka detayı Konumlar bölümü", () => {
     });
     const [, postInit] = locationCalls(fetchMock, "POST")[0];
     expect(JSON.parse(postInit.body as string)).toMatchObject({
-      title: "Yeni nokta",
+      title: "New point",
     });
     const [patchUrl, patchInit] = locationCalls(fetchMock, "PATCH")[0];
     expect(patchUrl).toBe(`/api/cases/${CASE_ID}/locations/loc-2`);
     expect(JSON.parse(patchInit.body as string)).toMatchObject({
-      title: "Arka sokak güncel",
+      title: "Back street (updated)",
     });
     const [deleteUrl] = locationCalls(fetchMock, "DELETE")[0];
     expect(deleteUrl).toBe(`/api/cases/${CASE_ID}/locations/loc-1`);
 
-    // Kaydet sonrası Kaydet/Vazgeç kalkar, kalıcı liste kalır.
+    // After Save, Save/Cancel go away, persisted list remains.
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Vazgeç" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     });
-    expect(screen.getByText("Yeni nokta")).toBeTruthy();
-    expect(screen.getByText("Arka sokak güncel")).toBeTruthy();
+    expect(screen.getByText("New point")).toBeTruthy();
+    expect(screen.getByText("Back street (updated)")).toBeTruthy();
   });
 
-  it("(d) kapalı vakada ekle/düzenle/sil düğmeleri yoktur", async () => {
+  it("(d) no add/edit/delete buttons for closed cases", async () => {
     stubFetch(false, { status: "closed" });
     renderPage();
 
-    expect(await screen.findByText("Merdiven girişi")).toBeTruthy();
+    expect(await screen.findByText("Stairwell entrance")).toBeTruthy();
     expect(
-      screen.queryByRole("button", { name: "+ Konum Ekle" }),
+      screen.queryByRole("button", { name: "+ Add Location" }),
     ).toBeNull();
-    expect(screen.queryByRole("button", { name: "Düzenle" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Sil" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
 
-  it("(e) Olay Yeri olmayan listede uyarı bandı görünür", async () => {
+  it("(e) warning band visible for lists without a Crime Scene", async () => {
     stubFetch(false, {
       locations: [
         {
           id: "loc-2",
           caseId: CASE_ID,
-          title: "Arka sokak",
-          note: "kaçış yönü",
-          kind: "iliskili",
-          priority: "kritik",
+          title: "Back street",
+          note: "escape route",
+          kind: "related",
+          priority: "critical",
           createdAt: "2026-10-26T00:02:00.000Z",
         },
       ],
@@ -689,78 +689,78 @@ describe("Vaka detayı Konumlar bölümü", () => {
     renderPage();
 
     expect(
-      await screen.findByText(/Olay Yeri olarak işaretlenmiş konum yok/),
+      await screen.findByText(/No location.*Crime Scene/),
     ).toBeTruthy();
   });
 
-  it("(f) 202 kuyruk yanıtında 'Kuyruğa alındı' gösterilir ve taslak kalıcı sayılır", async () => {
+  it("(f) 202 queued response shows 'Queued' and the draft counts as persisted", async () => {
     const { fetchMock } = stubFetch(false, { queued: true });
     renderPage();
 
-    await screen.findByText("Merdiven girişi");
-    await addDraftLocation("Kuyruk noktası");
-    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+    await screen.findByText("Stairwell entrance");
+    await addDraftLocation("Queue point");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(await screen.findByText(/Kuyruğa alındı/)).toBeTruthy();
+    expect(await screen.findByText(/Queued/)).toBeTruthy();
     expect(locationCalls(fetchMock, "POST")).toHaveLength(1);
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     });
-    expect(screen.getByText("Kuyruk noktası")).toBeTruthy();
+    expect(screen.getByText("Queue point")).toBeTruthy();
   });
 
-  it("(g) kirli taslakla vaka kapatılınca Kaydet/Vazgeç ve konum kontrolleri kalkar", async () => {
+  it("(g) closing with a dirty draft drops Save/Cancel and location controls", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
-    await screen.findByText("Merdiven girişi");
-    await addDraftLocation("Kapanış taslağı");
-    expect(screen.getByRole("button", { name: "Kaydet" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Vazgeç" })).toBeTruthy();
+    await screen.findByText("Stairwell entrance");
+    await addDraftLocation("Closing draft");
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Vakayı Kapat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close Case" }));
 
     expect(
-      await screen.findByRole("button", { name: "Vakayı Aç" }),
+      await screen.findByRole("button", { name: "Reopen Case" }),
     ).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Vazgeç" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "+ Konum Ekle" }),
+      screen.queryByRole("button", { name: "+ Add Location" }),
     ).toBeNull();
-    expect(screen.queryByRole("button", { name: "Düzenle" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Sil" })).toBeNull();
-    // Kaydedilmemiş taslak satır da ortadan kalkar (tabana dönülür).
-    expect(screen.queryByText("Kapanış taslağı")).toBeNull();
-    expect(screen.getByText("Merdiven girişi")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+    // Unsaved draft rows also disappear (back to base).
+    expect(screen.queryByText("Closing draft")).toBeNull();
+    expect(screen.getByText("Stairwell entrance")).toBeTruthy();
     expect(locationCalls(fetchMock, "POST")).toHaveLength(0);
     expect(locationCalls(fetchMock, "PATCH")).toHaveLength(0);
     expect(locationCalls(fetchMock, "DELETE")).toHaveLength(0);
   });
 
-  it("(j) çevrimdışı (202) eklenen konum düzenlenince PATCH aynı istemci id'sine gider", async () => {
+  it("(j) an offline (202) added location edited via PATCH goes to the same client id", async () => {
     const { fetchMock } = stubFetch(false, { queued: true });
     renderPage();
-    await screen.findByText("Merdiven girişi");
-    await addDraftLocation("Çevrimdışı nokta");
-    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
-    expect(await screen.findByText(/Kuyruğa alındı/)).toBeTruthy();
+    await screen.findByText("Stairwell entrance");
+    await addDraftLocation("Offline point");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/Queued/)).toBeTruthy();
     const posts = locationCalls(fetchMock, "POST");
     expect(posts).toHaveLength(1);
     const postedId = (JSON.parse(posts[0][1].body as string) as { id: string }).id;
     expect(typeof postedId).toBe("string");
     expect(postedId.length).toBeGreaterThan(0);
 
-    const item = (await screen.findByText("Çevrimdışı nokta")).closest("li");
+    const item = (await screen.findByText("Offline point")).closest("li");
     fireEvent.click(
-      within(item as HTMLElement).getByRole("button", { name: "Düzenle" }),
+      within(item as HTMLElement).getByRole("button", { name: "Edit" }),
     );
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/konum başlığı/i), {
-      target: { value: "Çevrimdışı nokta güncel" },
+    fireEvent.change(within(dialog).getByLabelText(/location title/i), {
+      target: { value: "Offline point (updated)" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Kaydet" }));
-    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       expect(locationCalls(fetchMock, "PATCH")).toHaveLength(1);
     });
@@ -768,40 +768,40 @@ describe("Vaka detayı Konumlar bölümü", () => {
     expect(patchUrl).toBe(`/api/cases/${CASE_ID}/locations/${postedId}`);
   });
 
-  it("(h) Kaydet hata verirse taslak satır ve Kaydet düğmesi korunur", async () => {
+  it("(h) on Save error the draft row and Save button are kept", async () => {
     const { fetchMock } = stubFetch(false, { failLocationSave: true });
     renderPage();
 
-    await screen.findByText("Merdiven girişi");
-    await addDraftLocation("Hata taslağı");
-    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+    await screen.findByText("Stairwell entrance");
+    await addDraftLocation("Error draft");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     expect(
-      await screen.findByText(/Konumlar kaydedilemedi/),
+      await screen.findByText(/Could not save locations/),
     ).toBeTruthy();
     expect(locationCalls(fetchMock, "POST")).toHaveLength(1);
-    // Taslak silinmedi, kullanıcı tekrar deneyebilir.
-    expect(screen.getByText("Hata taslağı")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Kaydet" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Vazgeç" })).toBeTruthy();
+    // Draft not deleted, user can retry.
+    expect(screen.getByText("Error draft")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   });
 
-  it("(i) Kaydet'e çift tıklama yinelenen POST yapmaz", async () => {
+  it("(i) double-clicking Save does not duplicate POST", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
-    await screen.findByText("Merdiven girişi");
-    await addDraftLocation("Tek kayıt");
-    const saveButton = screen.getByRole("button", { name: "Kaydet" });
+    await screen.findByText("Stairwell entrance");
+    await addDraftLocation("Single record");
+    const saveButton = screen.getByRole("button", { name: "Save" });
     fireEvent.click(saveButton);
     fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(locationCalls(fetchMock, "POST")).toHaveLength(1);
     });
-    expect(await screen.findByText(/Konumlar kaydedildi/)).toBeTruthy();
+    expect(await screen.findByText(/Locations saved/)).toBeTruthy();
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Kaydet" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     });
   });
 });
@@ -819,101 +819,101 @@ function personCalls(
 }
 
 async function peopleSectionEl() {
-  const heading = await screen.findByRole("heading", { name: "Kişiler" });
+  const heading = await screen.findByRole("heading", { name: "People" });
   return heading.closest("section") as HTMLElement;
 }
 
 async function addDraftPerson(name: string) {
-  fireEvent.click(screen.getByRole("button", { name: "+ Kişi Ekle" }));
+  fireEvent.click(screen.getByRole("button", { name: "+ Add Person" }));
   const dialog = await screen.findByRole("dialog");
-  fireEvent.change(within(dialog).getByLabelText(/ad soyad/i), {
+  fireEvent.change(within(dialog).getByLabelText(/full name/i), {
     target: { value: name },
   });
   fireEvent.click(
-    within(dialog).getByRole("button", { name: "Kişiyi Kullan" }),
+    within(dialog).getByRole("button", { name: "Use This Person" }),
   );
 }
 
-describe("Vaka detayı Kişiler bölümü", () => {
-  it("(a) eski kişi satırları yok; ad+tür rozeti+ilişki+etiketler görünür", async () => {
+describe("Case detail People section", () => {
+  it("(a) no legacy person rows; name+type badge+relation+tags visible", async () => {
     stubFetch();
     renderPage();
 
-    const detail = await screen.findByRole("region", { name: "Vaka detayı" });
+    const detail = await screen.findByRole("region", { name: "Case detail" });
     const people = await peopleSectionEl();
-    expect(await within(people).findByText("Ayşe Yılmaz")).toBeTruthy();
-    expect(within(people).getByText("Maktül")).toBeTruthy();
-    expect(within(people).getByText("Mehmet Demir")).toBeTruthy();
-    expect(within(people).getByText("Şüpheli")).toBeTruthy();
-    expect(within(people).getByText("Tanık")).toBeTruthy();
-    expect(within(people).getByText(/İlişkili Maktül: Ayşe Yılmaz \(eşi\)/)).toBeTruthy();
-    expect(within(people).getByText(/İlişkili Maktül: Ayşe Yılmaz \(komşusu\)/)).toBeTruthy();
-    expect(within(people).getByText("Kimliği Tespit Edilemedi")).toBeTruthy();
-    expect(within(people).getByText("Ulaşıldı")).toBeTruthy();
-    expect(within(people).getByText("Ulaşılamadı")).toBeTruthy();
-    expect(within(people).getByText("maktul notu")).toBeTruthy();
-    // Eski tekil kişi satırları ve değerleri gösterilmez.
-    expect(within(detail).queryByText(/Memur:/)).toBeNull();
-    expect(within(detail).queryByText(/Maktul yaşı:/)).toBeNull();
-    expect(within(detail).queryByText(/Maktul cinsiyeti:/)).toBeNull();
-    expect(within(detail).queryByText(/Şüpheliler:/)).toBeNull();
-    expect(within(detail).queryByText(/Tanıklar:/)).toBeNull();
-    expect(within(detail).queryByText("Eski Memur Adı")).toBeNull();
-    expect(within(detail).queryByText("Eski Şüpheli Metni")).toBeNull();
-    expect(within(detail).queryByText("Eski Tanık Metni")).toBeNull();
+    expect(await within(people).findByText("Alice Johnson")).toBeTruthy();
+    expect(within(people).getByText("Victim")).toBeTruthy();
+    expect(within(people).getByText("Brian Carter")).toBeTruthy();
+    expect(within(people).getByText("Suspect")).toBeTruthy();
+    expect(within(people).getByText("Witness")).toBeTruthy();
+    expect(within(people).getByText(/Related Victim: Alice Johnson \(spouse\)/)).toBeTruthy();
+    expect(within(people).getByText(/Related Victim: Alice Johnson \(neighbor\)/)).toBeTruthy();
+    expect(within(people).getByText("Unidentified")).toBeTruthy();
+    expect(within(people).getByText("Reached")).toBeTruthy();
+    expect(within(people).getByText("Not reached")).toBeTruthy();
+    expect(within(people).getByText("victim note")).toBeTruthy();
+    // Legacy single person rows and values are not shown.
+    expect(within(detail).queryByText(/Officer:/)).toBeNull();
+    expect(within(detail).queryByText(/Victim age:/)).toBeNull();
+    expect(within(detail).queryByText(/Victim gender:/)).toBeNull();
+    expect(within(detail).queryByText(/Suspects:/)).toBeNull();
+    expect(within(detail).queryByText(/Witnesses:/)).toBeNull();
+    expect(within(detail).queryByText("Former Officer Name")).toBeNull();
+    expect(within(detail).queryByText("Former Suspect Text")).toBeNull();
+    expect(within(detail).queryByText("Former Witness Text")).toBeNull();
   });
 
-  it("(b) taslak kişi Kaydet olmadan POST yapmaz; Vazgeç satırı kaldırır", async () => {
+  it("(b) draft person does no POST without Save; Cancel removes the row", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
     const people = await peopleSectionEl();
-    await addDraftPerson("Yeni Kişi");
+    await addDraftPerson("New Person");
 
-    expect(await within(people).findByText("Yeni Kişi")).toBeTruthy();
+    expect(await within(people).findByText("New Person")).toBeTruthy();
     expect(personCalls(fetchMock, "POST")).toHaveLength(0);
 
     fireEvent.click(
-      within(people).getByRole("button", { name: "Vazgeç" }),
+      within(people).getByRole("button", { name: "Cancel" }),
     );
 
     await waitFor(() => {
-      expect(within(people).queryByText("Yeni Kişi")).toBeNull();
+      expect(within(people).queryByText("New Person")).toBeNull();
     });
     expect(personCalls(fetchMock, "POST")).toHaveLength(0);
-    expect(within(people).getByText("Ayşe Yılmaz")).toBeTruthy();
+    expect(within(people).getByText("Alice Johnson")).toBeTruthy();
   });
 
-  it("(c) Kaydet POST/PATCH/DELETE farkını uygular", async () => {
+  it("(c) Save applies POST/PATCH/DELETE deltas", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
     const people = await peopleSectionEl();
-    await addDraftPerson("Yeni Kişi");
+    await addDraftPerson("New Person");
 
-    const editItem = (await within(people).findByText("Mehmet Demir")).closest("li");
+    const editItem = (await within(people).findByText("Brian Carter")).closest("li");
     fireEvent.click(
-      within(editItem as HTMLElement).getByRole("button", { name: "Düzenle" }),
+      within(editItem as HTMLElement).getByRole("button", { name: "Edit" }),
     );
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/ad soyad/i), {
-      target: { value: "Mehmet Demir güncel" },
+    fireEvent.change(within(dialog).getByLabelText(/full name/i), {
+      target: { value: "Brian Carter (updated)" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Kaydet" }));
-    expect(await within(people).findByText("Mehmet Demir güncel")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(await within(people).findByText("Brian Carter (updated)")).toBeTruthy();
 
-    const deleteItem = within(people).getByText("tanık notu").closest("li");
+    const deleteItem = within(people).getByText("witness note").closest("li");
     fireEvent.click(
-      within(deleteItem as HTMLElement).getByRole("button", { name: "Sil" }),
+      within(deleteItem as HTMLElement).getByRole("button", { name: "Delete" }),
     );
     await waitFor(() => {
-      expect(within(people).queryByText("tanık notu")).toBeNull();
+      expect(within(people).queryByText("witness note")).toBeNull();
     });
     expect(personCalls(fetchMock, "POST")).toHaveLength(0);
     expect(personCalls(fetchMock, "PATCH")).toHaveLength(0);
     expect(personCalls(fetchMock, "DELETE")).toHaveLength(0);
 
-    fireEvent.click(within(people).getByRole("button", { name: "Kaydet" }));
+    fireEvent.click(within(people).getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(personCalls(fetchMock, "POST")).toHaveLength(1);
@@ -922,113 +922,113 @@ describe("Vaka detayı Kişiler bölümü", () => {
     });
     const [, postInit] = personCalls(fetchMock, "POST")[0];
     expect(JSON.parse(postInit.body as string)).toMatchObject({
-      name: "Yeni Kişi",
-      type: "maktul",
+      name: "New Person",
+      type: "victim",
     });
     const [patchUrl, patchInit] = personCalls(fetchMock, "PATCH")[0];
     expect(patchUrl).toBe(`/api/cases/${CASE_ID}/persons/kisi-2`);
     expect(JSON.parse(patchInit.body as string)).toMatchObject({
-      name: "Mehmet Demir güncel",
+      name: "Brian Carter (updated)",
     });
     const [deleteUrl] = personCalls(fetchMock, "DELETE")[0];
     expect(deleteUrl).toBe(`/api/cases/${CASE_ID}/persons/kisi-3`);
 
     await waitFor(() => {
       expect(
-        within(people).queryByRole("button", { name: "Kaydet" }),
+        within(people).queryByRole("button", { name: "Save" }),
       ).toBeNull();
     });
-    expect(within(people).getByText("Yeni Kişi")).toBeTruthy();
-    expect(within(people).getByText("Mehmet Demir güncel")).toBeTruthy();
+    expect(within(people).getByText("New Person")).toBeTruthy();
+    expect(within(people).getByText("Brian Carter (updated)")).toBeTruthy();
   });
 
-  it("(d) kapalı vakada kişi kontrolleri yoktur", async () => {
+  it("(d) no person controls for closed cases", async () => {
     stubFetch(false, { status: "closed" });
     renderPage();
 
     const people = await peopleSectionEl();
-    expect(await within(people).findByText("Ayşe Yılmaz")).toBeTruthy();
+    expect(await within(people).findByText("Alice Johnson")).toBeTruthy();
     expect(
-      within(people).queryByRole("button", { name: "+ Kişi Ekle" }),
+      within(people).queryByRole("button", { name: "+ Add Person" }),
     ).toBeNull();
     expect(
-      within(people).queryByRole("button", { name: "Düzenle" }),
+      within(people).queryByRole("button", { name: "Edit" }),
     ).toBeNull();
-    expect(within(people).queryByRole("button", { name: "Sil" })).toBeNull();
+    expect(within(people).queryByRole("button", { name: "Delete" })).toBeNull();
     expect(
-      within(people).queryByRole("button", { name: "Kaydet" }),
+      within(people).queryByRole("button", { name: "Save" }),
     ).toBeNull();
     expect(
-      within(people).queryByRole("button", { name: "Vazgeç" }),
+      within(people).queryByRole("button", { name: "Cancel" }),
     ).toBeNull();
   });
 
-  it("(e) kirli kişi taslağıyla kapatınca taslak satır kaybolur", async () => {
+  it("(e) dirty person draft row disappears on close", async () => {
     const { fetchMock } = stubFetch();
     renderPage();
 
     const people = await peopleSectionEl();
-    await addDraftPerson("Kapanış Kişisi");
+    await addDraftPerson("Closing Person");
     expect(
-      within(people).getByRole("button", { name: "Kaydet" }),
+      within(people).getByRole("button", { name: "Save" }),
     ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Vakayı Kapat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close Case" }));
 
     expect(
-      await screen.findByRole("button", { name: "Vakayı Aç" }),
+      await screen.findByRole("button", { name: "Reopen Case" }),
     ).toBeTruthy();
-    expect(within(people).queryByText("Kapanış Kişisi")).toBeNull();
-    expect(within(people).getByText("Ayşe Yılmaz")).toBeTruthy();
+    expect(within(people).queryByText("Closing Person")).toBeNull();
+    expect(within(people).getByText("Alice Johnson")).toBeTruthy();
     expect(
-      within(people).queryByRole("button", { name: "Kaydet" }),
+      within(people).queryByRole("button", { name: "Save" }),
     ).toBeNull();
     expect(
-      within(people).queryByRole("button", { name: "+ Kişi Ekle" }),
+      within(people).queryByRole("button", { name: "+ Add Person" }),
     ).toBeNull();
     expect(personCalls(fetchMock, "POST")).toHaveLength(0);
     expect(personCalls(fetchMock, "PATCH")).toHaveLength(0);
     expect(personCalls(fetchMock, "DELETE")).toHaveLength(0);
   });
 
-  it("(g) 202 kuyruk yanıtında 'Kuyruğa alındı' gösterilir, 'Kişiler kaydedildi.' gösterilmez; çift tık POST'u yinelemez", async () => {
+  it("(g) 202 queued response shows 'Queued', not 'People saved.'; double-click does not repeat POST", async () => {
     const { fetchMock } = stubFetch(false, { queued: true });
     renderPage();
 
     const people = await peopleSectionEl();
-    await addDraftPerson("Kuyruk Kişisi");
-    const saveButton = within(people).getByRole("button", { name: "Kaydet" });
+    await addDraftPerson("Queued Person");
+    const saveButton = within(people).getByRole("button", { name: "Save" });
     fireEvent.click(saveButton);
     fireEvent.click(saveButton);
 
-    expect(await within(people).findByText(/Kuyruğa alındı/)).toBeTruthy();
-    expect(within(people).queryByText(/Kişiler kaydedildi\./)).toBeNull();
+    expect(await within(people).findByText(/Queued/)).toBeTruthy();
+    expect(within(people).queryByText(/People saved\./)).toBeNull();
     expect(personCalls(fetchMock, "POST")).toHaveLength(1);
     await waitFor(() => {
       expect(
-        within(people).queryByRole("button", { name: "Kaydet" }),
+        within(people).queryByRole("button", { name: "Save" }),
       ).toBeNull();
     });
   });
 
-  it("(f) Kaydet hatasında taslak korunur", async () => {
+  it("(f) draft preserved on Save error", async () => {
     const { fetchMock } = stubFetch(false, { failPersonSave: true });
     renderPage();
 
     const people = await peopleSectionEl();
-    await addDraftPerson("Hata Kişisi");
-    fireEvent.click(within(people).getByRole("button", { name: "Kaydet" }));
+    await addDraftPerson("Error Person");
+    fireEvent.click(within(people).getByRole("button", { name: "Save" }));
 
     expect(
-      await within(people).findByText(/Kişiler kaydedilemedi/),
+      await within(people).findByText(/Could not save people/),
     ).toBeTruthy();
     expect(personCalls(fetchMock, "POST")).toHaveLength(1);
-    expect(within(people).getByText("Hata Kişisi")).toBeTruthy();
+    expect(within(people).getByText("Error Person")).toBeTruthy();
     expect(
-      within(people).getByRole("button", { name: "Kaydet" }),
+      within(people).getByRole("button", { name: "Save" }),
     ).toBeTruthy();
     expect(
-      within(people).getByRole("button", { name: "Vazgeç" }),
+      within(people).getByRole("button", { name: "Cancel" }),
     ).toBeTruthy();
   });
 });

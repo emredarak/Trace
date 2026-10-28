@@ -11,28 +11,28 @@ import type { CaseEvidenceDraft } from "../../lib/evidences";
 export type { CaseLocationDraft } from "../../lib/locations";
 export type { CasePersonDraft } from "../../lib/persons";
 
-// Vaka açma ve vaka düzenleme ekranlarının TEK alan tanımı.
-// Yeni alan eklenirse buraya eklenir; iki ekran da otomatik alır.
+// Single field definition for the case create and case edit screens.
+// Add new fields here; both screens pick them up automatically.
 export const CRIME_SUGGESTIONS = [
-  "hırsızlık",
-  "gasp",
-  "cinayet",
-  "yaralama",
-  "dolandırıcılık",
-  "kundaklama",
-  "trafik kazası",
-  "kayıp şahıs",
+  "theft",
+  "robbery",
+  "homicide",
+  "assault",
+  "fraud",
+  "arson",
+  "traffic accident",
+  "missing person",
 ];
 
 export const WEAPON_SUGGESTIONS = [
-  "bıçak",
-  "ateşli silah",
-  "levye",
-  "sopa",
-  "taş",
-  "tornavida",
-  "yok",
-  "diğer",
+  "knife",
+  "firearm",
+  "crowbar",
+  "baton",
+  "stone",
+  "screwdriver",
+  "none",
+  "other",
 ];
 
 export interface CaseFormValues {
@@ -140,7 +140,7 @@ export default function CaseForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (values.summary.trim().length === 0) {
-      setFormError("Özet zorunludur.");
+      setFormError("Summary is required.");
       return;
     }
     setFormError("");
@@ -169,18 +169,18 @@ export default function CaseForm({
       {header}
       <form onSubmit={handleSubmit}>
         <fieldset>
-          <legend>Olay bilgileri</legend>
-          <label htmlFor={id("ozet")}>Özet *</label>
+          <legend>Incident details</legend>
+          <label htmlFor={id("summary")}>Summary *</label>
           <textarea
-            id={id("ozet")}
-            aria-label="Özet"
+            id={id("summary")}
+            aria-label="Summary"
             rows={3}
             value={values.summary}
             onChange={set("summary")}
             style={fieldStyle}
-            placeholder="Olayı kısaca anlatın; benzer vaka araması bu metni kullanır."
+            placeholder="Briefly describe the incident; similar case search uses this text."
           />
-          <label htmlFor={id("occurredAt")}>Olay tarihi ve saati</label>
+          <label htmlFor={id("occurredAt")}>Incident date and time</label>
           <input
             id={id("occurredAt")}
             type="datetime-local"
@@ -188,7 +188,7 @@ export default function CaseForm({
             onChange={set("occurredAt")}
             style={fieldStyle}
           />
-          <label htmlFor={id("crimeType")}>Suç tipi</label>
+          <label htmlFor={id("crimeType")}>Crime type</label>
           <input
             id={id("crimeType")}
             type="text"
@@ -196,24 +196,24 @@ export default function CaseForm({
             value={values.crimeType}
             onChange={set("crimeType")}
             style={fieldStyle}
-            placeholder="Seçin ya da kendiniz yazın"
+            placeholder="Select or type your own"
           />
           <datalist id={id("crime-list")}>
             {CRIME_SUGGESTIONS.map((s) => (
               <option key={s} value={s} />
             ))}
           </datalist>
-          <label htmlFor={id("mo")}>Yöntem / işleniş biçimi (MO)</label>
+          <label htmlFor={id("mo")}>Method / modus operandi (MO)</label>
           <textarea
             id={id("mo")}
             rows={2}
             value={values.mo}
             onChange={set("mo")}
             style={fieldStyle}
-            placeholder="Örn. gece arkadan yaklaşma"
+            placeholder="E.g. approaching from behind at night"
           />
-          <p style={hintStyle}>Aynı yöntemi kullanan eski vakaları bulmaya yarar.</p>
-          <label htmlFor={id("weapon")}>Silah / alet</label>
+          <p style={hintStyle}>Helps find older cases that used the same method.</p>
+          <label htmlFor={id("weapon")}>Weapon / tool</label>
           <input
             id={id("weapon")}
             type="text"
@@ -221,7 +221,7 @@ export default function CaseForm({
             value={values.weapon}
             onChange={set("weapon")}
             style={fieldStyle}
-            placeholder="Seçin ya da kendiniz yazın; yoksa boş bırakın"
+            placeholder="Select or type your own; leave empty if none"
           />
           <datalist id={id("weapon-list")}>
             {WEAPON_SUGGESTIONS.map((s) => (
@@ -251,7 +251,7 @@ export default function CaseForm({
         {formError ? <p role="alert">{formError}</p> : null}
         {error ? <p role="alert">{error}</p> : null}
         <button type="submit" disabled={saving}>
-          {saving ? "Kaydediliyor…" : submitLabel}
+          {saving ? "Saving…" : submitLabel}
         </button>
       </form>
     </>

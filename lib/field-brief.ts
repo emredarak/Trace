@@ -45,14 +45,14 @@ export async function fieldBrief(
   const transcripts = collectTranscripts(entries ?? []);
   if (transcripts.length === 0) return "";
   const prompt = [
-    "Aşağıdaki saha ses-not çözümlerini tek cümleyle özetle. Sadece özet cümlesini döndür.",
+    "Summarize the following field voice-note transcripts in a single sentence. Return only the summary sentence.",
     ...transcripts.map((t, i) => `${i + 1}. ${t}`),
   ].join("\n");
   try {
     const out = await client.summarize(prompt);
     return typeof out === "string" ? out.trim() : "";
   } catch {
-    // Özet atlanır, kayıt kaybolmaz.
+    // Summary skipped, record preserved.
     return "";
   }
 }

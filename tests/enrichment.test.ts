@@ -16,10 +16,10 @@ let uploadDir = "";
 
 const fakeTranscribe = {
   transcribeAudio: async () => ({
-    text: "sorgu: gece gordum. memur: plakayi aldin mi.",
+    text: "interrogator: I saw it at night. officer: did you take the plate.",
     segments: [
-      { speaker: "sorgu", text: "gece gordum" },
-      { speaker: "memur", text: "plakayi aldin mi" },
+      { speaker: "interrogator", text: "I saw it at night" },
+      { speaker: "officer", text: "did you take the plate" },
     ],
   }),
 };
@@ -27,12 +27,12 @@ const hints: string[] = [];
 const fakeMark = {
   markImage: async (_image: Buffer, hint: string) => {
     hints.push(hint);
-    return { boxes: [{ x: 0.1, y: 0.2, w: 0.3, h: 0.4, label: "bicak" }] };
+    return { boxes: [{ x: 0.1, y: 0.2, w: 0.3, h: 0.4, label: "knife" }] };
   },
 };
 const failingTranscribe = {
   transcribeAudio: async () => {
-    throw new Error("transcribe coktu");
+    throw new Error("transcribe crashed");
   },
 };
 
@@ -52,12 +52,12 @@ function formReq(fields: Record<string, string>, files: Record<string, File> = {
 const caseParams = (id: string) => ({ params: Promise.resolve({ id }) });
 
 async function makeCase(): Promise<string> {
-  const res = await createCase(jsonReq({ summary: "zengin vaka" }));
+  const res = await createCase(jsonReq({ summary: "rich case" }));
   expect(res.status).toBe(201);
   return ((await res.json()) as { id: string }).id;
 }
 async function makePerson(caseId: string): Promise<string> {
-  const res = await addPerson(jsonReq({ name: "Tanik A", type: "tanik" }), caseParams(caseId));
+  const res = await addPerson(jsonReq({ name: "Witness A", type: "witness" }), caseParams(caseId));
   expect(res.status).toBe(201);
   return ((await res.json()) as { id: string }).id;
 }
@@ -79,11 +79,11 @@ afterEach(() => {
 });
 
 describe("processPendingJobs", () => {
-  it("kisi sesi yukleme is kuyruga girer; is calisinca transkript segmanlariyla kisiye yazilir", async () => {
+  it("person audio upload enqueues a job; when the job runs, transcript segments are written to the person", async () => {
     const caseId = await makeCase();
     const personId = await makePerson(caseId);
     const res = await uploadPersonAudio(
-      formReq({}, { file: new File(["ses"], "sorgu.mp3", { type: "audio/mpeg" }) }),
+      formReq({}, { file: new File(["audio"], "interview.mp3", { type: "audio/mpeg" }) }),
       { params: Promise.resolve({ id: caseId, personId }) },
     );
     expect(res.status).toBe(200);
@@ -96,18 +96,18 @@ describe("processPendingJobs", () => {
     expect(out).toEqual({ done: 1, failed: 0 });
     const stored = getDb().prepare("SELECT transcript FROM case_persons WHERE id=?").get(personId) as { transcript: string };
     const parsed = JSON.parse(stored.transcript);
-    expect(parsed.text).toContain("gece gordum");
+    expect(parsed.text).toContain("I saw it at night");
     expect(parsed.segments).toHaveLength(2);
     expect(new Set(parsed.segments.map((s: { speaker: string }) => s.speaker)).size).toBe(2);
     expect(jobs()[0]).toMatchObject({ status: "done", attempts: 1 });
   });
 
-  it("delil gorsel+ses isleri kuyruga girer; SAM ipucu baslik, transkript/isaret delile yazilir", async () => {
+  it("evidence image+audio jobs are enqueued; SAM hint comes from title, transcript/marking written to evidence", async () => {
     const caseId = await makeCase();
     const res = await addEvidence(
-      formReq({ title: "Olay yeri bicagi", note: "mutfak" }, {
+      formReq({ title: "Crime scene knife", note: "kitchen" }, {
         image: new File(["img"], "f.jpg", { type: "image/jpeg" }),
-        audio: new File(["ses"], "a.mp3", { type: "audio/mpeg" }),
+        audio: new File(["audio"], "a.mp3", { type: "audio/mpeg" }),
       }),
       caseParams(caseId),
     );
@@ -118,34 +118,34 @@ describe("processPendingJobs", () => {
 
     const out = await processPendingJobs(getDb(), 10, { transcribe: fakeTranscribe, markPhoto: fakeMark });
     expect(out).toEqual({ done: 2, failed: 0 });
-    expect(hints).toEqual(["Olay yeri bicagi"]);
+    expect(hints).toEqual(["Crime scene knife"]);
     const row = getDb().prepare("SELECT transcript, marking FROM evidences WHERE id=?").get(ev.id) as { transcript: string; marking: string };
     expect(JSON.parse(row.transcript).segments).toHaveLength(2);
-    expect(JSON.parse(row.marking).boxes).toMatchObject([{ label: "bicak" }]);
+    expect(JSON.parse(row.marking).boxes).toMatchObject([{ label: "knife" }]);
   });
 
-  it("SAM ipucu: baslik yoksa not, o da yoksa 'delil'", async () => {
+  it("SAM hint: title else note, else 'evidence'", async () => {
     const caseId = await makeCase();
     const db = getDb();
     const now = new Date().toISOString();
     writeFileSync(join(uploadDir, "a.jpg"), "img");
     writeFileSync(join(uploadDir, "b.jpg"), "img");
     db.prepare("INSERT INTO evidences (id, caseId, type, title, note, imageFile, createdAt) VALUES (?,?,?,?,?,?,?)")
-      .run("ev-note", caseId, "evidence", null, "kapi kolu", "a.jpg", now);
+      .run("ev-note", caseId, "evidence", null, "door handle", "a.jpg", now);
     db.prepare("INSERT INTO evidences (id, caseId, type, title, note, imageFile, createdAt) VALUES (?,?,?,?,?,?,?)")
       .run("ev-none", caseId, "evidence", null, null, "b.jpg", now);
     enqueueJob(db, { caseId, kind: "sam", refId: "ev-note" });
     enqueueJob(db, { caseId, kind: "sam", refId: "ev-none" });
     const out = await processPendingJobs(db, 10, { transcribe: fakeTranscribe, markPhoto: fakeMark });
     expect(out).toEqual({ done: 2, failed: 0 });
-    expect(hints.sort()).toEqual(["delil", "kapi kolu"]);
+    expect(hints.sort()).toEqual(["door handle", "evidence"]);
   });
 
-  it("istemci hatasinda kayit durur, is failed olur, yeniden kuyruga alip denenebilir", async () => {
+  it("on client error the upload stays, the job fails, and it can be retried from the queue", async () => {
     const caseId = await makeCase();
     const personId = await makePerson(caseId);
     await uploadPersonAudio(
-      formReq({}, { file: new File(["ses"], "s.mp3", { type: "audio/mpeg" }) }),
+      formReq({}, { file: new File(["audio"], "s.mp3", { type: "audio/mpeg" }) }),
       { params: Promise.resolve({ id: caseId, personId }) },
     );
     const out = await processPendingJobs(getDb(), 10, { transcribe: failingTranscribe, markPhoto: fakeMark });
@@ -155,7 +155,7 @@ describe("processPendingJobs", () => {
     expect(existsSync(join(uploadDir, person.audioFile))).toBe(true);
     expect(person.transcript ?? null).toBeNull();
     expect(jobs()[0]).toMatchObject({ status: "failed", attempts: 1 });
-    expect(String(jobs()[0].lastError)).toContain("transcribe coktu");
+    expect(String(jobs()[0].lastError)).toContain("transcribe crashed");
 
     // Retry (controller ruling): processPendingJobs retries the same failed
     // job (attempts < 3) without any manual re-enqueue.
@@ -164,16 +164,16 @@ describe("processPendingJobs", () => {
     expect(out2).toEqual({ done: 1, failed: 0 });
     expect(jobs().find((j) => j.id === failedId)).toMatchObject({ status: "done", attempts: 2 });
     const after = getDb().prepare("SELECT transcript FROM case_persons WHERE id=?").get(personId) as { transcript: string };
-    expect(JSON.parse(after.transcript).text).toContain("gece gordum");
+    expect(JSON.parse(after.transcript).text).toContain("I saw it at night");
   });
 
-  it("hic cevap vermeyen Transcribe'da is zaman asimiyla failed+retryable olur, kayit kaybolmaz", async () => {
+  it("unresponsive Transcribe fails the job by timeout as failed+retryable, upload is not lost", async () => {
     process.env.META_TRANSCRIBE_TIMEOUT_MS = "20";
     try {
       const caseId = await makeCase();
       const personId = await makePerson(caseId);
       await uploadPersonAudio(
-        formReq({}, { file: new File(["ses"], "s.mp3", { type: "audio/mpeg" }) }),
+        formReq({}, { file: new File(["audio"], "s.mp3", { type: "audio/mpeg" }) }),
         { params: Promise.resolve({ id: caseId, personId }) },
       );
       const hanging = { transcribeAudio: () => new Promise<never>(() => {}) };
@@ -183,14 +183,14 @@ describe("processPendingJobs", () => {
       });
       expect(out).toEqual({ done: 0, failed: 1 });
       expect(jobs()[0]).toMatchObject({ status: "failed", attempts: 1 });
-      expect(String(jobs()[0].lastError)).toMatch(/zaman asimi|timeout/i);
+      expect(String(jobs()[0].lastError)).toMatch(/timeout/i);
       const person = getDb()
         .prepare("SELECT audioFile, transcript FROM case_persons WHERE id=?")
         .get(personId) as { audioFile: string; transcript: unknown };
       expect(person.audioFile).toBeTruthy();
       expect(existsSync(join(uploadDir, person.audioFile))).toBe(true);
       expect(person.transcript ?? null).toBeNull();
-      // Retryable: sonraki calisma basarili istemciyle isi tamamlar.
+      // Retryable: the next run completes the job with a working client.
       const out2 = await processPendingJobs(getDb(), 10, {
         transcribe: fakeTranscribe,
         markPhoto: fakeMark,
@@ -201,11 +201,11 @@ describe("processPendingJobs", () => {
     }
   });
 
-  it("attempts >= 3 olan failed is yeniden denenmez", async () => {
+  it("a failed job with attempts >= 3 is not retried", async () => {
     const caseId = await makeCase();
     const personId = await makePerson(caseId);
     await uploadPersonAudio(
-      formReq({}, { file: new File(["ses"], "s.mp3", { type: "audio/mpeg" }) }),
+      formReq({}, { file: new File(["audio"], "s.mp3", { type: "audio/mpeg" }) }),
       { params: Promise.resolve({ id: caseId, personId }) },
     );
     getDb().prepare("UPDATE enrichment_jobs SET status='failed', attempts=3 WHERE refId=?").run(personId);
@@ -216,46 +216,46 @@ describe("processPendingJobs", () => {
     expect(person.transcript ?? null).toBeNull();
   });
 
-  it("yaris: transkript beklenirken ses degisirse eski sonuc yazilmaz, yeni dosya icin is kalir", async () => {
+  it("race: if audio changes while the transcript is pending, the stale result is not written and work remains for the new file", async () => {
     const caseId = await makeCase();
     const personId = await makePerson(caseId);
     await uploadPersonAudio(
-      formReq({}, { file: new File(["eski"], "eski.mp3", { type: "audio/mpeg" }) }),
+      formReq({}, { file: new File(["old"], "old.mp3", { type: "audio/mpeg" }) }),
       { params: Promise.resolve({ id: caseId, personId }) },
     );
     const swapping = {
       transcribeAudio: async () => {
-        writeFileSync(join(uploadDir, "yeni.mp3"), "yeni");
-        getDb().prepare("UPDATE case_persons SET audioFile='yeni.mp3', transcript=NULL WHERE id=?").run(personId);
-        return { text: "ESKI sonuc", segments: [{ speaker: "sorgu", text: "ESKI sonuc" }] };
+        writeFileSync(join(uploadDir, "new.mp3"), "new");
+        getDb().prepare("UPDATE case_persons SET audioFile='new.mp3', transcript=NULL WHERE id=?").run(personId);
+        return { text: "OLD result", segments: [{ speaker: "interrogator", text: "OLD result" }] };
       },
     };
     const out = await processPendingJobs(getDb(), 10, { transcribe: swapping, markPhoto: fakeMark });
     expect(out).toEqual({ done: 1, failed: 0 });
     const person = getDb().prepare("SELECT audioFile, transcript FROM case_persons WHERE id=?").get(personId) as { audioFile: string; transcript: unknown };
-    expect(person.audioFile).toBe("yeni.mp3");
+    expect(person.audioFile).toBe("new.mp3");
     expect(person.transcript ?? null).toBeNull();
     // New file still has work queued
     expect(jobs().filter((j) => j.status === "pending")).toMatchObject([{ kind: "transcribe", refId: personId }]);
     const out2 = await processPendingJobs(getDb(), 10, { transcribe: fakeTranscribe, markPhoto: fakeMark });
     expect(out2).toEqual({ done: 1, failed: 0 });
     const after = getDb().prepare("SELECT transcript FROM case_persons WHERE id=?").get(personId) as { transcript: string };
-    expect(JSON.parse(after.transcript).text).toContain("gece gordum");
-    expect(after.transcript).not.toContain("ESKI");
+    expect(JSON.parse(after.transcript).text).toContain("I saw it at night");
+    expect(after.transcript).not.toContain("OLD");
   });
 
-  it("yaris: SAM beklenirken gorsel degisirse eski isaret yazilmaz, yeni dosya icin is kalir", async () => {
+  it("race: if the image changes while SAM is pending, the stale marking is not written and work remains for the new file", async () => {
     const caseId = await makeCase();
     const db = getDb();
     writeFileSync(join(uploadDir, "a.jpg"), "img");
     writeFileSync(join(uploadDir, "b.jpg"), "img2");
     db.prepare("INSERT INTO evidences (id, caseId, type, title, imageFile, createdAt) VALUES (?,?,?,?,?,?)")
-      .run("ev-race", caseId, "evidence", "Foto", "a.jpg", new Date().toISOString());
+      .run("ev-race", caseId, "evidence", "Photo", "a.jpg", new Date().toISOString());
     enqueueJob(db, { caseId, kind: "sam", refId: "ev-race" });
     const swappingMark = {
       markImage: async () => {
         db.prepare("UPDATE evidences SET imageFile='b.jpg', marking=NULL WHERE id='ev-race'").run();
-        return { boxes: [{ x: 0, y: 0, w: 1, h: 1, label: "ESKI" }] };
+        return { boxes: [{ x: 0, y: 0, w: 1, h: 1, label: "OLD" }] };
       },
     };
     const out = await processPendingJobs(db, 10, { transcribe: fakeTranscribe, markPhoto: swappingMark });
@@ -267,14 +267,14 @@ describe("processPendingJobs", () => {
     const out2 = await processPendingJobs(db, 10, { transcribe: fakeTranscribe, markPhoto: fakeMark });
     expect(out2).toEqual({ done: 1, failed: 0 });
     const after = db.prepare("SELECT marking FROM evidences WHERE id='ev-race'").get() as { marking: string };
-    expect(JSON.parse(after.marking).boxes).toMatchObject([{ label: "bicak" }]);
+    expect(JSON.parse(after.marking).boxes).toMatchObject([{ label: "knife" }]);
   });
 
-  it("diskte olmayan delil gorseli: is failed olur, delil kaydi silinmez", async () => {
+  it("missing evidence image on disk: job fails, evidence record is kept", async () => {
     const caseId = await makeCase();
     const db = getDb();
     db.prepare("INSERT INTO evidences (id, caseId, type, title, note, imageFile, createdAt) VALUES (?,?,?,?,?,?,?)")
-      .run("ev-missing", caseId, "evidence", "Kayip foto", null, "yok-boyle.jpg", new Date().toISOString());
+      .run("ev-missing", caseId, "evidence", "Missing photo", null, "no-such.jpg", new Date().toISOString());
     enqueueJob(db, { caseId, kind: "sam", refId: "ev-missing" });
     const out = await processPendingJobs(db, 10, { transcribe: fakeTranscribe, markPhoto: fakeMark });
     expect(out).toEqual({ done: 0, failed: 1 });
@@ -283,7 +283,7 @@ describe("processPendingJobs", () => {
     expect(String(jobs()[0].lastError).length).toBeGreaterThan(0);
   });
 
-  it("limit kadar is isler; dossier isi bu modulde islenmez, pending kalir", async () => {
+  it("processes up to the limit; dossier jobs are not handled in this module and stay pending", async () => {
     const caseId = await makeCase();
     const db = getDb();
     const now = new Date().toISOString();
@@ -291,7 +291,7 @@ describe("processPendingJobs", () => {
     writeFileSync(join(uploadDir, "b.jpg"), "img");
     for (const [id, f] of [["ev-1", "a.jpg"], ["ev-2", "b.jpg"]] as const) {
       db.prepare("INSERT INTO evidences (id, caseId, type, title, imageFile, createdAt) VALUES (?,?,?,?,?,?)")
-        .run(id, caseId, "evidence", "Foto", f, now);
+        .run(id, caseId, "evidence", "Photo", f, now);
       enqueueJob(db, { caseId, kind: "sam", refId: id });
     }
     enqueueJob(db, { caseId, kind: "dossier" });
@@ -300,14 +300,14 @@ describe("processPendingJobs", () => {
     expect(jobs().filter((j) => j.status === "pending")).toHaveLength(2); // 1 sam + dossier
   });
 
-  it("PATCH ile yeni gorsel yuklenince SAM isi kuyruga girer", async () => {
+  it("uploading a new image via PATCH enqueues a SAM job", async () => {
     const caseId = await makeCase();
-    const created = (await (await addEvidence(formReq({ title: "Foto", note: "not" }), caseParams(caseId))).json()) as { id: string };
+    const created = (await (await addEvidence(formReq({ title: "Photo", note: "note" }), caseParams(caseId))).json()) as { id: string };
     expect(jobs()).toHaveLength(0);
     const form = new FormData();
-    form.append("title", "Foto");
-    form.append("note", "not");
-    form.append("image", new File(["img2"], "yeni.jpg", { type: "image/jpeg" }));
+    form.append("title", "Photo");
+    form.append("note", "note");
+    form.append("image", new File(["img2"], "new.jpg", { type: "image/jpeg" }));
     const res = await patchEvidence(new Request("http://localhost/x", { method: "PATCH", body: form }), {
       params: Promise.resolve({ id: caseId, evidenceId: created.id }),
     });

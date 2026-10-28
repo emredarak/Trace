@@ -41,14 +41,14 @@ export async function POST(
     form = await req.formData();
   } catch {
     return NextResponse.json(
-      { error: "fotoğraf gerekli (form-data 'file')" },
+      { error: "photo required (form-data 'file')" },
       { status: 400 },
     );
   }
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json(
-      { error: "fotoğraf gerekli (form-data 'file')" },
+      { error: "photo required (form-data 'file')" },
       { status: 400 },
     );
   }
@@ -56,12 +56,12 @@ export async function POST(
   const hint = typeof hintRaw === "string" ? hintRaw.trim() : "";
   if (hint.length === 0) {
     return NextResponse.json(
-      { error: "ipucu gerekli (form-data 'hint')" },
+      { error: "hint required (form-data 'hint')" },
       { status: 400 },
     );
   }
 
-  // Yüklenen fotoğrafı önce diske sakla; işaretleme başarısız olsa bile dosya kalır.
+  // Persist the uploaded photo to disk first; the file stays even if marking fails.
   const buffer = Buffer.from(await file.arrayBuffer());
   const dir = uploadDir();
   mkdirSync(dir, { recursive: true });
@@ -73,7 +73,7 @@ export async function POST(
     marking = await markPhoto(buffer, hint);
   } catch {
     return NextResponse.json(
-      { error: "fotoğraf işaretleme başarısız oldu, yüklenen dosya saklandı" },
+      { error: "photo annotation failed, uploaded file was kept" },
       { status: 502 },
     );
   }

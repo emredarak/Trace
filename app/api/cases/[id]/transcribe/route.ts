@@ -41,19 +41,19 @@ export async function POST(
     form = await req.formData();
   } catch {
     return NextResponse.json(
-      { error: "ses dosyası gerekli (form-data 'file')" },
+      { error: "audio file required (form-data 'file')" },
       { status: 400 },
     );
   }
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return NextResponse.json(
-      { error: "ses dosyası gerekli (form-data 'file')" },
+      { error: "audio file required (form-data 'file')" },
       { status: 400 },
     );
   }
 
-  // Yüklenen sesi önce diske sakla; çözüm başarısız olsa bile dosya kalır.
+  // Persist the uploaded audio to disk first; the file stays even if transcription fails.
   const buffer = Buffer.from(await file.arrayBuffer());
   const dir = uploadDir();
   mkdirSync(dir, { recursive: true });
@@ -65,7 +65,7 @@ export async function POST(
     transcript = await transcribe(buffer, file.name || stored);
   } catch {
     return NextResponse.json(
-      { error: "ses çözümü başarısız oldu, yüklenen dosya saklandı" },
+      { error: "audio transcription failed, uploaded file was kept" },
       { status: 502 },
     );
   }

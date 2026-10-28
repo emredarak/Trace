@@ -10,13 +10,13 @@ import {
 } from "../app/api/cases/route";
 import { POST as transcribeAudio } from "../app/api/cases/[id]/transcribe/route";
 
-// Sahte çözüm: iki konuşmacı, 3 bölüm.
+// Fake resolution: two speakers, 3 segments.
 const FAKE_TRANSCRIPT = {
-  text: "konusmaci 1: gece gordum. konusmaci 2: plakayi aldim. konusmaci 1: sonra kacti.",
+  text: "speaker 1: I saw it at night. speaker 2: I took the plate. speaker 1: then fled.",
   segments: [
-    { speaker: "konusmaci 1", text: "gece gordum" },
-    { speaker: "konusmaci 2", text: "plakayi aldim" },
-    { speaker: "konusmaci 1", text: "sonra kacti" },
+    { speaker: "speaker 1", text: "I saw it at night" },
+    { speaker: "speaker 2", text: "I took the plate" },
+    { speaker: "speaker 1", text: "then fled" },
   ],
 };
 
@@ -30,7 +30,7 @@ const fakeClient = {
 function audioRequest(
   id: string,
   bytes: Uint8Array<ArrayBuffer> = new Uint8Array([1, 2, 3, 4]),
-  name = "ifade.wav",
+  name = "statement.wav",
 ): Request {
   const form = new FormData();
   form.append("file", new File([bytes], name, { type: "audio/wav" }));
@@ -69,10 +69,10 @@ afterEach(() => {
 });
 
 describe("transcribe (lib)", () => {
-  it("sahte istemci iki konuşmacılı 3 bölümlük çözümü döndürür", async () => {
+  it("fake client returns a 2-speaker 3-segment resolution", async () => {
     const out = await transcribe(
-      Buffer.from("sahte-ses"),
-      "ifade.wav",
+      Buffer.from("fake-audio"),
+      "statement.wav",
       fakeClient,
     );
     expect(out.text).toBe(FAKE_TRANSCRIPT.text);
@@ -80,35 +80,35 @@ describe("transcribe (lib)", () => {
     expect(new Set(out.segments.map((s) => s.speaker)).size).toBe(2);
   });
 
-  it("boş ses verisi hata verir", async () => {
-    await expect(transcribe(Buffer.alloc(0), "bos.wav", fakeClient)).rejects.toThrow();
+  it("empty audio data throws", async () => {
+    await expect(transcribe(Buffer.alloc(0), "empty.wav", fakeClient)).rejects.toThrow();
   });
 
-  it("istemci hatası aynen iletilir", async () => {
+  it("client errors are passed through", async () => {
     const failing = {
       transcribeAudio: async () => {
-        throw new Error("servis çöktü");
+        throw new Error("service crashed");
       },
     };
     await expect(
-      transcribe(Buffer.from("ses"), "a.wav", failing),
-    ).rejects.toThrow("servis çöktü");
+      transcribe(Buffer.from("audio"), "a.wav", failing),
+    ).rejects.toThrow("service crashed");
   });
 
-  it("hic cevap vermeyen istemci kisa timeout ile reddeder", async () => {
+  it("unresponsive client rejects with a short timeout", async () => {
     const hanging = {
       transcribeAudio: () => new Promise<never>(() => {}),
     };
     await expect(
-      transcribe(Buffer.from("ses"), "a.wav", hanging, 20),
-    ).rejects.toThrow(/zaman asimi|timeout/i);
+      transcribe(Buffer.from("audio"), "a.wav", hanging, 20),
+    ).rejects.toThrow(/timeout/i);
   });
 });
 
 describe("POST /api/cases/[id]/transcribe", () => {
-  it("sahte çözüm metni girişe transcript olarak yazılır", async () => {
+  it("fake resolution text is written to the entry as a transcript", async () => {
     __setTranscribeClientForTests(fakeClient);
-    const id = await create("sesli vaka");
+    const id = await create("audio case");
 
     const res = await transcribeAudio(audioRequest(id), {
       params: Promise.resolve({ id }),
@@ -122,7 +122,7 @@ describe("POST /api/cases/[id]/transcribe", () => {
     });
     expect(body.transcript.segments).toHaveLength(3);
 
-    // Giriş vaka listesine yansır.
+    // Entry is reflected in the case list.
     const list = await (await listCases()).json();
     const record = list.find((c: { id: string }) => c.id === id) as {
       entries: { type: string; note: string }[];
@@ -133,17 +133,17 @@ describe("POST /api/cases/[id]/transcribe", () => {
       note: FAKE_TRANSCRIPT.text,
     });
 
-    // Yüklenen dosya diskte saklanır.
+    // Uploaded file is stored on disk.
     expect(readdirSync(uploadDir)).toHaveLength(1);
   });
 
-  it("servis hatasında 502 döner, dosya yine saklanır, giriş yazılmaz", async () => {
+  it("on service error returns 502, file still stored, no entry written", async () => {
     __setTranscribeClientForTests({
       transcribeAudio: async () => {
-        throw new Error("servis çöktü");
+        throw new Error("service crashed");
       },
     });
-    const id = await create("bozuk sesli vaka");
+    const id = await create("corrupt audio case");
 
     const res = await transcribeAudio(audioRequest(id), {
       params: Promise.resolve({ id }),
@@ -153,11 +153,11 @@ describe("POST /api/cases/[id]/transcribe", () => {
     expect(typeof body.error).toBe("string");
     expect(body.error.length).toBeGreaterThan(0);
 
-    // Dosya saklanmıştır.
+    // File was stored.
     expect(readdirSync(uploadDir)).toHaveLength(1);
     expect(existsSync(join(uploadDir, readdirSync(uploadDir)[0]))).toBe(true);
 
-    // Giriş yazılmamıştır.
+    // No entry was written.
     const count = (
       getDb().prepare("SELECT COUNT(*) AS n FROM evidences").get() as {
         n: number;
@@ -166,9 +166,9 @@ describe("POST /api/cases/[id]/transcribe", () => {
     expect(count).toBe(0);
   });
 
-  it("dosyasız istek 400 döner", async () => {
+  it("request without a file returns 400", async () => {
     __setTranscribeClientForTests(fakeClient);
-    const id = await create("dosyasız vaka");
+    const id = await create("fileless case");
     const res = await transcribeAudio(
       new Request(`http://localhost/api/cases/${id}/transcribe`, {
         method: "POST",
@@ -179,7 +179,7 @@ describe("POST /api/cases/[id]/transcribe", () => {
     expect(res.status).toBe(400);
   });
 
-  it("olmayan kayda 404 döner", async () => {
+  it("returns 404 for a missing record", async () => {
     __setTranscribeClientForTests(fakeClient);
     const res = await transcribeAudio(audioRequest("yok"), {
       params: Promise.resolve({ id: "yok" }),

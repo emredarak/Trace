@@ -28,16 +28,16 @@ interface SimilarResponse {
 }
 
 export const SIMILARITY_KIND_LABELS: Record<string, string> = {
-  ozet: "Özet",
-  "suc-tipi": "Suç Tipi",
-  yontem: "Yöntem",
-  silah: "Silah",
-  konum: "Konum",
-  kisi: "Kişi",
-  "sorgu-ifadesi": "Sorgu İfadesi",
-  "delil-nesne": "Delil Nesnesi",
-  "delil-notu": "Delil Notu",
-  zaman: "Zaman",
+  summary: "Summary",
+  "crime-type": "Crime Type",
+  method: "Method",
+  weapon: "Weapon",
+  location: "Location",
+  person: "Person",
+  "interview-quote": "Interview Quote",
+  "evidence-object": "Evidence Object",
+  "evidence-note": "Evidence Note",
+  time: "Time",
 };
 
 const layoutCss = [
@@ -130,9 +130,9 @@ function sameEvidences(
 function toDraft(l: CaseLocation): CaseLocationDraft {
   return {
     id: l.id,
-    title: l.title ?? "Konum",
+    title: l.title ?? "Location",
     note: l.note ?? "",
-    kind: l.kind ?? "iliskili",
+    kind: l.kind ?? "related",
     priority: l.priority ?? null,
     latitude: l.latitude ?? undefined,
     longitude: l.longitude ?? undefined,
@@ -144,7 +144,7 @@ function locationBody(l: CaseLocationDraft) {
     title: l.title,
     note: l.note || null,
     kind: l.kind,
-    priority: l.kind === "olay-yeri" ? null : l.priority,
+    priority: l.kind === "crime-scene" ? null : l.priority,
     latitude: l.latitude ?? null,
     longitude: l.longitude ?? null,
   };
@@ -189,7 +189,7 @@ function toPersonDraft(p: CasePerson): CasePersonDraft {
 
 function personBody(p: CasePersonDraft) {
   const relatedVictimId =
-    p.type === "maktul" ? null : p.relatedVictimId || null;
+    p.type === "victim" ? null : p.relatedVictimId || null;
   return {
     name: p.name.trim() || null,
     age: p.age.trim() ? Number(p.age) : null,
@@ -309,7 +309,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       try {
         const res = await fetch(`/api/cases/${id}/similar`);
         if (!res.ok) {
-          if (!cancelled) setSimilarError("Benzer vakalar alınamadı.");
+          if (!cancelled) setSimilarError("Could not load similar cases.");
           return;
         }
         const body = (await res.json()) as SimilarResponse;
@@ -326,7 +326,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           });
         }
       } catch {
-        if (!cancelled) setSimilarError("Bağlantı hatası, tekrar deneyin.");
+        if (!cancelled) setSimilarError("Connection error, please try again.");
       }
     }
     void load();
@@ -336,15 +336,15 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   }, [id]);
 
   async function saveLocations() {
-    // Yeniden giriş koruması: çift tık yinelenen POST yaratmaz.
+    // Re-entry guard: double-clicks never create duplicate POSTs.
     if (savingLocationsRef.current) return;
     savingLocationsRef.current = true;
     setSavingLocations(true);
     setLocationStatus("");
-    // Başarılı işlemler ara tabana işlenir; kısmi hatada taslak korunur.
+    // Successful operations are applied to the working baseline; drafts are preserved on partial failure.
     let working = [...baselineLocations];
-    // Kimliği sunucudan dönen kopyalarla ilerleyen etkin taslak;
-    // state nesneleri doğrudan değiştirilmez.
+    // Active draft advanced with copies returned from the server;
+    // state objects are never mutated directly.
     let effectiveDraft = draftLocations.map((l) => ({ ...l }));
     let queued = false;
     async function readQueued(res: Response): Promise<string | null> {
@@ -375,7 +375,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           if (!locRes.ok) {
             setBaselineLocations(working);
             setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
-            setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
+            setLocationStatus("Could not save locations, please try again.");
             return;
           }
           const savedLoc = createdId ? { ...loc, id: createdId } : { ...loc };
@@ -399,7 +399,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           if (!locRes.ok) {
             setBaselineLocations(working);
             setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
-            setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
+            setLocationStatus("Could not save locations, please try again.");
             return;
           }
           working = working.map((l) => (l.id === loc.id ? { ...loc } : l));
@@ -416,7 +416,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           if (!locRes.ok) {
             setBaselineLocations(working);
             setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
-            setLocationStatus("Konumlar kaydedilemedi, tekrar deneyin.");
+            setLocationStatus("Could not save locations, please try again.");
             return;
           }
           working = working.filter((l) => l.id !== original.id);
@@ -428,13 +428,13 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       setDraftLocations(persisted.map((l) => ({ ...l })));
       setLocationStatus(
         queued
-          ? "Kuyruğa alındı, bağlantı gelince gönderilecek."
-          : "Konumlar kaydedildi.",
+          ? "Queued, will be sent once you're back online."
+          : "Locations saved.",
       );
     } catch {
       setBaselineLocations(working);
       setDraftLocations(effectiveDraft.map((l) => ({ ...l })));
-      setLocationStatus("Bağlantı hatası, tekrar deneyin.");
+      setLocationStatus("Connection error, please try again.");
     } finally {
       savingLocationsRef.current = false;
       setSavingLocations(false);
@@ -471,7 +471,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     function failSave() {
       setBaselineEvidences(working);
       setDraftEvidences(effectiveDraft.map((e) => ({ ...e })));
-      setEvidenceStatus("Deliller kaydedilemedi, tekrar deneyin.");
+      setEvidenceStatus("Could not save evidence, please try again.");
     }
     try {
       const baselineById = new Map(baselineEvidences.map((e) => [e.id, e]));
@@ -566,13 +566,13 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       setDraftEvidences(persisted.map((e) => ({ ...e })));
       setEvidenceStatus(
         queued
-          ? "Kuyruğa alındı, bağlantı gelince gönderilecek."
-          : "Deliller kaydedildi.",
+          ? "Queued, will be sent once you're back online."
+          : "Evidence saved.",
       );
     } catch {
       setBaselineEvidences(working);
       setDraftEvidences(effectiveDraft.map((e) => ({ ...e })));
-      setEvidenceStatus("Bağlantı hatası, tekrar deneyin.");
+      setEvidenceStatus("Connection error, please try again.");
     } finally {
       savingEvidencesRef.current = false;
       setSavingEvidences(false);
@@ -580,12 +580,12 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   }
 
   async function savePersons() {
-    // Yeniden giriş koruması: çift tık yinelenen POST yaratmaz.
+    // Re-entry guard: double-clicks never create duplicate POSTs.
     if (savingPersonsRef.current) return;
     savingPersonsRef.current = true;
     setSavingPersons(true);
     setPersonStatus("");
-    // Başarılı işlemler ara tabana işlenir; kısmi hatada taslak korunur.
+    // Successful operations are applied to the working baseline; drafts are preserved on partial failure.
     let working = [...baselinePersons];
     let effectiveDraft = draftPersons.map((p) => ({ ...p }));
     let queued = false;
@@ -604,15 +604,15 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     function failSave() {
       setBaselinePersons(working);
       setDraftPersons(effectiveDraft.map((p) => ({ ...p })));
-      setPersonStatus("Kişiler kaydedilemedi, tekrar deneyin.");
+      setPersonStatus("Could not save people, please try again.");
     }
-    // Sorgu sesini kişi kaydından sonra ayrı uçla eşitler; güncel
-    // audioFile değerini döndürür, hata durumunda throw eder.
+    // Syncs the interview audio after the person record via a separate endpoint; returns the updated
+    // audioFile value, throws on error.
     async function syncAudio(
       personId: string,
       person: CasePersonDraft,
     ): Promise<string | null> {
-      if (person.type === "maktul") return null;
+      if (person.type === "victim") return null;
       if (person.audio) {
         const form = new FormData();
         form.append("file", person.audio);
@@ -629,7 +629,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           if (body?.queued === true) queued = true;
           if (typeof body?.audioFile === "string") audioFile = body.audioFile;
         } catch {
-          // gövde okunamazsa eski değer korunur
+          // keep the old value when the body is unreadable
         }
         if (!res.ok) throw new Error("audio upload failed");
         return audioFile;
@@ -648,12 +648,12 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       const baselineById = new Map(baselinePersons.map((p) => [p.id, p]));
       const currentIds = new Set(draftPersons.map((p) => p.id));
 
-      // Önce yeni maktüller: yeni tanık/şüpheli onlara bağlanabilsin.
+      // New victims first: so new witnesses/suspects can link to them.
       for (const wantVictim of [true, false]) {
         for (let i = 0; i < effectiveDraft.length; i++) {
           const person = effectiveDraft[i];
           if (baselineById.has(person.id)) continue;
-          if ((person.type === "maktul") !== wantVictim) continue;
+          if ((person.type === "victim") !== wantVictim) continue;
           const personRes = await fetch(`/api/cases/${id}/persons`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -750,13 +750,13 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       setDraftPersons(persisted.map((p) => ({ ...p })));
       setPersonStatus(
         queued
-          ? "Kuyruğa alındı, bağlantı gelince gönderilecek."
-          : "Kişiler kaydedildi.",
+          ? "Queued, will be sent once you're back online."
+          : "People saved.",
       );
     } catch {
       setBaselinePersons(working);
       setDraftPersons(effectiveDraft.map((p) => ({ ...p })));
-      setPersonStatus("Bağlantı hatası, tekrar deneyin.");
+      setPersonStatus("Connection error, please try again.");
     } finally {
       savingPersonsRef.current = false;
       setSavingPersons(false);
@@ -788,7 +788,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
         }
       }
     } catch {
-      // Sessiz geç: durum düğmesi kritik akışı engellemez.
+      // Fail silently: the status button must not block the critical flow.
     } finally {
       setTogglingStatus(false);
     }
@@ -805,7 +805,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       if (!res.ok) {
         setApproveError((cur) => ({
           ...cur,
-          [targetId]: "Onay kaydedilemedi.",
+          [targetId]: "Could not save approval.",
         }));
         return;
       }
@@ -813,7 +813,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     } catch {
       setApproveError((cur) => ({
         ...cur,
-        [targetId]: "Bağlantı hatası, tekrar deneyin.",
+        [targetId]: "Connection error, please try again.",
       }));
     } finally {
       setApproving((cur) => ({ ...cur, [targetId]: false }));
@@ -823,14 +823,14 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   if (caseMissing) {
     return (
       <main style={mainStyle}>
-        <p>Vaka bulunamadı.</p>
+        <p>Case not found.</p>
       </main>
     );
   }
   if (!caseItem) {
     return (
       <main style={mainStyle}>
-        <p>Yükleniyor…</p>
+        <p>Loading…</p>
       </main>
     );
   }
@@ -843,7 +843,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   return (
     <main style={mainStyle}>
       <style>{layoutCss}</style>
-      <h1>Vaka {caseItem.caseNo}</h1>
+      <h1>Case {caseItem.caseNo}</h1>
       <p>
         <button
           type="button"
@@ -851,19 +851,19 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           onClick={() => void toggleStatus()}
           style={approveButtonStyle}
         >
-          {caseItem.status === "closed" ? "Vakayı Aç" : "Vakayı Kapat"}
+          {caseItem.status === "closed" ? "Reopen Case" : "Close Case"}
         </button>
       </p>
-      {showFreshBadge ? <p style={badgeStyle}>yeni benzerler</p> : null}
+      {showFreshBadge ? <p style={badgeStyle}>new similar cases</p> : null}
       <div className="trace-case-layout">
-        <section aria-label="Vaka detayı" style={cardStyle}>
-          <h2>Vaka detayı</h2>
+        <section aria-label="Case detail" style={cardStyle}>
+          <h2>Case detail</h2>
           <p>{caseItem.summary}</p>
-          {fieldRow("Suç tipi", caseItem.crimeType)}
-          {fieldRow("Olay tarihi", caseItem.occurredAt)}
-          {fieldRow("Yöntem", caseItem.mo)}
-          {fieldRow("Silah", caseItem.weapon)}
-          {fieldRow("Durum", caseItem.status === "closed" ? "Kapalı" : "Açık")}
+          {fieldRow("Crime type", caseItem.crimeType)}
+          {fieldRow("Incident date", caseItem.occurredAt)}
+          {fieldRow("Method", caseItem.mo)}
+          {fieldRow("Weapon", caseItem.weapon)}
+          {fieldRow("Status", caseItem.status === "closed" ? "Closed" : "Open")}
           <EvidenceSection
             evidences={draftEvidences}
             onChange={(evidences) => {
@@ -913,33 +913,33 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             }}
           />
         </section>
-        <section aria-label="Benzer vakalar" style={cardStyle}>
-          <h2>Benzer vakalar</h2>
+        <section aria-label="Similar cases" style={cardStyle}>
+          <h2>Similar cases</h2>
           {similarError ? <p role="alert">{similarError}</p> : null}
           {similar?.pendingEnrichment ? (
             <p style={badgeStyle}>
-              Bekleyen zenginleştirme işleri var; sonuçlar eksik veriyle
-              hesaplanmış olabilir.
+              Background enrichment jobs are still pending; results may be
+              based on incomplete data.
             </p>
           ) : null}
-          {!similar && !similarError ? <p>Yükleniyor…</p> : null}
+          {!similar && !similarError ? <p>Loading…</p> : null}
           {similar && similar.results.length === 0 ? (
-            <p>Benzer vaka yok.</p>
+            <p>No similar cases.</p>
           ) : null}
           {similar && similar.results.length > 0 ? (
-            <ul aria-label="Benzer vaka listesi">
+            <ul aria-label="Similar case list">
               {similar.results.map((r) => (
                 <li key={r.caseId} style={cardStyle}>
                   <p>
-                    <strong>Vaka: </strong>
+                    <strong>Case: </strong>
                     <a href={`/cases/${r.caseId}`}>{r.caseNo || r.caseId}</a>
                   </p>
                   <p>
-                    <strong>skor: </strong>
-                    {r.score === 0 ? "0 (puanlanmadı)" : String(r.score)}
+                    <strong>score: </strong>
+                    {r.score === 0 ? "0 (not scored)" : String(r.score)}
                   </p>
                   <p>
-                    <strong>gerekçe: </strong>
+                    <strong>reason: </strong>
                     {r.reason}
                   </p>
                   {Array.isArray(r.similarities) && r.similarities.length > 0 ? (
@@ -953,7 +953,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                           {s.evidence ? (
                             <>
                               {" — "}
-                              <span>kanıt: {s.evidence}</span>
+                              <span>evidence: {s.evidence}</span>
                             </>
                           ) : null}
                         </li>
@@ -961,7 +961,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                     </ul>
                   ) : null}
                   {approved[r.caseId] ? (
-                    <p>onaylandı</p>
+                    <p>approved</p>
                   ) : (
                     <button
                       type="button"
@@ -969,7 +969,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                       onClick={() => void approve(r.caseId)}
                       style={approveButtonStyle}
                     >
-                      alakalı
+                      relevant
                     </button>
                   )}
                   {approveError[r.caseId] ? (

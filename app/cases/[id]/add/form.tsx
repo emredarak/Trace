@@ -3,12 +3,12 @@
 import { useRef, useState } from "react";
 
 export const EVIDENCE_TYPES = [
-  "ateşli silah",
-  "kovan",
-  "iz",
-  "biyolojik",
-  "belge",
-  "diğer",
+  "firearm",
+  "casing",
+  "trace",
+  "biological",
+  "document",
+  "other",
 ];
 
 const wrap: React.CSSProperties = {
@@ -63,9 +63,9 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
   const photoRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLInputElement>(null);
 
-  // Servis çalışanı çevrimdışı kaydı kuyruğa alırsa 202 {queued:true} döner.
-  // Gerçek fetch'te 202'nin ok'u true'dur; bu yüzden kuyruk bayrağı res.ok
-  // dallanmasından ÖNCE, ayrıştırılmış gövdeden okunur.
+  // When the service worker queues an offline record it returns 202 {queued:true}.
+  // In real fetch a 202 has ok=true, so the queue flag is read from the parsed body
+  // BEFORE branching on res.ok.
   interface ApiBody {
     queued?: boolean;
     boxes?: unknown;
@@ -82,7 +82,7 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
 
   async function saveNote() {
     if (note.trim().length === 0 && !type) {
-      setStatus("Not ya da delil tipi gerekli.");
+      setStatus("A note or evidence type is required.");
       return;
     }
     setBusy(true);
@@ -97,23 +97,23 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
       });
       const body = await readBody(res);
       if (body?.queued === true) {
-        setStatus("Not kuyruğa alındı, bağlantı gelince gönderilecek.");
+        setStatus("Note queued, will be sent once you're back online.");
         setNote("");
       } else if (res.ok) {
-        setStatus("Not kaydedildi.");
+        setStatus("Note saved.");
         setNote("");
       } else {
-        setStatus("Not kaydedilemedi.");
+        setStatus("Could not save note.");
       }
     } catch {
-      setStatus("Bağlantı hatası, tekrar deneyin.");
+      setStatus("Connection error, please try again.");
     } finally {
       setBusy(false);
     }
   }
 
   async function uploadPhoto(file: File) {
-    const hint = type || note.trim() || "delil";
+    const hint = type || note.trim() || "evidence";
     const form = new FormData();
     form.append("file", file);
     form.append("hint", hint);
@@ -125,17 +125,17 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
       });
       const body = await readBody(res);
       if (body?.queued === true) {
-        setStatus("Fotoğraf kuyruğa alındı, bağlantı gelince işlenecek.");
+        setStatus("Photo queued, will be processed once you're back online.");
         return;
       }
       if (!res.ok) {
-        setStatus("Fotoğraf işaretlenemedi.");
+        setStatus("Could not annotate photo.");
         return;
       }
       const n = Array.isArray(body?.boxes) ? body.boxes.length : 0;
-      setStatus(`Fotoğraf kaydedildi (${n} kutu).`);
+      setStatus(`Photo saved (${n} boxes).`);
     } catch {
-      setStatus("Bağlantı hatası, tekrar deneyin.");
+      setStatus("Connection error, please try again.");
     } finally {
       setBusy(false);
     }
@@ -152,16 +152,16 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
       });
       const body = await readBody(res);
       if (body?.queued === true) {
-        setStatus("Ses kuyruğa alındı, bağlantı gelince çözülecek.");
+        setStatus("Audio queued, will be transcribed once you're back online.");
         return;
       }
       if (!res.ok) {
-        setStatus("Ses çözülemedi.");
+        setStatus("Could not transcribe audio.");
         return;
       }
-      setStatus(`Ses çözüldü: ${body?.transcript?.text ?? ""}`);
+      setStatus(`Audio transcribed: ${body?.transcript?.text ?? ""}`);
     } catch {
-      setStatus("Bağlantı hatası, tekrar deneyin.");
+      setStatus("Connection error, please try again.");
     } finally {
       setBusy(false);
     }
@@ -169,9 +169,9 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
 
   return (
     <main style={wrap}>
-      <h1>Delil Ekle</h1>
+      <h1>Add Evidence</h1>
 
-      <div role="group" aria-label="Delil tipi" style={chipRow}>
+      <div role="group" aria-label="Evidence type" style={chipRow}>
         {EVIDENCE_TYPES.map((t) => (
           <button
             key={t}
@@ -185,7 +185,7 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         ))}
       </div>
 
-      <label htmlFor="not">Not</label>
+      <label htmlFor="not">Note</label>
       <textarea
         id="not"
         rows={3}
@@ -194,7 +194,7 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         style={field}
       />
       <button type="button" disabled={busy} onClick={saveNote} style={button}>
-        Not Kaydet
+        Save Note
       </button>
 
       <input
@@ -215,7 +215,7 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         onClick={() => photoRef.current?.click()}
         style={button}
       >
-        Fotoğraf Çek
+        Take Photo
       </button>
 
       <input
@@ -236,7 +236,7 @@ export default function AddEvidenceForm({ caseId }: { caseId: string }) {
         onClick={() => audioRef.current?.click()}
         style={button}
       >
-        Ses Kaydet
+        Record Audio
       </button>
 
       {status ? <p aria-live="polite">{status}</p> : null}

@@ -1,23 +1,23 @@
-// Vaka dosyasi (dossier) — Muse Glimmer'in derledigi, surumlu vaka derlemesi.
+// Case dossier — versioned case compilation built by Muse Glimmer.
 //
-// Deterministik cikarim (cases / case_locations / case_persons / evidences
-// satirlari, yetkili veri case_persons + case_locations) + transkript
-// ozetleri icin Glimmer cagrisi. One cikanlar (highlights) her zaman kaynak
-// transkriptten birebir alintidir ve kaynak kayit id'sini tasir; Glimmer
-// ozeti ayri alanda durur, uydurma alinti one cikana giremez.
+// Deterministic extraction (cases / case_locations / case_persons / evidences
+// rows; authoritative data is case_persons + case_locations) plus a Glimmer call
+// for transcript summaries. Highlights are always verbatim quotes from the
+// source transcript and carry the source record id; the Glimmer
+// summary lives in a separate field, so an invented quote can never enter highlights.
 //
-// Sonuc case_dossiers'a hash ile yazilir. Hash yalniz deterministik
-// kaynaktan (ham transkript metni ve transcriptHash parmak izi dahil,
-// Glimmer ozetleri haric) hesaplanir; ayni deterministik icerikte
-// Glimmer hic cagrilmaz ve kayitli dosya aynen doner (updatedAt korunur).
-// Kismen degisimde, transkripti degismeyen kayitlarin ozetleri onceki
-// dosyadan (sourceId + transcriptHash anahtariyla) yeniden kullanilir.
-// Kisi/konum/delil yoklugu, bozuk zenginlestirme JSON'u veya Glimmer
-// hatasi dosyayi bozmaz; yalnizca olmayan vaka hata firlatir.
-// Not: ozet istemi transkripti 4000 karakterde keser (bilinen sinir).
+// The result is written to case_dossiers with a hash. The hash is computed only from
+// deterministic sources (raw transcript text and transcriptHash fingerprint included,
+// Glimmer summaries excluded); with identical deterministic content
+// Glimmer is never called and the stored dossier is returned as-is (updatedAt preserved).
+// On partial change, summaries of unchanged transcripts are reused from the previous
+// dossier (keyed by sourceId + transcriptHash).
+// Missing persons/locations/evidence, corrupt enrichment JSON, or a Glimmer
+// failure never corrupts the dossier; only a missing case throws.
+// Note: the summary prompt truncates the transcript at 4000 characters (known limit).
 //
-// Musteri kalibi field-brief.ts ile ayni: testler sahte istemci enjekte
-// eder, uretim glimmerChat kullanir; ag hatasi ozeti bos birakir.
+// Client pattern is the same as field-brief.ts: tests inject a fake client,
+// production uses glimmerChat; a network error leaves the summary empty.
 
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
@@ -28,9 +28,9 @@ import type { Box } from "./mark-photo";
 
 export const DOSSIER_VERSION = 1;
 
-/** Transkript basina en fazla one cikan segment sayisi. */
+/** Max highlight segments per transcript. */
 export const MAX_TRANSCRIPT_HIGHLIGHTS = 5;
-/** One cikan basina karakter siniri (kaynak metnin on eki korunur). */
+/** Per-highlight character limit (source text prefix is preserved). */
 export const MAX_HIGHLIGHT_CHARS = 400;
 
 // Injectable client seam: tests pass a fake, production uses glimmerChat.
@@ -79,10 +79,10 @@ function asGlimmerClient(input: GlimmerInput | undefined): GlimmerClient {
 }
 
 export interface DossierTranscriptHighlight {
-  /** Kaynak kayit id'si (kisi veya delil id'si). */
+  /** Source record id (person or evidence id). */
   sourceId: string;
   speaker: string | null;
-  /** Kaynak transkriptten birebir alinti. */
+  /** Verbatim quote from the source transcript. */
   text: string;
 }
 
@@ -118,9 +118,9 @@ export interface DossierPerson {
   unidentified: boolean;
   contactStatus: string | null;
   transcriptHighlights: DossierTranscriptHighlight[];
-  /** Deterministik transkript parmak izi; ozet onbellegi bununla anahtarlanir. */
+  /** Deterministic transcript fingerprint; the summary cache is keyed by this. */
   transcriptHash: string | null;
-  /** Glimmer ozeti; transkript yoksa veya Glimmer basarisizsa null. */
+  /** Glimmer summary; null when there is no transcript or Glimmer fails. */
   transcriptSummary: string | null;
 }
 
@@ -129,13 +129,13 @@ export interface DossierEvidence {
   type: string;
   title: string | null;
   note: string | null;
-  /** SAM kutularindan turetilmis, tekrarsiz etiketler (ilk gorunum sirasi). */
+  /** SAM-derived deduplicated labels (first-seen order). */
   samLabels: string[];
   markingBoxes: Box[];
   transcriptHighlights: DossierTranscriptHighlight[];
-  /** Deterministik transkript parmak izi; ozet onbellegi bununla anahtarlanir. */
+  /** Deterministic transcript fingerprint; the summary cache is keyed by this. */
   transcriptHash: string | null;
-  /** Glimmer ozeti; transkript yoksa veya Glimmer basarisizsa null. */
+  /** Glimmer summary; null when there is no transcript or Glimmer fails. */
   transcriptSummary: string | null;
 }
 
@@ -224,7 +224,7 @@ function highlightsFor(
 ): DossierTranscriptHighlight[] {
   if (!transcript) return [];
   if (transcript.segments.length > 0) {
-    // En bilgilendirici (en uzun) segmentleri sec, asil sirayla sun.
+    // Pick the most informative (longest) segments, present in original order.
     const indexed = transcript.segments
       .map((seg, index) => ({ seg, index, segText: seg.text.trim() }))
       .filter((e) => e.segText.length > 0);
@@ -260,7 +260,7 @@ async function summarizeTranscript(
   const body = transcript.text.trim();
   if (!body) return null;
   const prompt = [
-    "Asagidaki sorgu/delil ses transkriptini tek veya iki cumleyle ozetle. Sadece ozeti dondur, alinti uydurma.",
+    "Summarize the following interrogation/evidence audio transcript in one or two sentences. Return only the summary, do not invent quotes.",
     body.slice(0, 4000),
   ].join("\n");
   try {
@@ -269,7 +269,7 @@ async function summarizeTranscript(
     const out = await withModelTimeout(
       client.summarize(prompt),
       resolveTimeoutMs(undefined, "GLIMMER_TIMEOUT_MS"),
-      "glimmer zaman asimi (timeout)",
+      "glimmer timeout",
     );
     return typeof out === "string" && out.trim() ? out.trim() : null;
   } catch {
@@ -288,7 +288,7 @@ export async function buildDossier(
   const caseRow = db
     .prepare("SELECT * FROM cases WHERE id = ?")
     .get(caseId) as Row | undefined;
-  if (!caseRow) throw new Error(`vaka bulunamadi: ${caseId}`);
+  if (!caseRow) throw new Error(`case not found: ${caseId}`);
 
   const locationRows = db
     .prepare(
@@ -317,8 +317,8 @@ export async function buildDossier(
     longitude: num(r.longitude),
   }));
 
-  // Once deterministik iskelet: ozetler haric tum alanlar + ham transkript.
-  // Hash yalniz bundan hesaplanir; Glimmer serbest metni hash'e girmez.
+  // First the deterministic skeleton: all fields except summaries plus the raw transcript.
+  // Only this feeds the hash; Glimmer free text never enters the hash.
   interface PersonDraft extends Omit<DossierPerson, "transcriptSummary"> {
     transcript: Transcript | null;
   }
@@ -331,7 +331,7 @@ export async function buildDossier(
     return {
       sourceId,
       name: text(r.name),
-      type: typeof r.type === "string" && r.type ? r.type : "kisi",
+      type: typeof r.type === "string" && r.type ? r.type : "person",
       age: num(r.age),
       gender: text(r.gender),
       note: text(r.note),
@@ -384,7 +384,7 @@ export async function buildDossier(
     draft: T,
   ) => {
     const { transcript, ...rest } = draft;
-    // Ham transkript metni degisim tespitine girer (ozet girmez).
+    // Raw transcript text participates in change detection (summaries do not).
     return { ...rest, transcriptText: transcript?.text ?? null };
   };
   const deterministic = {
@@ -400,7 +400,7 @@ export async function buildDossier(
     .prepare("SELECT hash, json FROM case_dossiers WHERE caseId = ?")
     .get(caseId) as { hash: string; json: string } | undefined;
 
-  // Ayni deterministik icerik: Glimmer hic cagrilmaz, kayitli dosya doner.
+  // Identical deterministic content: Glimmer is never called, the stored dossier is returned.
   let previous: CaseDossier | null = null;
   if (existing) {
     try {
@@ -413,7 +413,7 @@ export async function buildDossier(
     }
   }
 
-  // Degismeyen transkriptlerin ozetleri onceki dosyadan yeniden kullanilir.
+  // Summaries of unchanged transcripts are reused from the previous dossier.
   const summaryCache = new Map<string, string>();
   if (previous) {
     for (const entry of [...previous.persons, ...previous.evidences]) {
@@ -481,7 +481,7 @@ export async function buildDossier(
   return dossier;
 }
 
-/** Kayitli dosyayi okur; yoksa null. Task 5/6 icin yardimci. */
+/** Reads the stored dossier; null when absent. Helper for Task 5/6. */
 export function getDossier(
   db: Database.Database,
   caseId: string,
@@ -513,72 +513,72 @@ export function dossierText(d: CaseDossier): string {
 function buildDossierText(d: CaseDossier, includeSummaries: boolean): string {
   const lines: string[] = [];
   lines.push(
-    `Vaka ${d.caseNo} (id: ${d.caseId}, durum: ${d.status}) [${d.event.sourceId}]`,
+    `Case ${d.caseNo} (id: ${d.caseId}, status: ${d.status}) [${d.event.sourceId}]`,
   );
   const e = d.event;
   const eventParts = [
-    `ozet: ${e.summary}`,
-    e.crimeType ? `suc tipi: ${e.crimeType}` : "",
-    e.weapon ? `silah: ${e.weapon}` : "",
-    e.mo ? `yontem: ${e.mo}` : "",
-    e.occurredAt ? `olay zamani: ${e.occurredAt}` : "",
+    `summary: ${e.summary}`,
+    e.crimeType ? `crime type: ${e.crimeType}` : "",
+    e.weapon ? `weapon: ${e.weapon}` : "",
+    e.mo ? `method: ${e.mo}` : "",
+    e.occurredAt ? `occurred at: ${e.occurredAt}` : "",
   ].filter(Boolean);
-  lines.push(`Olay [${e.sourceId}]: ${eventParts.join(" | ")}`);
+  lines.push(`Event [${e.sourceId}]: ${eventParts.join(" | ")}`);
 
   for (const loc of d.locations) {
     const parts = [
-      loc.title ?? "Konum",
-      loc.kind ? `tur: ${loc.kind}` : "",
-      loc.priority ? `oncelik: ${loc.priority}` : "",
+      loc.title ?? "Location",
+      loc.kind ? `type: ${loc.kind}` : "",
+      loc.priority ? `priority: ${loc.priority}` : "",
       loc.latitude !== null && loc.longitude !== null
-        ? `koordinat: ${loc.latitude},${loc.longitude}`
+        ? `coordinates: ${loc.latitude},${loc.longitude}`
         : "",
-      loc.note ? `not: ${loc.note}` : "",
+      loc.note ? `note: ${loc.note}` : "",
       loc.locationText && loc.locationText !== loc.note
-        ? `konum metni: ${loc.locationText}`
+        ? `location text: ${loc.locationText}`
         : "",
     ].filter(Boolean);
-    lines.push(`Konum [${loc.sourceId}]: ${parts.join(" | ")}`);
+    lines.push(`Location [${loc.sourceId}]: ${parts.join(" | ")}`);
   }
 
   for (const p of d.persons) {
     const parts = [
-      p.name ?? (p.unidentified ? "Kimligi belirsiz" : "Isimsiz"),
-      `rol: ${p.type}`,
-      p.age !== null ? `yas: ${p.age}` : "",
-      p.gender ? `cinsiyet: ${p.gender}` : "",
-      p.relationship ? `iliski: ${p.relationship}` : "",
-      p.note ? `not: ${p.note}` : "",
+      p.name ?? (p.unidentified ? "Unidentified" : "Unnamed"),
+      `role: ${p.type}`,
+      p.age !== null ? `age: ${p.age}` : "",
+      p.gender ? `gender: ${p.gender}` : "",
+      p.relationship ? `relationship: ${p.relationship}` : "",
+      p.note ? `note: ${p.note}` : "",
     ].filter(Boolean);
-    lines.push(`Kisi [${p.sourceId}]: ${parts.join(" | ")}`);
+    lines.push(`Person [${p.sourceId}]: ${parts.join(" | ")}`);
     for (const h of p.transcriptHighlights) {
       lines.push(
-        `  Sorgu one cikani [${h.sourceId}]: ${h.speaker ? `${h.speaker}: ` : ""}${h.text}`,
+        `  Interview highlight [${h.sourceId}]: ${h.speaker ? `${h.speaker}: ` : ""}${h.text}`,
       );
     }
     if (includeSummaries && p.transcriptSummary) {
-      lines.push(`  Sorgu ozeti [${p.sourceId}]: ${p.transcriptSummary}`);
+      lines.push(`  Interview summary [${p.sourceId}]: ${p.transcriptSummary}`);
     }
   }
 
   for (const ev of d.evidences) {
     const parts = [
-      ev.title ?? "Delil",
-      `tur: ${ev.type}`,
-      ev.note ? `not: ${ev.note}` : "",
+      ev.title ?? "Evidence",
+      `type: ${ev.type}`,
+      ev.note ? `note: ${ev.note}` : "",
       ev.samLabels.length > 0
-        ? `SAM etiketleri: ${ev.samLabels.join(", ")}`
+        ? `SAM labels: ${ev.samLabels.join(", ")}`
         : "",
     ].filter(Boolean);
-    lines.push(`Delil [${ev.sourceId}]: ${parts.join(" | ")}`);
+    lines.push(`Evidence [${ev.sourceId}]: ${parts.join(" | ")}`);
     for (const h of ev.transcriptHighlights) {
       lines.push(
-        `  Delil transkript one cikani [${h.sourceId}]: ${h.speaker ? `${h.speaker}: ` : ""}${h.text}`,
+        `  Evidence transcript highlight [${h.sourceId}]: ${h.speaker ? `${h.speaker}: ` : ""}${h.text}`,
       );
     }
     if (includeSummaries && ev.transcriptSummary) {
       lines.push(
-        `  Delil transkript ozeti [${ev.sourceId}]: ${ev.transcriptSummary}`,
+        `  Evidence transcript summary [${ev.sourceId}]: ${ev.transcriptSummary}`,
       );
     }
   }

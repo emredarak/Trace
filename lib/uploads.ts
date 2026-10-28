@@ -23,7 +23,7 @@ export async function saveUpload(file: File, caseId: string): Promise<string> {
   return stored;
 }
 
-// Yalnızca düz dosya adı kabul edilir; yol ayırıcı içeren adlar reddedilir.
+// Only plain file names are accepted; names containing path separators are rejected.
 export function safeUploadName(name: string): string | null {
   let decoded = name;
   try {
@@ -55,7 +55,7 @@ export function deleteUpload(name: string | null | undefined): void {
   try {
     unlinkSync(join(uploadDir(), safe));
   } catch {
-    // Dosya zaten yoksa sessiz geç.
+    // Silently ignore when the file is already gone.
   }
 }
 

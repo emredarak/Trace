@@ -17,13 +17,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="tr">
+    <html lang="en">
       <body>
         <SwRegister />
         <header className="trace-nav">
           <nav>
-            <a href="/">Vakalar</a>
-            <a href="/new">+ Yeni Vaka</a>
+            <a href="/">Cases</a>
+            <a href="/new">+ New Case</a>
           </nav>
         </header>
         {children}

@@ -1,82 +1,87 @@
 # Trace MVP
 
-Kurgu veriyle çalışan vaka kayıt ve benzer vaka bulma demosu. Benzerlik yalnızca
-özet metnindeki kelime ortaklığıyla ölçülmez: konum, kişi, sorgu transkripti,
-delil notu, görseldeki nesneler ve olay zamanı da hesaba katılır; bulunan her
-benzerlik gücü ve dayandığı kanıtla birlikte gösterilir.
+A case-record and similar-case discovery demo running on fictional data. Similarity is
+not measured by shared words in the summary text alone: location, people, interview
+transcripts, evidence notes, objects in images, and event time are also taken into
+account; every similarity found is shown with its strength and supporting evidence.
 
-Demo akış metni için bkz. `DEMO.md`. Tasarım belgesi:
+For the demo script see `DEMO.md`. Design document:
 `docs/superpowers/specs/2026-10-28-similar-cases-meta-models-design.md`.
 
-## Dört Meta modelinin rolü
+## Roles of the four Meta models
 
-| Model | Görev | Kod |
+| Model | Task | Code |
 |---|---|---|
-| Muse Voice Transcribe | Sesli delil ve kişi sorgu sesini konuşmacı ayrımlı metne çevirir | `lib/transcribe.ts`, zenginleştirme işleri `lib/enrichment.ts` |
-| SAM 3.1 | Görsel delildeki nesneleri etiketler/kutular | `lib/mark-photo.ts`, `lib/enrichment.ts` |
-| Muse Glimmer | Her vaka için sürümlü vaka dosyası (dossier) derler; transkriptten öne çıkan ifadeleri seçer | `lib/glimmer-client.ts`, `lib/dossier.ts` |
-| Muse Spark Open | Aday vaka dosyalarını karşılaştırır; benzerlikleri madde madde, güçleriyle (1–10) ve genel puanla çıkarır | `lib/spark-client.ts`, `lib/similarity.ts` |
+| Muse Voice Transcribe (`muse-voice-transcribe-1.0`) | Transcribes audio evidence and person-interview audio into speaker-separated text. File endpoint `POST https://api.meta.ai/v1/asr/transcribe` (multipart `request` JSON + `audio` WAV); `DIARIZATION` mode returns `turns[]` with speaker labels. WAV required: mono 16-bit PCM at 16/24 kHz | `lib/transcribe.ts`, enrichment jobs `lib/enrichment.ts` |
+| SAM 3.1 (`sam-3.1`) | Labels/boxes objects in visual evidence. Responses endpoint `POST https://api.meta.ai/v1/responses` with one short noun phrase per call (`input_text`, e.g. `knife`) plus the photo (`input_image`, data URL); boxes parsed from output tokens and normalized to 0–1 | `lib/mark-photo.ts`, `lib/enrichment.ts` |
+| Muse Glimmer | Compiles a versioned case file (dossier) per case; picks standout quotes from transcripts | `lib/glimmer-client.ts`, `lib/dossier.ts` |
+| Muse Spark Open | Compares candidate case files; lists similarities item by item with strengths (1–10) and an overall score | `lib/spark-client.ts`, `lib/similarity.ts` |
 
-## Benzerlik akışı
+## Similarity flow
 
-1. **Zenginleştirme** (`lib/enrichment.ts`): ses/görsel yüklendiğinde iş kuyruğa
-   girer; Transcribe transkript, SAM nesne işaretleri üretir. İş başarısız
-   olursa kayıt kaybolmaz, iş yeniden denenebilir durumda kalır ve puanlama
-   kalan veriyle sürer.
-2. **Vaka dosyası** (`lib/dossier.ts`): Glimmer her vaka için olay, konum,
-   kişi (sorgu transkriptinden öne çıkanlar) ve delilleri içeren, kaynak
-   işaretli ve hash'li bir derleme üretir.
-3. **Aday üretimi** (`lib/candidates.ts`): çok kanallı ve puansızdır — metin
-   (FTS), konum (≤5 km), kişi (Türkçe normalize ad + rol), nesne (SAM etiketi)
-   ve zaman (±90 gün) kanallarının birleşimi, en fazla 20 aday. Kapalı vakalar
-   da aday havuzundadır.
-4. **Puanlama** (`lib/similarity.ts`): Spark adayları tek çağrıda puanlar.
-   Sabit puan tablosu yoktur; kod yalnızca aday üretir, nesnel ipuçları
-   (mesafe vb.) hesaplar ve çıktıyı doğrular: bilinmeyen/tekrarlı `caseId`
-   elenir, puan ve güç 1–10'a clamp'lenir, kaynak dosyada doğrulanamayan
-   alıntı maddeye giremez. Ortak SAM etiketli delillerden en fazla 3 görsel
-   doğrulama için pakete eklenir. Sonuçlar dosya hash'leriyle
-   `similar_results` tablosunda saklanır; içerik değişmedikçe yeniden
-   puanlanmaz.
-5. **Sunum** (`GET /api/cases/[id]/similar`): varsayılan ilk 5 sonuç
-   (`SIMILAR_RESULT_LIMIT`), kartta ham id yerine vaka numarası (`caseNo`),
-   her maddede tür + açıklama + güç + kanıt.
+1. **Enrichment** (`lib/enrichment.ts`): when audio/an image is uploaded, a job enters the queue;
+   Transcribe produces transcripts, SAM produces object marks. If a job fails
+   the record is not lost, the job stays retryable and scoring continues
+   with the remaining data.
+2. **Case file** (`lib/dossier.ts`): Glimmer compiles, per case, a build of the incident, location,
+   people (standouts from interview transcripts) and evidence, with source
+   marks and hashes.
+3. **Candidate generation** (`lib/candidates.ts`): multi-channel and scoreless — the union of text
+   (FTS), location (≤5 km), person (English-normalized name + role), object (SAM label)
+   and time (±90 days) channels, at most 20 candidates. Closed cases
+   are also in the candidate pool.
+4. **Scoring** (`lib/similarity.ts`): Spark scores candidates in a single call.
+   There is no fixed score table; the code only generates candidates, computes objective cues
+   (e.g. distance) and validates the output: unknown/repeated `caseId`
+   entries are dropped, scores and strengths are clamped to 1–10, a quote that cannot be verified in the source file
+   cannot enter an item. At most 3 images from evidence with shared SAM labels are added to the package for
+   visual verification. Results are stored with file hashes in the
+   `similar_results` table; they are not re-scored unless content changes.
+5. **Presentation** (`GET /api/cases/[id]/similar`): first 5 results by default
+   (`SIMILAR_RESULT_LIMIT`), case number (`caseNo`) instead of raw id on the card,
+   per item type + description + strength + evidence.
 
-## Kurulum
+## Setup
 
 ```bash
 npm install
 npm run dev          # http://localhost:3000
-npm run seed         # 32 kurgu vaka (ayrı terminalde, sunucu açıkken)
-npm test             # test paketi
+npm run seed         # 18 fictional cases (separate terminal, with the server running)
+npm test             # test suite
 ```
 
-## Yapılandırma (env)
+## Configuration (env)
 
-Anahtarlar yalnızca ortam değişkenlerindedir; kodda sabit anahtar yoktur.
-Anahtar yoksa sistem puansız yedek davranışla çalışmaya devam eder (benzer
-liste ön filtre/aday sırasıyla, skor "0 (puanlanmadı)" olarak gelir).
+Keys live only in environment variables; there are no hard-coded keys.
+`MODEL_API_KEY` is the primary key (same Bearer key for Transcribe, SAM,
+image generation and chat). `META_API_KEY` / `LLAMA_API_KEY` are accepted
+as fallbacks. Without keys the system keeps working with a scoreless fallback (similar
+list in prefilter/candidate order, score shown as "0 (not scored)").
 
-| Değişken | Anlamı |
+| Variable | Meaning |
 |---|---|
-| `BASETEN_API_KEY` | Varsa Spark, Baseten üzerinden çağrılır (öncelikli) |
-| `BASETEN_API_URL` | Baseten uç noktası (varsayılan: `https://inference.baseten.co/v1/chat/completions`) |
-| `SPARK_MODEL` | Baseten yolunda Spark model adı (varsayılan: `muse-spark-open`) |
-| `META_API_KEY` | Baseten yoksa Spark için Meta API anahtarı; Transcribe ve SAM de bunu kullanır |
-| `LLAMA_API_KEY` | `META_API_KEY` yoksa yedek anahtar |
-| `META_API_URL` / `META_MODEL` | Meta API chat uç noktası / model adı geçersiz kılma |
-| `GLIMMER_API_KEY` | Glimmer için ayrı anahtar (yoksa `META_API_KEY`/`LLAMA_API_KEY`) |
-| `GLIMMER_API_URL` / `GLIMMER_MODEL` | Glimmer uç noktası / model adı (yoksa `META_API_URL`/`META_MODEL`) |
-| `SIMILAR_RESULT_LIMIT` | Gösterilecek benzer vaka sayısı (varsayılan 5) |
-| `SPARK_TIMEOUT_MS` | Spark çağrısı zaman aşımı, ms (varsayılan 120000) |
-| `META_TIMEOUT_MS` / `GLIMMER_TIMEOUT_MS` / `META_TRANSCRIBE_TIMEOUT_MS` / `META_SAM_TIMEOUT_MS` | Chat/Glimmer, Transcribe ve SAM çağrısı zaman aşımı, ms (varsayılan 120000) |
-| `META_TRANSCRIBE_URL` / `META_TRANSCRIBE_MODEL` | Voice Transcribe uç noktası / model geçersiz kılma |
-| `META_SAM_URL` / `META_SAM_MODEL` | SAM 3.1 uç noktası / model geçersiz kılma |
-| `TRACE_DB_PATH` / `TRACE_UPLOAD_DIR` | SQLite dosyası / yükleme dizini (varsayılan `trace.db` / `uploads`) |
-| `TRACE_BASE_URL` | Seed hedefi (varsayılan `http://localhost:3000`) |
-| `DEMO_PASSCODE` | Demo giriş kodu (opsiyonel) |
+| `MODEL_API_KEY` | Primary Meta Model API key (Transcribe, SAM 3.1, chat, image generation) |
+| `JUDGE_API_URL` / `JUDGE_MODEL` | Judge (similarity scoring) endpoint — full chat-completions URL — / model name. Legacy `META_API_URL` / `META_MODEL` still accepted as fallback |
+| `PROSECUTOR_API_KEY` | Separate key for the prosecutor (falls back to `MODEL_API_KEY` and below) |
+| `PROSECUTOR_API_URL` / `PROSECUTOR_MODEL` | Prosecutor (dossier building) endpoint / model name. Legacy `GLIMMER_API_URL` / `GLIMMER_MODEL` still accepted as fallback |
+| `BASETEN_API_KEY` | When set, Spark is called via Baseten (preferred) |
+| `BASETEN_API_URL` | Baseten endpoint (default: `https://inference.baseten.co/v1/chat/completions`) |
+| `SPARK_MODEL` | Spark model name on the Baseten path (default: `muse-spark-open`) |
+| `META_API_KEY` | Legacy key name for the judge path; accepted for Transcribe and SAM too |
+| `LLAMA_API_KEY` | Fallback key when the above are absent |
+| `META_API_URL` / `META_MODEL` | Meta API chat endpoint (default `https://api.meta.ai/v1/chat/completions`) / model name override (default `muse-spark-1.3`) |
+| `GLIMMER_API_KEY` | Separate key for Glimmer (falls back to `META_API_KEY`/`LLAMA_API_KEY`) |
+| `GLIMMER_API_URL` / `GLIMMER_MODEL` | Glimmer endpoint / model name (falls back to `META_API_URL`/`META_MODEL`) |
+| `SIMILAR_RESULT_LIMIT` | Number of similar cases shown (default 5) |
+| `SPARK_TIMEOUT_MS` | Spark call timeout, ms (default 120000) |
+| `META_TIMEOUT_MS` / `GLIMMER_TIMEOUT_MS` / `META_TRANSCRIBE_TIMEOUT_MS` / `META_SAM_TIMEOUT_MS` | Chat/Glimmer, Transcribe and SAM call timeout, ms (default 120000) |
+| `META_TRANSCRIBE_URL` / `META_TRANSCRIBE_MODEL` | Voice Transcribe endpoint (default `https://api.meta.ai/v1/asr/transcribe`) / model override (default `muse-voice-transcribe-1.0`). Audio must be WAV (mono 16-bit PCM 16/24 kHz); convert first, e.g. `ffmpeg -i in.m4a -ac 1 -ar 24000 -c:a pcm_s16le out.wav` |
+| `META_SAM_URL` / `META_SAM_MODEL` | SAM 3.1 endpoint (default `https://api.meta.ai/v1/responses`) / model override (default `sam-3.1`) |
+| `TRACE_DB_PATH` / `TRACE_UPLOAD_DIR` | SQLite file / upload directory (defaults `trace.db` / `uploads`) |
+| `TRACE_BASE_URL` | Seed target (default `http://localhost:3000`) |
+| `DEMO_PASSCODE` | Demo login passcode (optional) |
 
-PowerShell örneği:
+PowerShell example:
 
 ```powershell
 $env:BASETEN_API_KEY="..."
@@ -85,11 +90,11 @@ $env:SIMILAR_RESULT_LIMIT="5"
 npm run dev
 ```
 
-## Dağıtım ve gizlilik notu
+## Deployment and privacy note
 
-v1 yalnızca **API modunda** çalışır: Spark için Baseten (öncelikli) ya da Meta
-API; kişi isimleri ve transkriptler API modunda modele olduğu gibi gider.
-Self-host (Spark Open'ın birimin kendi sisteminde çalıştırılması, verinin
-kurum dışına çıkmaması) v1'de **kurulmaz**; yalnızca satış/demo anlatısıdır.
-Model erişimi tek chat katmanından ve env ile yönlendirildiği için ileride
-self-host kurulursa arayüz ve puanlama davranışı aynı kalır.
+v1 works **API-mode only**: Spark via Baseten (preferred) or the Meta
+API; person names and transcripts go to the model as-is in API mode.
+Self-hosting (running Spark Open on the unit's own systems so case data
+never leaves the organization) is **not** set up in v1; it is only a sales/demo narrative.
+Since model access goes through a single chat layer routed by env, the interface and scoring behavior stay the same if
+self-hosting is set up later.

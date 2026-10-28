@@ -29,7 +29,7 @@ export interface CaseLocation {
   createdAt: string;
 }
 
-// Vaka düzenleme ekranından değiştirilebilen alanlar.
+// Fields editable from the case edit screen.
 const EDITABLE_FIELDS = [
   "summary",
   "crimeType",

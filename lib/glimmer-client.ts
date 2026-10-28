@@ -1,15 +1,20 @@
-// Muse Glimmer client — the compiler agent (dossier building, briefs).
+// Dossier compiler client (role name: PROSECUTOR) — dossier building, briefs.
 //
-// Uses GLIMMER_API_URL / GLIMMER_MODEL / GLIMMER_API_KEY when defined.
-// When no GLIMMER_* env is defined it falls back to the shared chat layer
-// (chatCompletion with META_* env), so behaviour is unchanged without a
-// dedicated Glimmer endpoint. Keys come from env only, never hardcoded.
+// Uses PROSECUTOR_API_URL / PROSECUTOR_MODEL / PROSECUTOR_API_KEY when
+// defined (legacy GLIMMER_API_URL / GLIMMER_MODEL / GLIMMER_API_KEY still
+// accepted as fallback). When no compiler env is defined it falls back to the shared
+// chat layer (chatCompletion with META_* env), so behaviour is unchanged
+// without a dedicated compiler endpoint. Keys come from env only, never
+// hardcoded.
 
 import { chatCompletion } from "./meta-client";
 import { parseTimeoutMs } from "./model-timeout";
 
 export async function glimmerChat(prompt: string): Promise<string> {
   const hasGlimmerEnv =
+    process.env.PROSECUTOR_API_URL !== undefined ||
+    process.env.PROSECUTOR_MODEL !== undefined ||
+    process.env.PROSECUTOR_API_KEY !== undefined ||
     process.env.GLIMMER_API_URL !== undefined ||
     process.env.GLIMMER_MODEL !== undefined ||
     process.env.GLIMMER_API_KEY !== undefined;
@@ -23,11 +28,19 @@ export async function glimmerChat(prompt: string): Promise<string> {
   }
   return chatCompletion(prompt, {
     apiKey:
+      process.env.PROSECUTOR_API_KEY ??
       process.env.GLIMMER_API_KEY ??
+      process.env.MODEL_API_KEY ??
       process.env.META_API_KEY ??
       process.env.LLAMA_API_KEY,
-    url: process.env.GLIMMER_API_URL ?? process.env.META_API_URL,
-    model: process.env.GLIMMER_MODEL ?? process.env.META_MODEL,
+    url:
+      process.env.PROSECUTOR_API_URL ??
+      process.env.GLIMMER_API_URL ??
+      process.env.META_API_URL,
+    model:
+      process.env.PROSECUTOR_MODEL ??
+      process.env.GLIMMER_MODEL ??
+      process.env.META_MODEL,
     timeoutMs,
   });
 }

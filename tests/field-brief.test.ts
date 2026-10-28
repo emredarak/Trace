@@ -2,29 +2,29 @@ import { describe, expect, it, vi } from "vitest";
 import { fieldBrief } from "../lib/field-brief";
 
 const THREE = [
-  { type: "transcript", note: "gece marketin önünde beyaz arabayı gördüm" },
-  { type: "transcript", note: "plakayı aldım, sürücü hızla kaçtı" },
-  { type: "transcript", note: "güvenlik kamerası sokağa bakıyordu" },
+  { type: "transcript", note: "I saw the white car in front of the night market" },
+  { type: "transcript", note: "I took the plate, the driver fled fast" },
+  { type: "transcript", note: "the security camera faced the street" },
 ] as Parameters<typeof fieldBrief>[0];
 
 describe("fieldBrief", () => {
-  it("3 çözümlü girişten tek cümle özet döner", async () => {
-    const summarize = vi.fn(async (_prompt: string) => "Beyaz araçlı şüpheli kaçtı.");
+  it("returns a one-sentence summary from 3 resolved inputs", async () => {
+    const summarize = vi.fn(async (_prompt: string) => "The suspect fled in the white car.");
     const out = await fieldBrief(THREE, { summarize });
-    expect(out).toBe("Beyaz araçlı şüpheli kaçtı.");
-    // Tek çağrı, üç çözüm de istemde birleşti.
+    expect(out).toBe("The suspect fled in the white car.");
+    // Single call, all three resolutions combined in the prompt.
     expect(summarize).toHaveBeenCalledTimes(1);
     const prompt = String(summarize.mock.calls[0]?.[0]);
     for (const e of THREE) expect(prompt).toContain(e.note!);
   });
 
-  it("boş girişte boş döner, istemciyi çağırmaz", async () => {
+  it("returns empty for empty input without calling the client", async () => {
     const summarize = vi.fn(async (_prompt: string) => "asla");
     await expect(fieldBrief([], { summarize })).resolves.toBe("");
     expect(summarize).not.toHaveBeenCalled();
   });
 
-  it("transcript dışı girişler (foto işaretleme) yok sayılır", async () => {
+  it("ignores non-transcript inputs (photo markings)", async () => {
     const summarize = vi.fn(async (_prompt: string) => "asla");
     const entries = [
       { type: "photo-marking", note: '{"marks":[{"x":1,"y":2}]}' },
@@ -34,10 +34,10 @@ describe("fieldBrief", () => {
     expect(summarize).not.toHaveBeenCalled();
   });
 
-  it("istemci hatasında atlar: boş döner, fırlatmaz", async () => {
+  it("skips on client error: returns empty, does not throw", async () => {
     const out = await fieldBrief(THREE, {
       summarize: async () => {
-        throw new Error("servis çöktü");
+        throw new Error("service crashed");
       },
     });
     expect(out).toBe("");

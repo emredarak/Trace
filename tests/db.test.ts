@@ -45,46 +45,46 @@ describe("case database", () => {
 
   it("stores optional schema fields", () => {
     const rec = insertCase({
-      summary: "su kenarında olay",
-      crimeType: "cinayet",
-      locationType: "su kenarı",
-      weapon: "bıçak",
-      mo: "gece yaklaşma",
+      summary: "waterfront incident",
+      crimeType: "homicide",
+      locationType: "waterfront",
+      weapon: "knife",
+      mo: "night approach",
     });
-    expect(rec.crimeType).toBe("cinayet");
-    expect(rec.locationType).toBe("su kenarı");
-    expect(rec.weapon).toBe("bıçak");
-    expect(rec.mo).toBe("gece yaklaşma");
+    expect(rec.crimeType).toBe("homicide");
+    expect(rec.locationType).toBe("waterfront");
+    expect(rec.weapon).toBe("knife");
+    expect(rec.mo).toBe("night approach");
   });
 
   it("indexes searchable fields in case_fts", () => {
     insertCase({
-      summary: "su kenarında kesici alet olayı",
-      crimeType: "cinayet",
-      locationType: "su kenarı",
-      weapon: "bıçak",
-      mo: "gece yaklaşma",
+      summary: "waterfront sharp-object incident",
+      crimeType: "homicide",
+      locationType: "waterfront",
+      weapon: "knife",
+      mo: "night approach",
     });
     const db = getDb();
     const row = db
-      .prepare("SELECT COUNT(*) AS n FROM case_fts WHERE case_fts MATCH 'bıçak'")
+      .prepare("SELECT COUNT(*) AS n FROM case_fts WHERE case_fts MATCH 'knife'")
       .get() as { n: number };
     expect(row.n).toBe(1);
   });
 
   it("writes location title/kind/priority and mirrors note into locationText", () => {
     const rec = insertCase({
-      summary: "konumlu vaka",
+      summary: "case with location",
       locations: [
         {
-          title: "Olay evi",
-          note: "kapı zorlanmış",
-          kind: "olay-yeri",
-          priority: "kritik",
+          title: "Incident house",
+          note: "door forced",
+          kind: "crime-scene",
+          priority: "critical",
           latitude: 41.01,
           longitude: 28.97,
         },
-        { locationText: "köprü altı" },
+        { locationText: "under the bridge" },
       ],
     });
     initDb();
@@ -95,17 +95,17 @@ describe("case database", () => {
       .all(rec.id) as Record<string, unknown>[];
     expect(rows).toEqual([
       {
-        title: "Olay evi",
-        note: "kapı zorlanmış",
-        locationText: "kapı zorlanmış",
-        kind: "olay-yeri",
+        title: "Incident house",
+        note: "door forced",
+        locationText: "door forced",
+        kind: "crime-scene",
         priority: null,
       },
       {
-        title: "köprü altı",
+        title: "under the bridge",
         note: null,
         locationText: null,
-        kind: "iliskili",
+        kind: "related",
         priority: null,
       },
     ]);
@@ -153,8 +153,8 @@ describe("case database", () => {
 
   it("stores dossier and similar result rows keyed by case", () => {
     const db = getDb();
-    const a = insertCase({ summary: "sorgu vakasi" });
-    const b = insertCase({ summary: "aday vaka" });
+    const a = insertCase({ summary: "query case" });
+    const b = insertCase({ summary: "candidate case" });
     const now = new Date().toISOString();
     db.prepare(
       "INSERT INTO case_dossiers (caseId, version, hash, json, updatedAt) VALUES (?, ?, ?, ?, ?)",
@@ -168,7 +168,7 @@ describe("case database", () => {
     ).toThrow();
     db.prepare(
       "INSERT INTO similar_results (queryId, candidateId, score, similarities, reason, queryHash, candidateHash, model, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(a.id, b.id, 8, "[]", "benzer", "qh", "ch", "spark", now);
+    ).run(a.id, b.id, 8, "[]", "similar", "qh", "ch", "spark", now);
     const row = db
       .prepare(
         "SELECT queryId, candidateId, score FROM similar_results WHERE queryId = ?",
@@ -180,13 +180,13 @@ describe("case database", () => {
         .prepare(
           "INSERT INTO similar_results (queryId, candidateId, score, similarities, reason, queryHash, candidateHash, model, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
-        .run(a.id, b.id, 5, "[]", "tekrar", "qh", "ch", "spark", now),
+        .run(a.id, b.id, 5, "[]", "duplicate", "qh", "ch", "spark", now),
     ).toThrow();
   });
 
   it("rejects invalid enrichment job kind and status", () => {
     const db = getDb();
-    const rec = insertCase({ summary: "is vakasi" });
+    const rec = insertCase({ summary: "job case" });
     const now = new Date().toISOString();
     expect(() =>
       db
@@ -206,7 +206,7 @@ describe("case database", () => {
 
   it("enqueueJob creates a pending job with defaults and returns its id", () => {
     const db = getDb();
-    const rec = insertCase({ summary: "kuyruk vakasi" });
+    const rec = insertCase({ summary: "queue case" });
     const id = enqueueJob(db, {
       caseId: rec.id,
       kind: "transcribe",
@@ -231,7 +231,7 @@ describe("case database", () => {
 
   it("enqueueJob does not open a second pending job for same kind and refId", () => {
     const db = getDb();
-    const rec = insertCase({ summary: "tekil is vakasi" });
+    const rec = insertCase({ summary: "single job case" });
     const first = enqueueJob(db, {
       caseId: rec.id,
       kind: "sam",
@@ -261,14 +261,14 @@ describe("case database", () => {
 
   it("enqueueJob dedupes refId-less dossier jobs while pending", () => {
     const db = getDb();
-    const rec = insertCase({ summary: "dosya vakasi" });
+    const rec = insertCase({ summary: "dossier case" });
     const first = enqueueJob(db, { caseId: rec.id, kind: "dossier" });
     expect(enqueueJob(db, { caseId: rec.id, kind: "dossier" })).toBe(first);
   });
 
   it("enqueueJob opens a new job after previous one is done or failed", () => {
     const db = getDb();
-    const rec = insertCase({ summary: "yeniden deneme vakasi" });
+    const rec = insertCase({ summary: "retry case" });
     const first = enqueueJob(db, {
       caseId: rec.id,
       kind: "transcribe",
@@ -296,10 +296,10 @@ describe("case database", () => {
 
   it("links evidence rows to their case", () => {
     const db = getDb();
-    const rec = insertCase({ summary: "delilli vaka" });
+    const rec = insertCase({ summary: "case with evidence" });
     db.prepare(
       "INSERT INTO evidences (id, caseId, type, note, createdAt) VALUES (?, ?, ?, ?, ?)",
-    ).run("ev-1", rec.id, "note", "kısa not", rec.createdAt);
+    ).run("ev-1", rec.id, "note", "short note", rec.createdAt);
     const row = db
       .prepare("SELECT caseId, type FROM evidences WHERE id = 'ev-1'")
       .get() as { caseId: string; type: string };

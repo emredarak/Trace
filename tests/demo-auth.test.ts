@@ -9,17 +9,17 @@ describe("checkPasscode", () => {
     else process.env.DEMO_PASSCODE = prev;
   });
 
-  it("doğru parola true döndürür", () => {
+  it("returns true for the correct passcode", () => {
     process.env.DEMO_PASSCODE = "demo-secret";
     expect(checkPasscode("demo-secret")).toBe(true);
   });
 
-  it("yanlış parola false döndürür", () => {
+  it("returns false for the wrong passcode", () => {
     process.env.DEMO_PASSCODE = "demo-secret";
     expect(checkPasscode("wrong")).toBe(false);
   });
 
-  it("parola tanımsızsa false döndürür", () => {
+  it("returns false when passcode is undefined", () => {
     delete process.env.DEMO_PASSCODE;
     expect(checkPasscode("demo-secret")).toBe(false);
   });

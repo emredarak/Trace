@@ -86,8 +86,8 @@ function normalizeNumber(value: unknown, field: string): number | null {
   return num;
 }
 
-const LOCATION_KINDS: readonly string[] = ["olay-yeri", "iliskili"];
-const LOCATION_PRIORITIES: readonly string[] = ["kritik", "onemli", "rutin"];
+const LOCATION_KINDS: readonly string[] = ["crime-scene", "related"];
+const LOCATION_PRIORITIES: readonly string[] = ["critical", "important", "routine"];
 
 export function normalizeLocationInput(
   raw: unknown,
@@ -117,10 +117,10 @@ export function normalizeLocationInput(
     throw new Error(`${prefix}.longitude must be between -180 and 180`);
   }
 
-  let kind: LocationKind = "iliskili";
+  let kind: LocationKind = "related";
   if (loc.kind !== undefined && loc.kind !== null && loc.kind !== "") {
     if (typeof loc.kind !== "string" || !LOCATION_KINDS.includes(loc.kind)) {
-      throw new Error(`${prefix}.kind must be 'olay-yeri' or 'iliskili'`);
+      throw new Error(`${prefix}.kind must be 'crime-scene' or 'related'`);
     }
     kind = loc.kind as LocationKind;
   }
@@ -132,12 +132,12 @@ export function normalizeLocationInput(
       !LOCATION_PRIORITIES.includes(loc.priority)
     ) {
       throw new Error(
-        `${prefix}.priority must be 'kritik', 'onemli' or 'rutin'`,
+        `${prefix}.priority must be 'critical', 'important' or 'routine'`,
       );
     }
     priority = loc.priority as LocationPriority;
   }
-  if (kind === "olay-yeri") priority = null;
+  if (kind === "crime-scene") priority = null;
 
   let title: string;
   let note: string | null;
@@ -151,7 +151,7 @@ export function normalizeLocationInput(
     title = locationTextRaw;
     note = null;
   } else if (latitude !== null && longitude !== null) {
-    title = "Konum";
+    title = "Location";
     note = null;
   } else {
     throw new Error(`${prefix} needs a title or coordinates`);
@@ -181,27 +181,27 @@ export interface LocationResponse {
   createdAt: string;
 }
 
-// Ham DB satırını API yanıtına çevirir; eski satırlarda boş başlık/tür
-// görüntü amaçlı varsayılanlara düşer (veri taşınmaz).
+// Convert a raw DB row to an API response; old rows with empty title/type
+// fall back to display defaults (no data migration).
 export function toLocationResponse(
   row: Record<string, unknown>,
 ): LocationResponse {
   const title =
     typeof row.title === "string" && row.title.trim()
       ? row.title.trim()
-      : "Konum";
+      : "Location";
   const kind: LocationKind =
     typeof row.kind === "string" && LOCATION_KINDS.includes(row.kind)
       ? (row.kind as LocationKind)
-      : "iliskili";
+      : "related";
   let priority: LocationPriority | null =
     typeof row.priority === "string" &&
     LOCATION_PRIORITIES.includes(row.priority)
       ? (row.priority as LocationPriority)
       : null;
-  if (kind === "olay-yeri") priority = null;
-  // Eski veri taşınmaz: note yalnızca row.note'tan gelir; locationText
-  // onun aliasıdır, boş note eski locationText ile doldurulmaz.
+  if (kind === "crime-scene") priority = null;
+  // No legacy migration: note comes only from row.note; locationText
+  // is its alias, an empty note is not backfilled from old locationText.
   const note =
     typeof row.note === "string" && row.note.trim() ? row.note.trim() : null;
   return {

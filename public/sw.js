@@ -1,15 +1,15 @@
 /* Trace MVP service worker.
  *
- * POST /api/* isteklerini ve /api/cases/<id>/locations/<locId> ile
- * /api/cases/<id>/persons/<personId> yollarındaki PATCH/DELETE isteklerini
- * çevrimdışıyken IndexedDB kuyruğuna alır (202 ile),
- * bağlantı dönünce sırayla tekrar gönderir. Çakışmada (HTTP 409) sunucu kaydı
- * esas alınır: kuyruktaki kopya silinir.
+ * Queues POST /api/* requests and PATCH/DELETE requests on
+ * /api/cases/<id>/locations/<locId> and /api/cases/<id>/persons/<personId>
+ * paths into the IndexedDB queue while offline (202),
+ * then replays them in order when connectivity returns. On conflict (HTTP 409)
+ * the server record wins: the queued copy is deleted.
  *
- * Not: fotoğraf/video gibi multipart gövdeler ArrayBuffer olarak aynen
- * saklanır ve orijinal Content-Type (boundary dahil) ile birebir geri
- * oynatılır. Gövde okunamaz ya da kuyruğa yazılamazsa 503 {queued:false}
- * dönülür; kayıt kaybolmaz, arayan taslağı elinde tutar.
+ * Note: multipart bodies such as photos/videos are stored verbatim as ArrayBuffers
+ * and replayed byte-for-byte with the original Content-Type (boundary included).
+ * When the body cannot be read or queued, a retryable 503 {queued:false}
+ * is returned; the record is not lost and the caller keeps its draft.
  */
 "use strict";
 
@@ -84,8 +84,8 @@ function scheduleSync() {
 }
 
 async function replay(entry) {
-  // Başlıklar ve gövde birebir korunur: multipart yüklemeler orijinal
-  // Content-Type (boundary dahil) ile aynen geri oynatılır.
+  // Headers and body are preserved verbatim: multipart uploads are replayed
+  // exactly with the original Content-Type (including boundary).
   const headers = Object.assign({}, entry.headers);
   const init = { method: entry.method || "POST", headers };
   if (entry.bodyBuffer && entry.bodyBuffer.byteLength) {
@@ -95,18 +95,18 @@ async function replay(entry) {
   }
   const res = await fetch(entry.url, init);
   if (res.ok || res.status === 409) {
-    // 409: sunucu kaydı esas, yerel kopya düşer.
+    // 409: the server record wins, the local copy is dropped.
     await removeEntry(entry.id);
     return "done";
   }
-  // Sunucu hatası: katı FIFO için patlat, flushQueue dursun; kayıt kalır.
+  // Server error: throw for strict FIFO so flushQueue stops; the record stays.
   throw new Error("outbox replay failed: http " + res.status);
 }
 
 async function flushQueue() {
   const all = await readAll();
   for (const entry of all) {
-    // İlk hatada dur (ağ ya da sunucu): varış sırası kuyruk sırasıyla aynı kalır.
+    // Stop at the first error (network or server): arrival order stays the same as queue order.
     try {
       await replay(entry);
     } catch (err) {
@@ -162,8 +162,8 @@ self.addEventListener("fetch", (event) => {
           }
         }
       } catch (err) {
-        // Gövde okunamadı (çok büyük dosya olabilir): kayıt kuyruğa girmedi,
-        // arayan taslağı elinde tutsun diye yeniden denenebilir 503 dön.
+        // Body unreadable (possibly a very large file): the record never entered the queue,
+        // return a retryable 503 so the caller keeps its draft.
         return new Response(JSON.stringify({ queued: false }), {
           status: 503,
           headers: { "Content-Type": "application/json" },
@@ -176,9 +176,9 @@ self.addEventListener("fetch", (event) => {
         try {
           await enqueue(entry);
         } catch (dbErr) {
-          // Kuyruğa yazılamadı: 503 dön, arayan form verisini saklasın.
+          // Queue write failed: return 503 so the caller keeps the form data.
           return new Response(
-            JSON.stringify({ queued: false, error: "kuyruk yazılamadı" }),
+            JSON.stringify({ queued: false, error: "queue write failed" }),
             {
               status: 503,
               headers: { "Content-Type": "application/json" },
@@ -195,14 +195,14 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
-// Background Sync (destekleyen tarayıcılar).
+// Background Sync (supporting browsers).
 self.addEventListener("sync", (event) => {
   if (event.tag === SYNC_TAG) {
     event.waitUntil(flushQueue());
   }
 });
 
-// Desteklemeyenler için (örn. iOS Safari): sayfa "FLUSH_OUTBOX" yollar.
+// For non-supporters (e.g. iOS Safari): the page sends "FLUSH_OUTBOX".
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "FLUSH_OUTBOX") {
     if (event.waitUntil) event.waitUntil(flushQueue());

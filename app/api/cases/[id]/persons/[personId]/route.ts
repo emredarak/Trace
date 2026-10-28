@@ -18,7 +18,7 @@ function isRelatedVictim(caseId: string, personId: string): boolean {
   return Boolean(
     getDb()
       .prepare(
-        "SELECT id FROM case_persons WHERE id = ? AND caseId = ? AND type = 'maktul'",
+        "SELECT id FROM case_persons WHERE id = ? AND caseId = ? AND type = 'victim'",
       )
       .get(personId, caseId),
   );
@@ -54,13 +54,13 @@ export async function PATCH(req: Request, { params }: Params) {
     return NextResponse.json(
       {
         error:
-          "person.relatedVictimId must reference a maktul person in the same case",
+          "person.relatedVictimId must reference a victim person in the same case",
       },
       { status: 400 },
     );
   }
   const db = getDb();
-  const clearAudio = normalized.type === "maktul";
+  const clearAudio = normalized.type === "victim";
   db.transaction(() => {
     db.prepare(
       `UPDATE case_persons SET name = ?, age = ?, gender = ?, note = ?, type = ?, relatedVictimId = ?, relationship = ?, unidentified = ?, contactStatus = ?${clearAudio ? ", audioFile = NULL" : ""} WHERE id = ? AND caseId = ?`,
@@ -77,7 +77,7 @@ export async function PATCH(req: Request, { params }: Params) {
       personId,
       id,
     );
-    if (existing.type === "maktul" && normalized.type !== "maktul") {
+    if (existing.type === "victim" && normalized.type !== "victim") {
       db.prepare(
         "UPDATE case_persons SET relatedVictimId = NULL, relationship = NULL WHERE relatedVictimId = ? AND caseId = ?",
       ).run(personId, id);

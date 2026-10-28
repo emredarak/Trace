@@ -5,41 +5,41 @@ import {
 } from "../lib/evidences";
 
 describe("normalizeEvidenceInput", () => {
-  it("başlık + not geçerlidir", () => {
+  it("title + note is valid", () => {
     expect(
-      normalizeEvidenceInput({ title: " Kovan ", note: " yerde bulundu " }),
-    ).toEqual({ title: "Kovan", note: "yerde bulundu" });
+      normalizeEvidenceInput({ title: " Casing ", note: " found at the scene " }),
+    ).toEqual({ title: "Casing", note: "found at the scene" });
   });
 
-  it("başlık zorunludur", () => {
-    expect(() => normalizeEvidenceInput({ note: "not" })).toThrow(/title/);
+  it("title is required", () => {
+    expect(() => normalizeEvidenceInput({ note: "note" })).toThrow(/title/);
     expect(() =>
-      normalizeEvidenceInput({ title: "  ", note: "not" }),
+      normalizeEvidenceInput({ title: "  ", note: "note" }),
     ).toThrow(/title/);
   });
 
-  it("görsel, ses ya da nottan en az biri zorunludur", () => {
-    expect(() => normalizeEvidenceInput({ title: "Delil" })).toThrow(
+  it("at least one of image, audio, or note is required", () => {
+    expect(() => normalizeEvidenceInput({ title: "Evidence" })).toThrow(
       /at least one/,
     );
     expect(
-      normalizeEvidenceInput({ title: "Delil", hasImage: true }),
-    ).toMatchObject({ title: "Delil" });
+      normalizeEvidenceInput({ title: "Evidence", hasImage: true }),
+    ).toMatchObject({ title: "Evidence" });
     expect(
-      normalizeEvidenceInput({ title: "Delil", hasAudio: true }),
-    ).toMatchObject({ title: "Delil" });
+      normalizeEvidenceInput({ title: "Evidence", hasAudio: true }),
+    ).toMatchObject({ title: "Evidence" });
   });
 });
 
 describe("toEvidenceResponse", () => {
-  it("yeni alanları taşır", () => {
+  it("carries the new fields", () => {
     expect(
       toEvidenceResponse({
         id: "e1",
         caseId: "c1",
         type: "evidence",
-        title: "Bıçak",
-        note: "not",
+        title: "Knife",
+        note: "note",
         imageFile: "a.jpg",
         audioFile: "b.mp3",
         createdAt: "2026-01-01T00:00:00.000Z",
@@ -48,24 +48,24 @@ describe("toEvidenceResponse", () => {
       id: "e1",
       caseId: "c1",
       type: "evidence",
-      title: "Bıçak",
-      note: "not",
+      title: "Knife",
+      note: "note",
       imageFile: "a.jpg",
       audioFile: "b.mp3",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
   });
 
-  it("eski kayıtlarda başlık türden türetilir", () => {
+  it("derives the title from the type for legacy records", () => {
     expect(
       toEvidenceResponse({
         id: "e2",
         caseId: "c1",
         type: "transcript",
-        note: "metin",
+        note: "text",
         createdAt: "2026-01-01T00:00:00.000Z",
       }).title,
-    ).toBe("İfade");
+    ).toBe("Statement");
     expect(
       toEvidenceResponse({
         id: "e3",
@@ -74,15 +74,15 @@ describe("toEvidenceResponse", () => {
         note: "{}",
         createdAt: "2026-01-01T00:00:00.000Z",
       }).title,
-    ).toBe("Fotoğraf");
+    ).toBe("Photo");
     expect(
       toEvidenceResponse({
         id: "e4",
         caseId: "c1",
-        type: "kovan",
+        type: "casing",
         note: "9mm",
         createdAt: "2026-01-01T00:00:00.000Z",
       }).title,
-    ).toBe("kovan");
+    ).toBe("casing");
   });
 });

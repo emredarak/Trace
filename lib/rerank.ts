@@ -54,26 +54,26 @@ export function matchedFieldsFor(
 function describeCase(c: CaseRecord): string {
   const parts = [
     `id: ${c.id}`,
-    `özet: ${c.summary}`,
-    c.crimeType ? `suç türü: ${c.crimeType}` : "",
-    c.locationType ? `konum türü: ${c.locationType}` : "",
-    c.weapon ? `silah: ${c.weapon}` : "",
-    c.mo ? `yöntem: ${c.mo}` : "",
+    `summary: ${c.summary}`,
+    c.crimeType ? `crime type: ${c.crimeType}` : "",
+    c.locationType ? `location type: ${c.locationType}` : "",
+    c.weapon ? `weapon: ${c.weapon}` : "",
+    c.mo ? `method: ${c.mo}` : "",
   ].filter(Boolean);
   return `- ${parts.join(" | ")}`;
 }
 
 function buildPrompt(cases: CaseRecord[], query: CaseRecord): string {
   return [
-    "Aşağıdaki sorgu vakaya en çok benzeyen aday vakaları puanla.",
+    "Rank the candidate cases most similar to the query case.",
     "",
-    `Sorgu vaka: ${describeCase(query)}`,
+    `Query case: ${describeCase(query)}`,
     "",
-    "Aday vakalar:",
+    "Candidate cases:",
     ...cases.map((c) => describeCase(c)),
     "",
-    "Yalnızca şu JSON dizisini döndür, başka metin yazma:",
-    '[{"caseId": "<aday id>", "score": <1-10 benzerlik puanı>, "reason": "<kısa gerekçe>", "quote": "<adaydan kısa alıntı>"}]',
+    "Return only this JSON array, no other text:",
+    '[{"caseId": "<candidate id>", "score": <1-10 similarity score>, "reason": "<short reason>", "quote": "<short quote from candidate>"}]',
   ].join("\n");
 }
 
@@ -115,7 +115,7 @@ export async function rerank(
   try {
     const raw = await client.chatCompletion(buildPrompt(cases, query));
     const parsed: unknown = JSON.parse(stripFences(raw));
-    if (!Array.isArray(parsed)) throw new Error("model yanıtı dizi değil");
+    if (!Array.isArray(parsed)) throw new Error("model response is not an array");
 
     const scored: RankedCase[] = [];
     const seen = new Set<string>();
@@ -135,7 +135,7 @@ export async function rerank(
         reason:
           typeof entry.reason === "string" && entry.reason.trim().length > 0
             ? entry.reason.trim()
-            : "model gerekçe vermedi",
+            : "model gave no reason",
         quote:
           typeof entry.quote === "string" && entry.quote.trim().length > 0
             ? entry.quote.trim()
@@ -143,26 +143,26 @@ export async function rerank(
         matchedFields: matchedFieldsFor(query, candidate),
       });
     }
-    if (seen.size === 0) throw new Error("model yanıtında geçerli aday yok");
+    if (seen.size === 0) throw new Error("no valid candidate in model response");
 
     scored.sort((x, y) => y.score - x.score);
-    // Modelin atladığı adayları puansız ekle (kayıp yok), sonra ilk 5.
+    // Add candidates skipped by the model unscored (no loss), then take the first 5.
     for (const c of cases) {
-      if (!seen.has(c.id)) scored.push(toUnscored(c, query, "model listesinde yok"));
+      if (!seen.has(c.id)) scored.push(toUnscored(c, query, "not in model list"));
     }
     return scored.slice(0, MAX_RESULTS);
   } catch {
-    // Bozuk yanıt / istemci hatası: ilk 5 adayı puansız, giriş sırasıyla listele.
+    // Malformed response / client error: list the first 5 candidates unscored, in input order.
     return cases
-      .map((c) => toUnscored(c, query, "model yanıtı kullanılamadı"))
+      .map((c) => toUnscored(c, query, "model response unavailable"))
       .slice(0, MAX_RESULTS);
   }
 }
 
 export const RERANK_TIMEOUT_MS = 15_000;
 
-// Yavaş/yanıtsız model istemcisinde isteği asılı bırakmaz: 15 sn'de zaman
-// aşımına uğrar ve mevcut geri dönüş yoluna (puansız liste, kayıp yok) düşer.
+// Never leaves the request hanging on a slow/unresponsive model client: times out after 15s
+// and falls back to the existing fallback path (unscored list, no loss).
 export async function rerankWithTimeout(
   cases: CaseRecord[],
   query: CaseRecord,
@@ -174,7 +174,7 @@ export async function rerankWithTimeout(
   try {
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(
-        () => reject(new Error("rerank zaman aşımı")),
+        () => reject(new Error("rerank timeout")),
         timeoutMs,
       );
     });
@@ -185,7 +185,7 @@ export async function rerankWithTimeout(
     return await Promise.race([pending, timeout]);
   } catch {
     return cases
-      .map((c) => toUnscored(c, query, "model yanıtı kullanılamadı"))
+      .map((c) => toUnscored(c, query, "model response unavailable"))
       .slice(0, MAX_RESULTS);
   } finally {
     if (timer !== undefined) clearTimeout(timer);

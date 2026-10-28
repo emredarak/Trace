@@ -16,51 +16,51 @@ function makeCase(
 
 const query = makeCase({
   id: "query",
-  summary: "su kenarında kesici aletle gece saldırısı",
-  crimeType: "cinayet",
-  locationType: "su kenarı",
-  weapon: "kesici alet",
-  mo: "gece yaklaşma",
+  summary: "night stabbing at the waterfront",
+  crimeType: "homicide",
+  locationType: "waterfront",
+  weapon: "sharp object",
+  mo: "night approach",
 });
 
 function threeCases(): CaseRecord[] {
   return [
     makeCase({
       id: "case-a",
-      summary: "su kenarında kesici aletle saldırı",
-      crimeType: "gasp",
-      locationType: "su kenarı",
-      weapon: "kesici alet",
-      mo: "gündüz tehdit",
+      summary: "waterfront stabbing attack",
+      crimeType: "robbery",
+      locationType: "waterfront",
+      weapon: "sharp object",
+      mo: "daytime threat",
     }),
     makeCase({
       id: "case-b",
-      summary: "su kenarında tabancalı kavga",
-      crimeType: "yaralama",
-      locationType: "su kenarı",
-      weapon: "tabanca",
+      summary: "waterfront gunfight",
+      crimeType: "assault",
+      locationType: "waterfront",
+      weapon: "pistol",
     }),
     makeCase({
       id: "case-c",
-      summary: "şehir merkezinde bıçaklı cinayet",
-      crimeType: "cinayet",
-      locationType: "şehir merkezi",
-      weapon: "tabanca",
+      summary: "downtown knife homicide",
+      crimeType: "homicide",
+      locationType: "city center",
+      weapon: "pistol",
     }),
   ];
 }
 
 describe("rerank", () => {
-  it("sahte istemciyle 3 adayı puan sırasına dizer; her maddede score, reason, quote, matchedFields dolu", async () => {
+  it("orders 3 candidates by score with a fake client; every item has score, reason, quote, matchedFields filled", async () => {
     const [a, b, c] = threeCases();
     let seenPrompt = "";
     const fake = {
       chatCompletion: async (prompt: string) => {
         seenPrompt = prompt;
         return JSON.stringify([
-          { caseId: b.id, score: 6, reason: "konum uyuyor", quote: b.summary },
-          { caseId: a.id, score: 9, reason: "konum ve silah uyuyor", quote: a.summary },
-          { caseId: c.id, score: 3, reason: "sadece suç türü uyuyor", quote: c.summary },
+          { caseId: b.id, score: 6, reason: "location matches", quote: b.summary },
+          { caseId: a.id, score: 9, reason: "location and weapon match", quote: a.summary },
+          { caseId: c.id, score: 3, reason: "only crime type matches", quote: c.summary },
         ]);
       },
     };
@@ -81,10 +81,10 @@ describe("rerank", () => {
     expect(seenPrompt).toContain(a.summary);
   });
 
-  it("bozuk model yanıtında adayları puansız listeler, kayıp olmaz", async () => {
+  it("lists candidates unscored without loss on malformed model responses", async () => {
     const [a, b, c] = threeCases();
     const fake = {
-      chatCompletion: async (_prompt: string) => "bozuk yanıt {{{",
+      chatCompletion: async (_prompt: string) => "broken response {{{",
     };
 
     const ranked = await rerank([a, b, c], query, fake);
@@ -94,7 +94,7 @@ describe("rerank", () => {
     expect(ranked[0].quote).toBe(a.summary);
   });
 
-  it("istemci hatasında adayları puansız listeler, kayıp olmaz", async () => {
+  it("lists candidates unscored without loss on client errors", async () => {
     const [a, b, c] = threeCases();
     const fake = {
       chatCompletion: async (_prompt: string) => {
@@ -107,18 +107,18 @@ describe("rerank", () => {
     expect(ranked.map((r) => r.caseId)).toEqual([a.id, b.id, c.id]);
   });
 
-  it("bozuk yanıtta geri dönüş ilk 5 ile sınırlıdır (6 adaydan ilk 5)", async () => {
+  it("malformed-response fallback limited to the first 5 (first 5 of 6 candidates)", async () => {
     const base = threeCases();
     const extra = [4, 5, 6].map((n) =>
       makeCase({
         id: `case-x${n}`,
-        summary: `su kenarında vaka ${n}`,
-        locationType: "su kenarı",
+        summary: `waterfront case ${n}`,
+        locationType: "waterfront",
       }),
     );
     const all = [...base, ...extra];
     const fake = {
-      chatCompletion: async (_prompt: string) => "bozuk yanıt {{{",
+      chatCompletion: async (_prompt: string) => "broken response {{{",
     };
 
     const ranked = await rerank(all, query, fake);
@@ -133,13 +133,13 @@ describe("rerank", () => {
     }
   });
 
-  it("ilk 5'i döndürür (6 adaydan en yüksek puanlı 5)", async () => {
+  it("returns the first 5 (top 5 of 6 candidates by score)", async () => {
     const base = threeCases();
     const extra = [4, 5, 6].map((n) =>
       makeCase({
         id: `case-x${n}`,
-        summary: `su kenarında vaka ${n}`,
-        locationType: "su kenarı",
+        summary: `waterfront case ${n}`,
+        locationType: "waterfront",
       }),
     );
     const all = [...base, ...extra];
@@ -150,7 +150,7 @@ describe("rerank", () => {
           all.map((c, i) => ({
             caseId: c.id,
             score: scores[i],
-            reason: `gerekçe ${i}`,
+            reason: `reason ${i}`,
             quote: c.summary,
           })),
         ),

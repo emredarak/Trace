@@ -24,7 +24,7 @@ const personParamsOf = (id: string, personId: string) => ({
   params: Promise.resolve({ id, personId }),
 });
 
-async function makeCase(summary = "kişili vaka"): Promise<string> {
+async function makeCase(summary = "case with person"): Promise<string> {
   const body = (await (
     await createCase(
       jsonReq("POST", { summary }),
@@ -50,29 +50,29 @@ beforeEach(() => {
   initDb();
 });
 
-describe("kişi uçları", () => {
-  it("(a) kişi POST 201 ve detay GET'te persons içinde döner", async () => {
+describe("person endpoints", () => {
+  it("(a) person POST 201 and appears in detail GET inside persons", async () => {
     const id = await makeCase();
     const { res, body } = await add(id, {
-      name: "Ayşe Yılmaz",
+      name: "Alice Johnson",
       age: 34,
-      gender: "kadın",
-      note: "not",
-      type: "maktul",
-      contactStatus: "ulasildi",
+      gender: "female",
+      note: "note",
+      type: "victim",
+      contactStatus: "reached",
     });
     expect(res.status).toBe(201);
     expect(body).toMatchObject({
       caseId: id,
-      name: "Ayşe Yılmaz",
+      name: "Alice Johnson",
       age: 34,
-      gender: "kadın",
-      note: "not",
-      type: "maktul",
+      gender: "female",
+      note: "note",
+      type: "victim",
       relatedVictimId: null,
       relationship: null,
       unidentified: false,
-      contactStatus: "ulasildi",
+      contactStatus: "reached",
     });
     expect(typeof body.id).toBe("string");
     expect(typeof body.createdAt).toBe("string");
@@ -81,126 +81,126 @@ describe("kişi uçları", () => {
       await getCase(new Request("http://localhost/x"), paramsOf(id))
     ).json()) as { persons: Array<Record<string, unknown>> };
     expect(detail.persons).toHaveLength(1);
-    expect(detail.persons[0]).toMatchObject({ name: "Ayşe Yılmaz", type: "maktul" });
+    expect(detail.persons[0]).toMatchObject({ name: "Alice Johnson", type: "victim" });
     expect(await list(id)).toHaveLength(1);
   });
 
-  it("(b) tanık aynı vakadaki maktüle ilişkiyle eklenir; başka vakaya/maktül olmayana ilişki 400", async () => {
+  it("(b) witness added with relation to same-case victim; other-case/non-victim relation 400", async () => {
     const id = await makeCase();
-    const otherId = await makeCase("başka vaka");
-    const victim = (await add(id, { name: "Maktul A", type: "maktul" })).body;
-    const otherVictim = (await add(otherId, { name: "Maktul B", type: "maktul" })).body;
-    const witness0 = (await add(id, { name: "Tanık Sıfır", type: "tanik" })).body;
+    const otherId = await makeCase("other case");
+    const victim = (await add(id, { name: "Victim A", type: "victim" })).body;
+    const otherVictim = (await add(otherId, { name: "Victim B", type: "victim" })).body;
+    const witness0 = (await add(id, { name: "Witness Zero", type: "witness" })).body;
 
     const ok = await add(id, {
-      name: "Tanık A",
-      type: "tanik",
+      name: "Witness A",
+      type: "witness",
       relatedVictimId: victim.id,
-      relationship: "eşi",
+      relationship: "spouse",
     });
     expect(ok.res.status).toBe(201);
     expect(ok.body.relatedVictimId).toBe(victim.id);
-    expect(ok.body.relationship).toBe("eşi");
+    expect(ok.body.relationship).toBe("spouse");
 
     const crossCase = await add(id, {
-      name: "Tanık B",
-      type: "tanik",
+      name: "Witness B",
+      type: "witness",
       relatedVictimId: otherVictim.id,
-      relationship: "eşi",
+      relationship: "spouse",
     });
     expect(crossCase.res.status).toBe(400);
 
     const notVictim = await add(id, {
-      name: "Tanık C",
-      type: "supheli",
+      name: "Witness C",
+      type: "suspect",
       relatedVictimId: witness0.id,
-      relationship: "arkadaşı",
+      relationship: "friend",
     });
     expect(notVictim.res.status).toBe(400);
 
     const missing = await add(id, {
-      name: "Tanık D",
-      type: "tanik",
-      relatedVictimId: "yok",
+      name: "Witness D",
+      type: "witness",
+      relatedVictimId: "missing",
     });
     expect(missing.res.status).toBe(400);
   });
 
-  it("(c) maktüle ilişki gönderilirse null saklanır", async () => {
+  it("(c) relation sent to a victim is stored as null", async () => {
     const id = await makeCase();
-    const victim = (await add(id, { name: "Maktul A", type: "maktul" })).body;
+    const victim = (await add(id, { name: "Victim A", type: "victim" })).body;
     const second = await add(id, {
-      name: "Maktul B",
-      type: "maktul",
+      name: "Victim B",
+      type: "victim",
       relatedVictimId: victim.id,
-      relationship: "kardeşi",
+      relationship: "sibling",
     });
     expect(second.res.status).toBe(201);
     expect(second.body.relatedVictimId).toBeNull();
     expect(second.body.relationship).toBeNull();
   });
 
-  it("(d) istemci kimliği benimsenir, tekrar POST aynı satırı döner, başka vaka kimliği 400", async () => {
+  it("(d) client identity adopted, repeat POST returns same row, other-case identity 400", async () => {
     const id = await makeCase();
-    const otherId = await makeCase("başka vaka 2");
-    const payload = { id: "istemci-kisi-1", name: "Çevrimdışı Kişi", type: "tanik" };
+    const otherId = await makeCase("other case 2");
+    const payload = { id: "client-person-1", name: "Offline Person", type: "witness" };
     const first = await add(id, payload);
     expect(first.res.status).toBe(201);
-    expect(first.body.id).toBe("istemci-kisi-1");
+    expect(first.body.id).toBe("client-person-1");
 
     const dup = await add(id, payload);
     expect(dup.res.status).toBe(200);
-    expect(dup.body.id).toBe("istemci-kisi-1");
+    expect(dup.body.id).toBe("client-person-1");
     expect(await list(id)).toHaveLength(1);
 
     const cross = await add(otherId, payload);
     expect(cross.res.status).toBe(400);
   });
 
-  it("(e) PATCH alanları günceller; maktülün tipi değişince bağlı tanığın ilişkisi temizlenir", async () => {
+  it("(e) PATCH updates fields; changing the victim type clears the linked witness relation", async () => {
     const id = await makeCase();
-    const victim = (await add(id, { name: "Maktul A", type: "maktul" })).body;
+    const victim = (await add(id, { name: "Victim A", type: "victim" })).body;
     const witness = (
       await add(id, {
-        name: "Tanık A",
-        type: "tanik",
+        name: "Witness A",
+        type: "witness",
         relatedVictimId: victim.id,
-        relationship: "komşusu",
+        relationship: "neighbor",
       })
     ).body;
 
     const patchRes = await patchPerson(
       jsonReq("PATCH", {
-        name: "Tanık Yeni",
+        name: "New Witness",
         age: 41,
-        gender: "erkek",
-        note: "güncel not",
-        type: "supheli",
+        gender: "male",
+        note: "updated note",
+        type: "suspect",
         relatedVictimId: victim.id,
-        relationship: "komşusu",
+        relationship: "neighbor",
         unidentified: false,
-        contactStatus: "ulasilamadi",
+        contactStatus: "unreached",
       }),
       personParamsOf(id, String(witness.id)),
     );
     expect(patchRes.status).toBe(200);
     expect(await patchRes.json()).toMatchObject({
-      name: "Tanık Yeni",
+      name: "New Witness",
       age: 41,
-      gender: "erkek",
-      note: "güncel not",
-      type: "supheli",
+      gender: "male",
+      note: "updated note",
+      type: "suspect",
       relatedVictimId: victim.id,
-      relationship: "komşusu",
-      contactStatus: "ulasilamadi",
+      relationship: "neighbor",
+      contactStatus: "unreached",
     });
 
     const typeRes = await patchPerson(
-      jsonReq("PATCH", { name: "Maktul A", type: "tanik" }),
+      jsonReq("PATCH", { name: "Victim A", type: "witness" }),
       personParamsOf(id, String(victim.id)),
     );
     expect(typeRes.status).toBe(200);
-    expect((await typeRes.json()) as Record<string, unknown>).toMatchObject({ type: "tanik" });
+    expect((await typeRes.json()) as Record<string, unknown>).toMatchObject({ type: "witness" });
 
     const persons = await list(id);
     const updatedWitness = persons.find((p) => p.id === witness.id);
@@ -208,36 +208,36 @@ describe("kişi uçları", () => {
     expect(updatedWitness?.relationship).toBeNull();
   });
 
-  it("PATCH başka vakadaki maktüle ilişki 400 döner; bilinmeyen kişi 404", async () => {
+  it("PATCH relation to another-case victim returns 400; unknown person 404", async () => {
     const id = await makeCase();
-    const otherId = await makeCase("başka vaka 3");
-    const otherVictim = (await add(otherId, { name: "Maktul B", type: "maktul" })).body;
-    const witness = (await add(id, { name: "Tanık A", type: "tanik" })).body;
+    const otherId = await makeCase("other case 3");
+    const otherVictim = (await add(otherId, { name: "Victim B", type: "victim" })).body;
+    const witness = (await add(id, { name: "Witness A", type: "witness" })).body;
     const res = await patchPerson(
       jsonReq("PATCH", {
-        name: "Tanık A",
-        type: "tanik",
+        name: "Witness A",
+        type: "witness",
         relatedVictimId: otherVictim.id,
       }),
       personParamsOf(id, String(witness.id)),
     );
     expect(res.status).toBe(400);
     const missing = await patchPerson(
-      jsonReq("PATCH", { name: "X", type: "tanik" }),
-      personParamsOf(id, "yok"),
+      jsonReq("PATCH", { name: "X", type: "witness" }),
+      personParamsOf(id, "missing"),
     );
     expect(missing.status).toBe(404);
   });
 
-  it("(f) DELETE maktülü siler, bağlı tanık durur ve ilişki alanları boştur", async () => {
+  it("(f) DELETE removes the victim, linked witness stays with empty relation fields", async () => {
     const id = await makeCase();
-    const victim = (await add(id, { name: "Maktul A", type: "maktul" })).body;
+    const victim = (await add(id, { name: "Victim A", type: "victim" })).body;
     const witness = (
       await add(id, {
-        name: "Tanık A",
-        type: "tanik",
+        name: "Witness A",
+        type: "witness",
         relatedVictimId: victim.id,
-        relationship: "eşi",
+        relationship: "spouse",
       })
     ).body;
     const del = await deletePerson(
@@ -253,41 +253,41 @@ describe("kişi uçları", () => {
 
     const missing = await deletePerson(
       new Request("http://localhost/x", { method: "DELETE" }),
-      personParamsOf(id, "yok"),
+      personParamsOf(id, "missing"),
     );
     expect(missing.status).toBe(404);
   });
 
-  it("(g) işaretsiz boş ad 400, işaretli boş ad 201", async () => {
+  it("(g) unchecked empty name 400, checked empty name 201", async () => {
     const id = await makeCase();
-    const unnamed = await add(id, { name: "", type: "maktul" });
+    const unnamed = await add(id, { name: "", type: "victim" });
     expect(unnamed.res.status).toBe(400);
-    const unidentified = await add(id, { name: "", type: "maktul", unidentified: true });
+    const unidentified = await add(id, { name: "", type: "victim", unidentified: true });
     expect(unidentified.res.status).toBe(201);
     expect(unidentified.body.name).toBeNull();
     expect(unidentified.body.unidentified).toBe(true);
   });
 
-  it("bilinmeyen vakaya kişi eklenemez ve liste 404 döner", async () => {
+  it("cannot add a person to an unknown case and list returns 404", async () => {
     const res = await addPerson(
-      jsonReq("POST", { name: "X", type: "tanik" }),
-      paramsOf("yok"),
+      jsonReq("POST", { name: "X", type: "witness" }),
+      paramsOf("missing"),
     );
     expect(res.status).toBe(404);
-    const listRes = await listPersons(new Request("http://localhost/x"), paramsOf("yok"));
+    const listRes = await listPersons(new Request("http://localhost/x"), paramsOf("missing"));
     expect(listRes.status).toBe(404);
   });
 });
 
-describe("vaka açarken kişiler", () => {
-  it("(h) persons dizisi (istemci kimlikli ilişki dahil) kaydedilir", async () => {
+describe("opening a case with persons", () => {
+  it("(h) persons array (including client-id relation) is saved", async () => {
     const created = (await (
       await createCase(
         jsonReq("POST", {
-          summary: "kişilerle açılan vaka",
+          summary: "case opened with people",
           persons: [
-            { id: "kisi-tanik", name: "Tanık Önce", type: "tanik", relatedVictimId: "kisi-maktul", relationship: "eşi" },
-            { id: "kisi-maktul", name: "Maktul Sonra", type: "maktul" },
+            { id: "person-witness", name: "Early Witness", type: "witness", relatedVictimId: "person-victim", relationship: "spouse" },
+            { id: "person-victim", name: "Later Victim", type: "victim" },
           ],
         }),
       )
@@ -297,11 +297,11 @@ describe("vaka açarken kişiler", () => {
       await getCase(new Request("http://localhost/x"), paramsOf(created.id))
     ).json()) as { persons: Array<Record<string, unknown>> };
     expect(detail.persons).toHaveLength(2);
-    const witness = detail.persons.find((p) => p.id === "kisi-tanik");
+    const witness = detail.persons.find((p) => p.id === "person-witness");
     expect(witness).toMatchObject({
-      relatedVictimId: "kisi-maktul",
-      relationship: "eşi",
-      type: "tanik",
+      relatedVictimId: "person-victim",
+      relationship: "spouse",
+      type: "witness",
     });
   });
 });

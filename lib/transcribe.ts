@@ -1,12 +1,17 @@
-// Muse Voice Transcribe client (OpenAI-compatible audio endpoint).
+// Muse Voice Transcribe client — POST https://api.meta.ai/v1/asr/transcribe
 //
-// Follows the chatCompletion pattern from meta-client.ts: credentials come
-// from environment variables only, never hardcoded:
-//   META_API_KEY (or LLAMA_API_KEY fallback) - required secret
-//   META_TRANSCRIBE_URL   - optional override; the FULL transcriptions URL
-//                           (e.g. https://host/.../audio/transcriptions)
-//   META_TRANSCRIBE_MODEL - optional model name; omitted from the request
-//                           when unset (server-side default applies)
+// Docs: https://dev.meta.ai/docs/speech-to-text
+// Endpoint accepts multipart/form-data with two parts:
+//   request: JSON {model, audioEncoding:"WAV", mode, languageBias, keywords}
+//   audio:   WAV file (RIFF mono 16-bit PCM at 16 or 24 kHz)
+// Response JSON: {transcript, turns[{turnId,startMs,endMs,transcript,speaker}], ...}
+// We request DIARIZATION so multi-speaker audio comes back attributed (A, B...).
+// Turns map to Transcript segments (start/end in seconds).
+//
+// Credentials come from environment variables only, never hardcoded:
+//   MODEL_API_KEY (or META_API_KEY / LLAMA_API_KEY fallback) - required secret
+//   META_TRANSCRIBE_URL   - optional override (full transcribe URL)
+//   META_TRANSCRIBE_MODEL - optional model override (default muse-voice-transcribe-1.0)
 //
 // Tests inject a fake TranscriptionClient; no network access in tests.
 //
@@ -42,20 +47,71 @@ export function __setTranscribeClientForTests(
   clientOverride = client;
 }
 
-const DEFAULT_TRANSCRIBE_URL =
-  "https://api.llama.com/compat/v1/audio/transcriptions";
+export const DEFAULT_TRANSCRIBE_URL =
+  "https://api.meta.ai/v1/asr/transcribe";
+export const DEFAULT_TRANSCRIBE_MODEL = "muse-voice-transcribe-1.0";
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+
+function isWav(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 12 &&
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WAVE"
+  );
+}
+
+interface TurnRaw {
+  turnId?: unknown;
+  startMs?: unknown;
+  endMs?: unknown;
+  transcript?: unknown;
+  speaker?: unknown;
+}
+
+function segmentFromTurn(turn: TurnRaw): TranscriptSegment | null {
+  if (typeof turn !== "object" || turn === null) return null;
+  const text =
+    typeof turn.transcript === "string" ? turn.transcript.trim() : "";
+  if (!text) return null;
+  const segment: TranscriptSegment = { text };
+  if (typeof turn.speaker === "string" && turn.speaker.trim()) {
+    segment.speaker = turn.speaker.trim();
+  }
+  if (typeof turn.startMs === "number" && Number.isFinite(turn.startMs)) {
+    segment.start = turn.startMs / 1000;
+  }
+  if (typeof turn.endMs === "number" && Number.isFinite(turn.endMs)) {
+    segment.end = turn.endMs / 1000;
+  }
+  return segment;
+}
 
 function normalizeTranscript(raw: unknown): Transcript {
   if (typeof raw !== "object" || raw === null) {
-    throw new Error("transcription yanıtı geçersiz");
+    throw new Error("invalid transcription response");
   }
-  const { text, segments } = raw as {
+  const { text, segments, transcript, turns } = raw as {
     text?: unknown;
     segments?: unknown;
+    transcript?: unknown;
+    turns?: unknown;
   };
+  // Real API shape: {transcript, turns[]}
+  if (typeof transcript === "string" && Array.isArray(turns)) {
+    const full = transcript.trim();
+    if (!full) throw new Error("transcription response has no text");
+    const clean: TranscriptSegment[] = [];
+    for (const entry of turns) {
+      const seg = segmentFromTurn(entry as TurnRaw);
+      if (seg) clean.push(seg);
+    }
+    // PUSH_TO_TALK returns empty turns with full transcript; keep one segment.
+    if (clean.length === 0) return { text: full, segments: [{ text: full }] };
+    return { text: full, segments: clean };
+  }
+  // Legacy/test seam shape: {text, segments[]}
   if (typeof text !== "string" || text.trim().length === 0) {
-    throw new Error("transcription yanıtında metin yok");
+    throw new Error("transcription response has no text");
   }
   const list = Array.isArray(segments) ? segments : [];
   const clean: TranscriptSegment[] = [];
@@ -81,21 +137,33 @@ function normalizeTranscript(raw: unknown): Transcript {
 
 const defaultTranscriptionClient: TranscriptionClient = {
   async transcribeAudio(audio: Buffer, filename: string): Promise<Transcript> {
-    const apiKey = process.env.META_API_KEY ?? process.env.LLAMA_API_KEY;
+    const apiKey =
+      process.env.MODEL_API_KEY ??
+      process.env.META_API_KEY ??
+      process.env.LLAMA_API_KEY;
     if (!apiKey) {
-      throw new Error("META_API_KEY is not set");
+      throw new Error("MODEL_API_KEY is not set");
     }
     const url = process.env.META_TRANSCRIBE_URL ?? DEFAULT_TRANSCRIBE_URL;
-    const model = process.env.META_TRANSCRIBE_MODEL;
+    const model = process.env.META_TRANSCRIBE_MODEL ?? DEFAULT_TRANSCRIBE_MODEL;
 
     const form = new FormData();
     const bytes = new Uint8Array(audio.length);
     bytes.set(audio);
+    const requestPart = JSON.stringify({
+      model,
+      audioEncoding: "WAV",
+      mode: "DIARIZATION",
+      languageBias: ["English"],
+    });
     form.append(
-      "file",
+      "request",
+      new File([requestPart], "request.json", { type: "application/json" }),
+    );
+    form.append(
+      "audio",
       new File([bytes], filename || "audio.wav", { type: "audio/wav" }),
     );
-    if (model) form.append("model", model);
 
     const res = await fetch(url, {
       method: "POST",
@@ -119,15 +187,20 @@ export async function transcribe(
   timeoutMs?: number,
 ): Promise<Transcript> {
   if (!Buffer.isBuffer(audio) || audio.length === 0) {
-    throw new Error("ses verisi boş");
+    throw new Error("audio data is empty");
   }
   if (audio.length > MAX_AUDIO_BYTES) {
-    throw new Error("ses dosyası çok büyük (en fazla 25MB)");
+    throw new Error("audio file too large (max 25MB)");
+  }
+  if (!isWav(audio) && client === defaultTranscriptionClient) {
+    throw new Error(
+      "audio must be WAV (mono 16-bit PCM at 16 or 24 kHz); convert first (e.g. ffmpeg -ac 1 -ar 24000 -c:a pcm_s16le)",
+    );
   }
   const result = await withModelTimeout(
     client.transcribeAudio(audio, filename),
     resolveTimeoutMs(timeoutMs, "META_TRANSCRIBE_TIMEOUT_MS"),
-    "transcription zaman asimi (timeout)",
+    "transcription timeout",
   );
   return normalizeTranscript(result);
 }

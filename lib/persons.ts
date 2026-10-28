@@ -1,7 +1,7 @@
-export type PersonType = "maktul" | "tanik" | "supheli";
-export type ContactStatus = "ulasildi" | "ulasilamadi";
+export type PersonType = "victim" | "witness" | "suspect";
+export type ContactStatus = "reached" | "unreached";
 
-export const PERSON_GENDERS = ["kadın", "erkek", "bilinmiyor"] as const;
+export const PERSON_GENDERS = ["female", "male", "unknown"] as const;
 
 export interface CasePersonDraft {
   id: string;
@@ -32,25 +32,25 @@ export interface NormalizedPerson {
   contactStatus: ContactStatus | null;
 }
 
-const PERSON_TYPES: readonly string[] = ["maktul", "tanik", "supheli"];
-const CONTACT_STATUSES: readonly string[] = ["ulasildi", "ulasilamadi"];
+const PERSON_TYPES: readonly string[] = ["victim", "witness", "suspect"];
+const CONTACT_STATUSES: readonly string[] = ["reached", "unreached"];
 
 const TYPE_COLORS: Record<PersonType, { bg: string; fg: string }> = {
-  maktul: { bg: "#990000", fg: "#FFFFFF" },
-  supheli: { bg: "#6B21A8", fg: "#FFFFFF" },
-  tanik: { bg: "#0050A0", fg: "#FFFFFF" },
+  victim: { bg: "#990000", fg: "#FFFFFF" },
+  suspect: { bg: "#6B21A8", fg: "#FFFFFF" },
+  witness: { bg: "#0050A0", fg: "#FFFFFF" },
 };
 
 export function personTypeLabel(type: PersonType): string {
   switch (type) {
-    case "maktul":
-      return "Maktül";
-    case "tanik":
-      return "Tanık";
-    case "supheli":
-      return "Şüpheli";
+    case "victim":
+      return "Victim";
+    case "witness":
+      return "Witness";
+    case "suspect":
+      return "Suspect";
     default:
-      return "Kişi";
+      return "Person";
   }
 }
 
@@ -62,17 +62,17 @@ export function victimLabel(
   victim: Pick<CasePersonDraft, "id" | "name" | "age" | "gender">,
   victims: Pick<CasePersonDraft, "id" | "name" | "age" | "gender">[],
 ): string {
-  const base = victim.name.trim() ? victim.name.trim() : "Kimliği tespit edilemedi";
+  const base = victim.name.trim() ? victim.name.trim() : "Unidentified";
   const ambiguous = victims.some(
     (v) =>
       v.id !== victim.id &&
-      (v.name.trim() ? v.name.trim() : "Kimliği tespit edilemedi") === base,
+      (v.name.trim() ? v.name.trim() : "Unidentified") === base,
   );
   if (!ambiguous) return base;
   const index = victims.findIndex((v) => v.id === victim.id);
-  const parts = [`Maktül ${index >= 0 ? index + 1 : 1}`];
+  const parts = [`Victim ${index >= 0 ? index + 1 : 1}`];
   const age = typeof victim.age === "string" ? victim.age.trim() : victim.age;
-  if (age !== "" && age !== null && age !== undefined) parts.push(`Yaş ${age}`);
+  if (age !== "" && age !== null && age !== undefined) parts.push(`Age ${age}`);
   if (victim.gender.trim()) parts.push(victim.gender.trim());
   return `${base} (${parts.join(", ")})`;
 }
@@ -98,7 +98,7 @@ export function normalizePersonInput(raw: unknown): NormalizedPerson {
     typeof person.type !== "string" ||
     !PERSON_TYPES.includes(person.type)
   ) {
-    throw new Error("person.type must be 'maktul', 'tanik' or 'supheli'");
+    throw new Error("person.type must be 'victim', 'witness' or 'suspect'");
   }
   const type = person.type as PersonType;
 
@@ -135,7 +135,7 @@ export function normalizePersonInput(raw: unknown): NormalizedPerson {
 
   const gender = normalizeText(person.gender, "person.gender");
   if (gender !== null && !(PERSON_GENDERS as readonly string[]).includes(gender)) {
-    throw new Error("person.gender must be 'kadın', 'erkek' or 'bilinmiyor'");
+    throw new Error("person.gender must be 'female', 'male' or 'unknown'");
   }
 
   const note = normalizeText(person.note, "person.note");
@@ -144,7 +144,7 @@ export function normalizePersonInput(raw: unknown): NormalizedPerson {
   const contactRaw = normalizeText(person.contactStatus, "person.contactStatus");
   if (contactRaw !== null) {
     if (!CONTACT_STATUSES.includes(contactRaw)) {
-      throw new Error("person.contactStatus must be 'ulasildi' or 'ulasilamadi'");
+      throw new Error("person.contactStatus must be 'reached' or 'unreached'");
     }
     contactStatus = contactRaw as ContactStatus;
   }
@@ -154,7 +154,7 @@ export function normalizePersonInput(raw: unknown): NormalizedPerson {
     "person.relatedVictimId",
   );
   let relationship = normalizeText(person.relationship, "person.relationship");
-  if (type === "maktul" || relatedVictimId === null) {
+  if (type === "victim" || relatedVictimId === null) {
     relatedVictimId = null;
     relationship = null;
   }
@@ -207,7 +207,7 @@ export function toPersonResponse(row: Record<string, unknown>): CasePerson {
     relationship: text(row.relationship),
     unidentified: Boolean(row.unidentified),
     contactStatus:
-      row.contactStatus === "ulasildi" || row.contactStatus === "ulasilamadi"
+      row.contactStatus === "reached" || row.contactStatus === "unreached"
         ? row.contactStatus
         : null,
     audioFile: text(row.audioFile),
@@ -230,9 +230,9 @@ export function normalizePersonsInput(raw: unknown): NormalizedPerson[] {
   for (const person of persons) {
     if (person.relatedVictimId !== null) {
       const target = byId.get(person.relatedVictimId);
-      if (!target || target.type !== "maktul") {
+      if (!target || target.type !== "victim") {
         throw new Error(
-          "person.relatedVictimId must reference a maktul person in the same case",
+          "person.relatedVictimId must reference a victim person in the same case",
         );
       }
     }

@@ -9,31 +9,31 @@ beforeEach(() => {
 });
 
 describe("prefilter", () => {
-  it("su kenarı + kesici özellikleri 3 kurgu vaka içinden doğru 2 adayı matchedFields ile döndürür", () => {
+  it("returns the right 2 candidates with matchedFields from 3 fixtures for waterfront + bladed features", () => {
     const a = insertCase({
-      summary: "su kenarında kesici aletle saldırı",
-      crimeType: "cinayet",
-      locationType: "su kenarı",
-      weapon: "kesici alet",
-      mo: "gece yaklaşma",
+      summary: "waterfront stabbing attack",
+      crimeType: "homicide",
+      locationType: "waterfront",
+      weapon: "sharp object",
+      mo: "night approach",
     });
     const b = insertCase({
-      summary: "su kenarında tabancalı kavga",
-      crimeType: "yaralama",
-      locationType: "su kenarı",
-      weapon: "tabanca",
+      summary: "waterfront gunfight",
+      crimeType: "assault",
+      locationType: "waterfront",
+      weapon: "pistol",
     });
     insertCase({
-      summary: "şehir merkezinde tabancalı soygun",
-      crimeType: "gasp",
-      locationType: "şehir merkezi",
-      weapon: "tabanca",
-      mo: "gündüz tehdit",
+      summary: "downtown armed robbery",
+      crimeType: "robbery",
+      locationType: "city center",
+      weapon: "pistol",
+      mo: "daytime threat",
     });
 
     const candidates = prefilter(getDb(), {
-      locationType: "su kenarı",
-      weapon: "kesici",
+      locationType: "waterfront",
+      weapon: "sharp",
     });
 
     expect(candidates).toHaveLength(2);
@@ -47,21 +47,21 @@ describe("prefilter", () => {
     expect(bCandidate?.matchedFields).toEqual(["locationType"]);
   });
 
-  it("boş özelliklerde boş liste döndürür", () => {
-    insertCase({ summary: "su kenarında olay", locationType: "su kenarı" });
+  it("returns an empty list for empty features", () => {
+    insertCase({ summary: "waterfront incident", locationType: "waterfront" });
     expect(prefilter(getDb(), {})).toEqual([]);
   });
 
-  it("varsayılan limiti 20 uygular ve özel limiti dikkate alır", () => {
+  it("applies the default limit of 20 and honors a custom limit", () => {
     for (let i = 0; i < 25; i++) {
       insertCase({
-        summary: `su kenarı vaka ${i}`,
-        locationType: "su kenarı",
+        summary: `waterfront case ${i}`,
+        locationType: "waterfront",
       });
     }
-    const all = prefilter(getDb(), { locationType: "su kenarı" });
+    const all = prefilter(getDb(), { locationType: "waterfront" });
     expect(all).toHaveLength(20);
-    const five = prefilter(getDb(), { locationType: "su kenarı" }, 5);
+    const five = prefilter(getDb(), { locationType: "waterfront" }, 5);
     expect(five).toHaveLength(5);
   });
 });

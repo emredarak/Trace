@@ -10,19 +10,19 @@ import {
 import { normalizeLocationInput } from "../lib/case-schema";
 
 describe("formatDistance", () => {
-  it("1000 m altını metre olarak gösterir", () => {
+  it("shows values under 1000 m in meters", () => {
     expect(formatDistance(850)).toBe("850 m");
   });
 
-  it("1000 m ve üstünü 10 km altında bir ondalıkla km gösterir", () => {
+  it("shows 1000 m and above as km with one decimal below 10 km", () => {
     expect(formatDistance(1240)).toBe("1,2 km");
   });
 
-  it("10 km ve üstünü tam sayı km gösterir", () => {
+  it("shows 10 km and above as whole-number km", () => {
     expect(formatDistance(12300)).toBe("12 km");
   });
 
-  it("yuvarlanmış değere göre terfi eder", () => {
+  it("promotes based on the rounded value", () => {
     expect(formatDistance(999.6)).toBe("1,0 km");
     expect(formatDistance(999.4)).toBe("999 m");
     expect(formatDistance(9999)).toBe("10 km");
@@ -31,7 +31,7 @@ describe("formatDistance", () => {
 });
 
 describe("haversineMeters", () => {
-  it("İstanbul–Ankara arası 350–450 km aralığındadır", () => {
+  it("Istanbul-Ankara is in the 350-450 km range", () => {
     const meters = haversineMeters(
       { latitude: 41.05, longitude: 28.9 },
       { latitude: 39.9334, longitude: 32.8597 },
@@ -42,37 +42,37 @@ describe("haversineMeters", () => {
 });
 
 describe("sortLocations", () => {
-  it("Olay Yeri'ni Kritik/Önemli/Rutin/etiketsizin önüne alır", () => {
+  it("puts Crime Scene ahead of Critical/Important/Routine/untagged", () => {
     const locs = [
-      { title: "etiketsiz", kind: "iliskili", priority: null },
-      { title: "rutin", kind: "iliskili", priority: "rutin" },
-      { title: "olay", kind: "olay-yeri", priority: null },
-      { title: "onemli", kind: "iliskili", priority: "onemli" },
-      { title: "kritik", kind: "iliskili", priority: "kritik" },
+      { title: "untagged", kind: "related", priority: null },
+      { title: "routine", kind: "related", priority: "routine" },
+      { title: "incident", kind: "crime-scene", priority: null },
+      { title: "important", kind: "related", priority: "important" },
+      { title: "critical", kind: "related", priority: "critical" },
     ] as const;
     expect(sortLocations([...locs]).map((l) => l.title)).toEqual([
-      "olay",
-      "kritik",
-      "onemli",
-      "rutin",
-      "etiketsiz",
+      "incident",
+      "critical",
+      "important",
+      "routine",
+      "untagged",
     ]);
   });
 
-  it("aynı grupta giriş sırasını korur", () => {
+  it("preserves insertion order within the same group", () => {
     const locs = [
-      { title: "ilk olay", kind: "olay-yeri", priority: null },
-      { title: "ikinci olay", kind: "olay-yeri", priority: null },
+      { title: "first incident", kind: "crime-scene", priority: null },
+      { title: "second incident", kind: "crime-scene", priority: null },
     ] as const;
     expect(sortLocations([...locs]).map((l) => l.title)).toEqual([
-      "ilk olay",
-      "ikinci olay",
+      "first incident",
+      "second incident",
     ]);
   });
 });
 
 describe("distancePairs", () => {
-  it("koordinatsız konumu atlar ve 2 koordinatlı konumda 1 çift döner", () => {
+  it("skips locations without coordinates; 2 geolocated locations yield 1 pair", () => {
     const pairs = distancePairs([
       { latitude: 41.0082, longitude: 28.9784 },
       { latitude: null, longitude: null },
@@ -84,7 +84,7 @@ describe("distancePairs", () => {
     expect(pairs[0].label).toBe(formatDistance(pairs[0].meters));
   });
 
-  it("3 koordinatlı konumda 3 çift döner ve koordinatsız indeks hiçbir çiftte yer almaz", () => {
+  it("3 geolocated locations yield 3 pairs; the coordinate-less index appears in no pair", () => {
     const pairs = distancePairs([
       { latitude: 41.0082, longitude: 28.9784 },
       { latitude: 41.02, longitude: 28.99 },
@@ -102,7 +102,7 @@ describe("distancePairs", () => {
     ).toBe(true);
   });
 
-  it("tüm çiftlerin etiketi formatDistance(meters) ile aynıdır", () => {
+  it("every pair label matches formatDistance(meters)", () => {
     const pairs = distancePairs([
       { latitude: 41.0082, longitude: 28.9784 },
       { latitude: 41.02, longitude: 28.99 },
@@ -116,89 +116,89 @@ describe("distancePairs", () => {
 });
 
 describe("locationColor / locationLabel", () => {
-  it("Olay Yeri için kırmızı pin ve 'Olay Yeri' etiketi döner", () => {
-    const loc = { kind: "olay-yeri", priority: null } as const;
+  it("returns a red pin and 'Crime Scene' label for Crime Scene", () => {
+    const loc = { kind: "crime-scene", priority: null } as const;
     expect(locationColor(loc).pin).toBe("#C00000");
     expect(locationColor(loc).badgeBg).toBe("#C00000");
-    expect(locationLabel(loc)).toBe("Olay Yeri");
+    expect(locationLabel(loc)).toBe("Crime Scene");
   });
 
-  it("Önemli için siyah yazılı sarı döner", () => {
-    const loc = { kind: "iliskili", priority: "onemli" } as const;
+  it("returns black-on-yellow for Important", () => {
+    const loc = { kind: "related", priority: "important" } as const;
     const color = locationColor(loc);
     expect(color.pin).toBe("#FFD400");
     expect(color.badgeBg).toBe("#FFD400");
     expect(color.badgeFg).toBe("#000000");
-    expect(locationLabel(loc)).toBe("Önemli");
+    expect(locationLabel(loc)).toBe("Important");
   });
 
-  it("diğer önceliklerin etiketlerini döner", () => {
-    expect(locationLabel({ kind: "iliskili", priority: "kritik" })).toBe("Kritik");
-    expect(locationLabel({ kind: "iliskili", priority: "rutin" })).toBe("Rutin");
-    expect(locationLabel({ kind: "iliskili", priority: null })).toBe(
-      "İlişkili Konum",
+  it("returns the labels of the other priorities", () => {
+    expect(locationLabel({ kind: "related", priority: "critical" })).toBe("Critical");
+    expect(locationLabel({ kind: "related", priority: "routine" })).toBe("Routine");
+    expect(locationLabel({ kind: "related", priority: null })).toBe(
+      "Related Location",
     );
-    expect(locationColor({ kind: "iliskili", priority: "kritik" }).pin).toBe(
+    expect(locationColor({ kind: "related", priority: "critical" }).pin).toBe(
       "#B34700",
     );
-    expect(locationColor({ kind: "iliskili", priority: "rutin" }).pin).toBe(
+    expect(locationColor({ kind: "related", priority: "routine" }).pin).toBe(
       "#0050A0",
     );
-    expect(locationColor({ kind: "iliskili", priority: null }).pin).toBe(
+    expect(locationColor({ kind: "related", priority: null }).pin).toBe(
       "#5A5A5A",
     );
   });
 });
 
 describe("normalizeLocationInput", () => {
-  it("kanonik title varsa not = note ?? locationText olur", () => {
+  it("with canonical title, note = note ?? locationText", () => {
     expect(
-      normalizeLocationInput({ title: "Ev", locationText: "arka bahçe" }),
-    ).toMatchObject({ title: "Ev", note: "arka bahçe", kind: "iliskili", priority: null });
+      normalizeLocationInput({ title: "House", locationText: "backyard" }),
+    ).toMatchObject({ title: "House", note: "backyard", kind: "related", priority: null });
     expect(
-      normalizeLocationInput({ title: "Ev", note: "not", locationText: "eski" }),
-    ).toMatchObject({ title: "Ev", note: "not" });
+      normalizeLocationInput({ title: "House", note: "note", locationText: "old" }),
+    ).toMatchObject({ title: "House", note: "note" });
   });
 
-  it("title yoksa note başlık olur, locationText not olur", () => {
+  it("without title, note becomes the title and locationText the note", () => {
     expect(
-      normalizeLocationInput({ note: "Bulunma noktası", locationText: "dere yatağı" }),
-    ).toMatchObject({ title: "Bulunma noktası", note: "dere yatağı" });
+      normalizeLocationInput({ note: "Discovery site", locationText: "creek bed" }),
+    ).toMatchObject({ title: "Discovery site", note: "creek bed" });
   });
 
-  it("yalnız locationText varsa başlık o olur, not boş kalır", () => {
-    expect(normalizeLocationInput({ locationText: "köprü altı" })).toMatchObject({
-      title: "köprü altı",
+  it("with only locationText, it becomes the title and note stays empty", () => {
+    expect(normalizeLocationInput({ locationText: "under the bridge" })).toMatchObject({
+      title: "under the bridge",
       note: null,
     });
   });
 
-  it("yalnız koordinat varsa başlık 'Konum' olur", () => {
+  it("with only coordinates, title becomes 'Location'", () => {
     expect(
       normalizeLocationInput({ latitude: 41.01, longitude: 28.97 }),
-    ).toMatchObject({ title: "Konum", note: null, latitude: 41.01, longitude: 28.97 });
+    ).toMatchObject({ title: "Location", note: null, latitude: 41.01, longitude: 28.97 });
   });
 
-  it("hiçbir şey yoksa hata verir", () => {
+  it("throws when there is nothing", () => {
     expect(() => normalizeLocationInput({})).toThrow();
   });
 
-  it("kind varsayılanı iliskili'dir; geçersiz kind hata verir", () => {
-    expect(normalizeLocationInput({ title: "x" }).kind).toBe("iliskili");
-    expect(() => normalizeLocationInput({ title: "x", kind: "baska" })).toThrow();
+  it("kind defaults to related; invalid kind throws", () => {
+    expect(normalizeLocationInput({ title: "x" }).kind).toBe("related");
+    expect(() => normalizeLocationInput({ title: "x", kind: "other" })).toThrow();
   });
 
-  it("Olay Yeri'nde priority null yazılır; geçersiz öncelik hata verir", () => {
+  it("priority is written null for Crime Scene; invalid priority throws", () => {
     expect(
-      normalizeLocationInput({ title: "x", kind: "olay-yeri", priority: "kritik" })
+      normalizeLocationInput({ title: "x", kind: "crime-scene", priority: "critical" })
         .priority,
     ).toBeNull();
     expect(
-      () => normalizeLocationInput({ title: "x", priority: "baska" }),
+      () => normalizeLocationInput({ title: "x", priority: "other" }),
     ).toThrow();
   });
 
-  it("koordinatlar birlikte olmalı ve aralık içinde olmalıdır", () => {
+  it("coordinates must come together and be in range", () => {
     expect(() => normalizeLocationInput({ title: "x", latitude: 41 })).toThrow();
     expect(
       () => normalizeLocationInput({ title: "x", latitude: 91, longitude: 29 }),

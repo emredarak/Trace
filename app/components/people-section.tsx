@@ -63,14 +63,14 @@ export function PeopleSection({
   dirty,
   status,
 }: PeopleSectionProps) {
-  // undefined: panel kapalı, null: yeni kişi, draft: düzenlenen kişi.
+  // undefined: panel closed, null: new person, draft: person being edited.
   const [editor, setEditor] = useState<CasePersonDraft | null | undefined>(undefined);
 
   function handleConfirm(draft: CasePersonDraft) {
     if (editor) {
       let next = persons.map((p) => (p.id === editor.id ? draft : p));
-      // Maktül başka türe çevrildiyse ona bağlı ilişkiler boşalır.
-      if (editor.type === "maktul" && draft.type !== "maktul") {
+      // When a victim is converted to another type, relations pointing to them are cleared.
+      if (editor.type === "victim" && draft.type !== "victim") {
         next = clearRelationsTo(next, draft.id);
       }
       onChange(next);
@@ -82,14 +82,14 @@ export function PeopleSection({
 
   function removePerson(person: CasePersonDraft) {
     let next = persons.filter((p) => p.id !== person.id);
-    if (person.type === "maktul") {
+    if (person.type === "victim") {
       next = clearRelationsTo(next, person.id);
     }
     onChange(next);
   }
 
   const victimsForEditor = persons.filter(
-    (p) => p.type === "maktul" && (!editor || p.id !== editor.id),
+    (p) => p.type === "victim" && (!editor || p.id !== editor.id),
   );
 
   return (
@@ -108,16 +108,16 @@ export function PeopleSection({
         id={`${idPrefix}-kisiler-baslik`}
         style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}
       >
-        Kişiler
+        People
       </h2>
 
-      {persons.length === 0 ? <p style={textStyle}>Ekli kişi yok.</p> : null}
+      {persons.length === 0 ? <p style={textStyle}>No people added.</p> : null}
       <ul style={{ paddingLeft: "1.25rem" }}>
         {persons.map((person) => {
           const color = personTypeColor(person.type);
-          const victims = persons.filter((p) => p.type === "maktul");
+          const victims = persons.filter((p) => p.type === "victim");
           const relatedVictim =
-            person.type !== "maktul" && person.relatedVictimId
+            person.type !== "victim" && person.relatedVictimId
               ? persons.find((p) => p.id === person.relatedVictimId)
               : undefined;
           return (
@@ -134,55 +134,55 @@ export function PeopleSection({
             >
               {person.name ? (
                 <strong>
-                  {person.type === "maktul"
+                  {person.type === "victim"
                     ? victimLabel(person, victims)
                     : person.name}{" "}
                 </strong>
-              ) : person.type === "maktul" ? (
+              ) : person.type === "victim" ? (
                 <span>{victimLabel(person, victims)} </span>
               ) : null}
               <span style={{ ...badgeStyle, background: color.bg, color: color.fg }}>
                 {personTypeLabel(person.type)}
               </span>{" "}
-              {person.age ? <span>Yaş: {person.age} </span> : null}
+              {person.age ? <span>Age: {person.age} </span> : null}
               {person.gender ? <span>{person.gender} </span> : null}
               {person.note ? <span>{person.note} </span> : null}
               {relatedVictim ? (
                 <span>
-                  İlişkili Maktül: {victimLabel(relatedVictim, victims)}
+                  Related Victim: {victimLabel(relatedVictim, victims)}
                   {person.relationship ? ` (${person.relationship})` : ""}{" "}
                 </span>
               ) : null}
               {person.unidentified ? (
                 <span style={{ ...badgeStyle, background: "#FFD400", color: "#000000" }}>
-                  Kimliği Tespit Edilemedi
+                  Unidentified
                 </span>
               ) : null}{" "}
-              {person.contactStatus === "ulasildi" ? (
+              {person.contactStatus === "reached" ? (
                 <span style={{ ...badgeStyle, background: "#005C1F", color: "#FFFFFF" }}>
-                  Ulaşıldı
+                  Reached
                 </span>
-              ) : person.contactStatus === "ulasilamadi" ? (
+              ) : person.contactStatus === "unreached" ? (
                 <span style={{ ...badgeStyle, background: "#B34700", color: "#FFFFFF" }}>
-                  Ulaşılamadı
+                  Not reached
                 </span>
               ) : null}{" "}
-              {person.type !== "maktul" && person.audioFile && !person.removeAudio ? (
+              {person.type !== "victim" && person.audioFile && !person.removeAudio ? (
                 <audio
                   controls
                   src={evidenceFileUrl(person.audioFile)}
                   style={{ display: "block", margin: "0.5rem 0" }}
                 />
-              ) : person.type !== "maktul" && person.audio ? (
-                <span>Sorgu sesi (kaydedilmedi): {person.audio.name} </span>
+              ) : person.type !== "victim" && person.audio ? (
+                <span>Interview audio (unsaved): {person.audio.name} </span>
               ) : null}
               {!readOnly ? (
                 <>
                   <button type="button" onClick={() => setEditor(person)} style={buttonStyle}>
-                    Düzenle
+                    Edit
                   </button>{" "}
                   <button type="button" onClick={() => removePerson(person)} style={buttonStyle}>
-                    Sil
+                    Delete
                   </button>
                 </>
               ) : null}
@@ -193,7 +193,7 @@ export function PeopleSection({
 
       {!readOnly ? (
         <button type="button" onClick={() => setEditor(null)} style={buttonStyle}>
-          + Kişi Ekle
+          + Add Person
         </button>
       ) : null}
 
@@ -204,10 +204,10 @@ export function PeopleSection({
       {dirty && !readOnly ? (
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "1rem" }}>
           <button type="button" onClick={() => void onSave?.()} style={buttonStyle}>
-            Kaydet
+            Save
           </button>
           <button type="button" onClick={() => onReset?.()} style={buttonStyle}>
-            Vazgeç
+            Cancel
           </button>
         </div>
       ) : null}

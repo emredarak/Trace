@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { startAutoSync } from "../lib/outbox";
 
-// Servis çalışanını kaydeder, bağlantı dönünce kuyruğu boşaltır.
+// Registers the service worker and drains the queue when connectivity returns.
 export default function SwRegister() {
   useEffect(() => {
     try {
@@ -11,7 +11,7 @@ export default function SwRegister() {
         navigator.serviceWorker.register("/sw.js").catch(() => {});
       }
     } catch {
-      /* desteklenmiyorsa yoksay */
+      /* ignore when unsupported */
     }
     return startAutoSync();
   }, []);

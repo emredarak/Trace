@@ -32,24 +32,24 @@ export default function Home() {
     <main>
       <h1>Trace</h1>
       <p>
-        <a href="/new">+ Yeni Vaka</a>
+        <a href="/new">+ New Case</a>
       </p>
-      {failed ? <p role="alert">Vakalar alınamadı.</p> : null}
-      {!failed && cases === null ? <p>Yükleniyor…</p> : null}
+      {failed ? <p role="alert">Could not load cases.</p> : null}
+      {!failed && cases === null ? <p>Loading…</p> : null}
       {cases !== null ? (
         <>
-          <section aria-label="Aktif vakalar">
-            <h2>Aktif Vakalar ({cases.filter((c) => c.status !== "closed").length})</h2>
+          <section aria-label="Active cases">
+            <h2>Active Cases ({cases.filter((c) => c.status !== "closed").length})</h2>
             <CaseList
               items={cases.filter((c) => c.status !== "closed")}
-              empty="Aktif vaka yok."
+              empty="No active cases."
             />
           </section>
-          <section aria-label="Geçmiş vakalar">
-            <h2>Geçmiş Vakalar ({cases.filter((c) => c.status === "closed").length})</h2>
+          <section aria-label="Past cases">
+            <h2>Past Cases ({cases.filter((c) => c.status === "closed").length})</h2>
             <CaseList
               items={cases.filter((c) => c.status === "closed")}
-              empty="Geçmiş vaka yok."
+              empty="No past cases."
             />
           </section>
         </>

@@ -7,7 +7,7 @@ import { buildDossier } from "../lib/dossier";
 import { scoreCandidates, SPARK_TIMEOUT_MS } from "../lib/similarity";
 import type { CandidateMatch } from "../lib/candidates";
 
-const noGlimmer = { summarize: async () => "ozet" };
+const noGlimmer = { summarize: async () => "summary" };
 let uploadDirPath = "";
 
 beforeEach(() => {
@@ -36,29 +36,29 @@ function addEvidenceWithImage(
     .prepare(
       "INSERT INTO evidences (id, caseId, type, title, note, imageFile, marking, createdAt) VALUES (?,?,?,?,?,?,?,?)",
     )
-    .run(id, caseId, "evidence", opts.title ?? "Delil", null, opts.imageFile, marking, new Date().toISOString());
+    .run(id, caseId, "evidence", opts.title ?? "Evidence", null, opts.imageFile, marking, new Date().toISOString());
   return id;
 }
 
 async function seedQueryAndCandidates() {
   const query = insertCase({
-    summary: "gece market onunde bicakli saldiri beyaz arac kacti",
-    crimeType: "yaralama",
-    weapon: "bicak",
-    mo: "gece yaklasma",
+    summary: "night market knife attack, white car fled",
+    crimeType: "assault",
+    weapon: "knife",
+    mo: "night approach",
     occurredAt: "2026-01-15T22:30:00.000Z",
   });
   const a = insertCase({
-    summary: "gece market onunde bicakli saldiri olayi",
-    crimeType: "yaralama",
-    weapon: "bicak",
-    mo: "gece yaklasma",
+    summary: "night market knife attack incident",
+    crimeType: "assault",
+    weapon: "knife",
+    mo: "night approach",
     occurredAt: "2026-01-20T22:30:00.000Z",
   });
   const b = insertCase({
-    summary: "gunduz parkta tabancali kavga",
-    crimeType: "kavga",
-    weapon: "tabanca",
+    summary: "daytime park gunfight",
+    crimeType: "fight",
+    weapon: "pistol",
     occurredAt: "2025-01-01T10:00:00.000Z",
   });
   for (const id of [query.id, a.id, b.id]) {
@@ -72,7 +72,7 @@ async function seedQueryAndCandidates() {
 }
 
 describe("scoreCandidates", () => {
-  it("tek cagrida cok maddeli benzerlikleri aynen tasir; bilinmeyen/tekrarli elenir, puan ve guc 1-10 clamp'lenir, gecersiz tur duser", async () => {
+  it("passes multi-item similarities through in one call; unknown/duplicates dropped, score and strength clamped 1-10, invalid kinds dropped", async () => {
     const { query, a, b, candidates } = await seedQueryAndCandidates();
     const spark = vi.fn(async (prompt: string, _images?: unknown) => {
       expect(prompt).toContain(query.summary);
@@ -81,23 +81,23 @@ describe("scoreCandidates", () => {
         {
           caseId: b.id,
           score: 4,
-          reason: "zayif benzerlik",
+          reason: "weak similarity",
           similarities: [
-            { kind: "silah", description: "silah turu farkli ama alet var", strength: 3, evidence: "tabancali kavga" },
+            { kind: "weapon", description: "different weapon type but still a weapon", strength: 3, evidence: "gunfight" },
           ],
         },
         {
           caseId: a.id,
           score: 99,
-          reason: "cok benzer",
+          reason: "very similar",
           similarities: [
-            { kind: "ozet", description: "ozetler neredeyse ayni", strength: 15, evidence: "bicakli saldiri" },
-            { kind: "silah", description: "ikisi de bicak", strength: 0, evidence: "bicak" },
-            { kind: "bilinmeyen-tur", description: "dusmali", strength: 5, evidence: "bicak" },
+            { kind: "summary", description: "summaries almost identical", strength: 15, evidence: "knife attack" },
+            { kind: "weapon", description: "knife in both", strength: 0, evidence: "knife" },
+            { kind: "unknown-kind", description: "should drop", strength: 5, evidence: "knife" },
           ],
         },
-        { caseId: "olmayan-vaka", score: 10, reason: "uydurma", similarities: [] },
-        { caseId: a.id, score: 1, reason: "tekrar dusmeli", similarities: [] },
+        { caseId: "nonexistent-case", score: 10, reason: "fabricated", similarities: [] },
+        { caseId: a.id, score: 1, reason: "should drop duplicate", similarities: [] },
       ]);
     });
 
@@ -105,26 +105,26 @@ describe("scoreCandidates", () => {
 
     expect(spark).toHaveBeenCalledTimes(1);
     expect(scored.map((s) => s.caseId)).toEqual([a.id, b.id]);
-    expect(scored[0]).toMatchObject({ caseId: a.id, caseNo: a.caseNo, score: 10, reason: "cok benzer" });
+    expect(scored[0]).toMatchObject({ caseId: a.id, caseNo: a.caseNo, score: 10, reason: "very similar" });
     expect(scored[0].similarities).toEqual([
-      { kind: "ozet", description: "ozetler neredeyse ayni", strength: 10, evidence: "bicakli saldiri" },
-      { kind: "silah", description: "ikisi de bicak", strength: 1, evidence: "bicak" },
+      { kind: "summary", description: "summaries almost identical", strength: 10, evidence: "knife attack" },
+      { kind: "weapon", description: "knife in both", strength: 1, evidence: "knife" },
     ]);
     expect(scored[1].score).toBe(4);
     expect(scored[1].caseNo).toBe(b.caseNo);
   });
 
-  it("kaynak dosyada dogrulanamayan uydurma alintili maddeyi dusurur, dogrulanani korur", async () => {
+  it("drops fabricated quote items unverifiable in the source file, keeps verified ones", async () => {
     const { query, a, candidates } = await seedQueryAndCandidates();
     const spark = vi.fn(async () =>
       JSON.stringify([
         {
           caseId: a.id,
           score: 8,
-          reason: "benzer",
+          reason: "similar",
           similarities: [
-            { kind: "ozet", description: "gercek", strength: 8, evidence: "bicakli saldiri olayi" },
-            { kind: "sorgu-ifadesi", description: "uydurma", strength: 9, evidence: "supheli mor ucakla kactigini soyledi" },
+            { kind: "summary", description: "genuine", strength: 8, evidence: "knife attack incident" },
+            { kind: "interview-quote", description: "fabricated", strength: 9, evidence: "the suspect said he fled in a purple plane" },
           ],
         },
       ]),
@@ -134,34 +134,34 @@ describe("scoreCandidates", () => {
 
     expect(scored).toHaveLength(1);
     expect(scored[0].similarities).toEqual([
-      { kind: "ozet", description: "gercek", strength: 8, evidence: "bicakli saldiri olayi" },
+      { kind: "summary", description: "genuine", strength: 8, evidence: "knife attack incident" },
     ]);
   });
 
-  it("yalniz Glimmer ozetinde gecen ifade kanit sayilmaz; madde duser, kaynak alinti korunur", async () => {
+  it("expressions only in the Glimmer summary do not count as evidence; item dropped, source quote kept", async () => {
     const query = insertCase({
-      summary: "gece market onunde bicakli saldiri beyaz arac kacti",
-      crimeType: "yaralama",
-      weapon: "bicak",
+      summary: "night market knife attack, white car fled",
+      crimeType: "assault",
+      weapon: "knife",
     });
     const cand = insertCase({
-      summary: "gece market onunde bicakli saldiri olayi",
-      crimeType: "yaralama",
-      weapon: "bicak",
+      summary: "night market knife attack incident",
+      crimeType: "assault",
+      weapon: "knife",
     });
-    // Adayda transkriptli kisi: one cikan kaynaktir, Glimmer ozeti kaynak degildir.
+    // Candidate with transcript person: highlight is the source, Glimmer summary is not a source.
     const transcript = JSON.stringify({
-      text: "supheli: gece gordum",
-      segments: [{ speaker: "supheli", text: "gece gordum" }],
+      text: "suspect: I saw it at night",
+      segments: [{ speaker: "suspect", text: "I saw it at night" }],
     });
     getDb()
       .prepare(
         "INSERT INTO case_persons (id, caseId, name, type, unidentified, transcript, createdAt) VALUES (?,?,?,?,?,?,?)",
       )
-      .run("per-glimmer", cand.id, "Supheli A", "supheli", 0, transcript, new Date().toISOString());
-    const GLIMMER_ONLY = "supheli mor ucakla kactigini soyledi";
+      .run("per-glimmer", cand.id, "Suspect A", "suspect", 0, transcript, new Date().toISOString());
+    const GLIMMER_ONLY = "the suspect said he fled in a purple plane";
     const glimmer = {
-      summarize: async () => `Ozet: ${GLIMMER_ONLY}.`,
+      summarize: async () => `Summary: ${GLIMMER_ONLY}.`,
     };
     await buildDossier(getDb(), query.id, glimmer);
     await buildDossier(getDb(), cand.id, glimmer);
@@ -171,10 +171,10 @@ describe("scoreCandidates", () => {
         {
           caseId: cand.id,
           score: 8,
-          reason: "benzer",
+          reason: "similar",
           similarities: [
-            { kind: "sorgu-ifadesi", description: "sadece ozette var", strength: 9, evidence: GLIMMER_ONLY },
-            { kind: "ozet", description: "gercek kaynak", strength: 8, evidence: "bicakli saldiri olayi" },
+            { kind: "interview-quote", description: "only in summary", strength: 9, evidence: GLIMMER_ONLY },
+            { kind: "summary", description: "genuine source", strength: 8, evidence: "knife attack incident" },
           ],
         },
       ]),
@@ -188,14 +188,14 @@ describe("scoreCandidates", () => {
     );
     expect(scored).toHaveLength(1);
     expect(scored[0].similarities).toEqual([
-      { kind: "ozet", description: "gercek kaynak", strength: 8, evidence: "bicakli saldiri olayi" },
+      { kind: "summary", description: "genuine source", strength: 8, evidence: "knife attack incident" },
     ]);
   });
 
-  it("bozuk JSON ve istemci hatasinda adaylar puansiz doner, kayip olmaz", async () => {
+  it("malformed JSON and client errors return unscored candidates, no loss", async () => {
     const { query, a, b, candidates } = await seedQueryAndCandidates();
 
-    const broken = vi.fn(async () => "bozuk yanit {{{");
+    const broken = vi.fn(async () => "broken response {{{");
     const scoredBroken = await scoreCandidates(getDb(), query.id, candidates, broken);
     expect(scoredBroken.map((s) => s.caseId)).toEqual([a.id, b.id]);
     for (const s of scoredBroken) {
@@ -213,14 +213,14 @@ describe("scoreCandidates", () => {
     expect(scoredFail.every((s) => s.score === 0)).toBe(true);
   });
 
-  it("sonuclari hash'lerle similar_results'a yazar; ikinci cagri onbellekten gelir, Spark tekrar cagrilmaz; hash degisince yeniden cagrilir", async () => {
+  it("writes results with hashes to similar_results; second call served from cache, Spark not called again; re-scores when hashes change", async () => {
     const { query, a, candidates } = await seedQueryAndCandidates();
     const payload = JSON.stringify([
       {
         caseId: a.id,
         score: 7,
-        reason: "benzer",
-        similarities: [{ kind: "ozet", description: "ozet benzer", strength: 7, evidence: "bicakli saldiri" }],
+        reason: "similar",
+        similarities: [{ kind: "summary", description: "similar summary", strength: 7, evidence: "knife attack" }],
       },
     ]);
     const spark = vi.fn(async () => payload);
@@ -239,31 +239,31 @@ describe("scoreCandidates", () => {
     expect(typeof row.candidateHash).toBe("string");
     expect((row.candidateHash as string).length).toBeGreaterThan(0);
     expect(JSON.parse(row.similarities as string)).toEqual(first[0].similarities);
-    expect(row.reason).toBe("benzer");
+    expect(row.reason).toBe("similar");
 
     const second = await scoreCandidates(getDb(), query.id, [candidates[0]], spark);
     expect(spark).toHaveBeenCalledTimes(1);
     expect(second).toEqual(first);
 
-    // Aday icerigi degisince hash degisir -> yeniden puanlanir.
-    getDb().prepare("UPDATE cases SET summary = 'tamamen yeni ozet metni bicakli' WHERE id = ?").run(a.id);
+    // Candidate content changed so the hash changed -> re-scored.
+    getDb().prepare("UPDATE cases SET summary = 'completely new summary text with knife' WHERE id = ?").run(a.id);
     await buildDossier(getDb(), a.id, noGlimmer);
     const third = await scoreCandidates(getDb(), query.id, [candidates[0]], spark);
     expect(spark).toHaveBeenCalledTimes(2);
     expect(third[0].score).toBe(7);
   });
 
-  it("modelin atladigi aday puansiz eklenir, listeden dusmez", async () => {
+  it("candidates skipped by the model are added unscored, not dropped", async () => {
     const { query, a, b, candidates } = await seedQueryAndCandidates();
     const spark = vi.fn(async () =>
-      JSON.stringify([{ caseId: a.id, score: 6, reason: "benzer", similarities: [] }]),
+      JSON.stringify([{ caseId: a.id, score: 6, reason: "similar", similarities: [] }]),
     );
     const scored = await scoreCandidates(getDb(), query.id, candidates, spark);
     expect(scored.map((s) => s.caseId)).toEqual([a.id, b.id]);
     expect(scored[1].score).toBe(0);
   });
 
-  it("zaman asiminda puansiz doner; SPARK_TIMEOUT_MS varsayilani 120000", async () => {
+  it("returns unscored on timeout; SPARK_TIMEOUT_MS defaults to 120000", async () => {
     expect(SPARK_TIMEOUT_MS).toBe(120000);
     process.env.SPARK_TIMEOUT_MS = "20";
     const { query, a, b, candidates } = await seedQueryAndCandidates();
@@ -275,29 +275,29 @@ describe("scoreCandidates", () => {
     expect(scored.every((s) => s.score === 0)).toBe(true);
   });
 
-  it("bos aday listesinde Spark cagrilmaz ve [] doner", async () => {
+  it("does not call Spark for an empty candidate list and returns []", async () => {
     const { query } = await seedQueryAndCandidates();
     const spark = vi.fn(async () => "[]");
     await expect(scoreCandidates(getDb(), query.id, [], spark)).resolves.toEqual([]);
     expect(spark).not.toHaveBeenCalled();
   });
 
-  it("ortak SAM etiketli delillerden en fazla 3 gorsel ekler; diskte olmayan dosya atlanir, hata olmaz", async () => {
+  it("attaches at most 3 images from shared SAM-labeled evidence; missing files on disk skipped, no error", async () => {
     uploadDirPath = join(tmpdir(), `similarity-uploads-${Date.now()}`);
     mkdirSync(uploadDirPath, { recursive: true });
     process.env.TRACE_UPLOAD_DIR = uploadDirPath;
 
-    const query = insertCase({ summary: "sorgu essiz ozet alpha", crimeType: "yaralama" });
-    const cand = insertCase({ summary: "aday essiz ozet beta", crimeType: "yaralama" });
+    const query = insertCase({ summary: "query unique summary alpha", crimeType: "assault" });
+    const cand = insertCase({ summary: "candidate unique summary beta", crimeType: "assault" });
 
-    // Sorgu tarafi: ortak etiketli bir delil (gorseli var)
+    // Query side: one shared-label evidence (with image)
     writeFileSync(join(uploadDirPath, "q1.jpg"), Buffer.from([0xff, 0xd8, 0xff, 1]));
-    addEvidenceWithImage(query.id, { labels: ["bicak"], imageFile: "q1.jpg" });
-    // Aday tarafi: 4 ortak etiketli delil; ilki diskte yok, digerleri var
-    addEvidenceWithImage(cand.id, { labels: ["bicak"], imageFile: "missing.jpg" });
+    addEvidenceWithImage(query.id, { labels: ["knife"], imageFile: "q1.jpg" });
+    // Candidate side: 4 shared-label evidences; first missing on disk, rest present
+    addEvidenceWithImage(cand.id, { labels: ["knife"], imageFile: "missing.jpg" });
     for (const name of ["c1.jpg", "c2.jpg", "c3.jpg"]) {
       writeFileSync(join(uploadDirPath, name), Buffer.from([0xff, 0xd8, 0xff, 2]));
-      addEvidenceWithImage(cand.id, { labels: ["bicak"], imageFile: name });
+      addEvidenceWithImage(cand.id, { labels: ["knife"], imageFile: name });
     }
 
     await buildDossier(getDb(), query.id, noGlimmer);
@@ -308,7 +308,7 @@ describe("scoreCandidates", () => {
     const spark = vi.fn(async (prompt: string, images?: unknown) => {
       seenPrompt = prompt;
       seenImages = images;
-      return JSON.stringify([{ caseId: cand.id, score: 5, reason: "orta", similarities: [] }]);
+      return JSON.stringify([{ caseId: cand.id, score: 5, reason: "medium", similarities: [] }]);
     });
 
     const scored = await scoreCandidates(
@@ -328,15 +328,15 @@ describe("scoreCandidates", () => {
       expect(img.dataUrl.startsWith("data:image/")).toBe(true);
       expect(img.evidenceId).toBeTruthy();
     }
-    // Diskte olmayan missing.jpg eklenmemis (dataUrl'ler gercek dosyalardan)
-    expect(seenPrompt).toContain("aday essiz ozet beta");
+    // missing.jpg on disk not added (dataUrls come from real files)
+    expect(seenPrompt).toContain("candidate unique summary beta");
   });
 
-  it("{chatCompletion} bicimindeki sahte istemciyi de kabul eder", async () => {
+  it("also accepts fake clients shaped as {chatCompletion}", async () => {
     const { query, a, candidates } = await seedQueryAndCandidates();
     const fake = {
       chatCompletion: vi.fn(async () =>
-        JSON.stringify([{ caseId: a.id, score: 9, reason: "cok benzer", similarities: [] }]),
+        JSON.stringify([{ caseId: a.id, score: 9, reason: "very similar", similarities: [] }]),
       ),
     };
     const scored = await scoreCandidates(getDb(), query.id, [candidates[0]], fake as never);

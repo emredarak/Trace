@@ -19,37 +19,37 @@ function makeCase(
 
 const query = makeCase({
   id: "query",
-  summary: "su kenarında gece hırsızlık olayı",
-  crimeType: "hırsızlık",
-  locationType: "su kenarı",
-  weapon: "bıçak",
-  mo: "gece yaklaşma",
+  summary: "night theft at the waterfront",
+  crimeType: "theft",
+  locationType: "waterfront",
+  weapon: "knife",
+  mo: "night approach",
 });
 
 function sixCases(): CaseRecord[] {
   return [1, 2, 3, 4, 5, 6].map((n) =>
     makeCase({
       id: `case-${n}`,
-      summary: `su kenarında gece vaka ${n}`,
-      crimeType: "hırsızlık",
-      locationType: "su kenarı",
-      weapon: "bıçak",
-      mo: "gece yaklaşma",
+      summary: `waterfront night case ${n}`,
+      crimeType: "theft",
+      locationType: "waterfront",
+      weapon: "knife",
+      mo: "night approach",
     }),
   );
 }
 
 describe("rerankWithTimeout", () => {
-  it("15 sn varsayılan zaman aşımı kullanır", () => {
+  it("uses the 15s default timeout", () => {
     expect(RERANK_TIMEOUT_MS).toBe(15_000);
   });
 
-  it("yavaş istemcide zaman aşımına uğrayıp puansız listeye düşer, kayıp olmaz (ilk 5)", async () => {
+  it("slow client times out and falls back to an unscored list, no loss (first 5)", async () => {
     const cases = sixCases();
     const slow = {
       chatCompletion: async (_prompt: string) =>
         new Promise<string>(() => {
-          // Hiç çözülmez: asılı model istemcisini taklit eder.
+    // Never resolves: mimics a hanging model client.
         }),
     };
 

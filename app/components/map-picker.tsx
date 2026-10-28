@@ -48,12 +48,12 @@ function escapeHtml(value: string): string {
 
 function pointInfoHtml(p: MapPoint): string {
   const color = locationColor(p);
-  const title = p.title?.trim() ? p.title : "Konum";
+  const title = p.title?.trim() ? p.title : "Location";
   const lines = [
     `<strong>${escapeHtml(title)}</strong>`,
     `<span style="background:${color.badgeBg};color:${color.badgeFg};padding:0.1rem 0.45rem;border-radius:0.4rem;">${escapeHtml(locationLabel(p))}</span>`,
   ];
-  if (p.note?.trim()) lines.push(`Not: ${escapeHtml(p.note)}`);
+  if (p.note?.trim()) lines.push(`Note: ${escapeHtml(p.note)}`);
   lines.push(`(${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)})`);
   return lines.join("<br/>");
 }
@@ -105,7 +105,7 @@ export default function MapPicker({
   onPickRef.current = onPick;
   const readOnlyRef = useRef(readOnly);
   readOnlyRef.current = readOnly;
-  // Leaflet tipleri dinamik importtan gelir; somut tipler kurulum aninda bilinir.
+  // Leaflet types come from the dynamic import; concrete types are known only at setup time.
   const mapRef = useRef<{ remove: () => void } | null>(null);
   const layerGroupRef = useRef<ReturnType<
     (typeof import("leaflet"))["layerGroup"]
@@ -113,7 +113,7 @@ export default function MapPicker({
   const prevPickCoordsRef = useRef<string | null>(null);
   const prevPointsCoordsRef = useRef<string | null>(null);
 
-  // Haritayi yalnizca bileşen kaldirilirken yok et.
+  // Destroy the map only when the component unmounts.
   useEffect(() => {
     return () => {
       mapRef.current?.remove();
@@ -268,7 +268,7 @@ export default function MapPicker({
   }, [points, pick, readOnly]);
 
   if (failed) {
-    return <p>Harita yüklenemedi (çevrimdışı olabilirsiniz); metin konumu kullanın.</p>;
+    return <p>Could not load the map (you may be offline); use the text location instead.</p>;
   }
   return (
     <>

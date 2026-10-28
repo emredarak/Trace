@@ -1,26 +1,26 @@
-// Çevrimdışı giden kutusu (outbox).
+// Offline outbox queue.
 //
-// Tarayıcıda IndexedDB destekli FIFO kuyruk; IndexedDB yoksa (ör. test/SSR)
-// bellek içi depoya düşer. Katı FIFO: ilk başarısızlıkta durulur, varış
-// sırası kuyruk sırasıyla aynı kalır. Çakışmada (HTTP 409) sunucu kaydı
-// esas alınır: yerel kopya silinir, rapor artar.
+// FIFO queue backed by IndexedDB in the browser; falls back to an in-memory
+// store when IndexedDB is unavailable (e.g. tests/SSR). Strict FIFO: stops at
+// the first failure so arrival order always matches queue order. On conflict
+// (HTTP 409) the server record wins: the local copy is deleted, conflicts counted.
 //
-// Fotoğraf/ses gibi dosyalar Blob olarak kaydın içinde saklanır; IndexedDB
-// Blob'u yapısal klonla kalıcı tutar, sync() sırasında FormData ile geri
-// gönderilir ("file" alanı + meta alanları).
+// Files such as photos/audio are stored as Blobs inside the queued record; IndexedDB
+// persists Blobs via structured clone, and sync() sends them back as FormData
+// ("file" field + meta fields).
 
 export interface OutboxInput {
   url: string;
   method?: string;
   headers?: Record<string, string>;
-  /** JSON olarak gönderilecek gövde. */
+  /** Request body to send as JSON. */
   body?: unknown;
-  /** Önceden serileştirilmiş gövde (verilirse body yerine kullanılır). */
+  /** Pre-serialized body (used instead of body when provided). */
   rawBody?: string;
-  /** Çevrimdışı çekilen dosya; meta ile birlikte FormData olarak gönderilir. */
+  /** File captured offline; sent as FormData together with meta. */
   blob?: Blob;
   blobName?: string;
-  /** Blob ile birlikte gönderilecek metin alanları (örn. { hint }). */
+  /** Text fields sent together with the Blob (e.g. { hint }). */
   meta?: Record<string, unknown>;
 }
 
@@ -189,8 +189,8 @@ export function createOutbox(deps: OutboxDeps = {}): Outbox {
     let bodyText: string | undefined;
     let contentType = contentTypeOf(headers);
     if (req.blob) {
-      // Dosya gönderiminde sınır başlığını fetch üretir; elle konmuş
-      // multipart content-type bayat boundary taşır, temizle.
+      // fetch generates the boundary header for file uploads; drop any hand-set
+      // multipart content-type carrying a stale boundary.
       for (const k of Object.keys(headers)) {
         if (k.toLowerCase() === "content-type") delete headers[k];
       }
@@ -253,14 +253,14 @@ export function createOutbox(deps: OutboxDeps = {}): Outbox {
           status: "failed",
           detail: (err as Error)?.message ?? "network error",
         });
-        break; // Katı FIFO: ilk hatada dur, varış sırası kuyruk sırasını izler.
+        break; // Strict FIFO: stop at the first error so arrival order follows queue order.
       }
       if (res.ok) {
         await store.remove(entry.id);
         report.sent += 1;
         report.items.push({ id: entry.id, url: entry.url, status: "sent" });
       } else if (res.status === 409) {
-        // Çakışma: sunucu kaydı esas alınır, yerel kopya düşer.
+        // Conflict: the server record wins, the local copy is dropped.
         await store.remove(entry.id);
         report.conflicts += 1;
         report.items.push({
@@ -277,7 +277,7 @@ export function createOutbox(deps: OutboxDeps = {}): Outbox {
           status: "failed",
           detail: `http ${res.status}`,
         });
-        break; // Katı FIFO: ilk hatada dur, denenmeyenler kuyrukta kalır.
+        break; // Strict FIFO: stop at the first error, untried entries stay queued.
       }
     }
     return report;
@@ -298,7 +298,7 @@ export function createOutbox(deps: OutboxDeps = {}): Outbox {
   };
 }
 
-// Varsayılan tekil kutu: tarayıcıda IndexedDB, yoksa bellek.
+// Default singleton box: IndexedDB in the browser, memory otherwise.
 let singleton: Outbox | null = null;
 
 function defaultOutbox(): Outbox {
@@ -324,7 +324,7 @@ export function pending(): Promise<number> {
   return defaultOutbox().pending();
 }
 
-/** Bağlantı dönünce kuyruğu boşaltmayı dener; durdurma işlevi döner. */
+/** Tries to drain the queue when connectivity returns; returns a stop function. */
 export function startAutoSync(
   onReport?: (report: SyncReport) => void,
 ): () => void {
@@ -349,7 +349,7 @@ export function startAutoSync(
         .catch(() => {});
     }
   } catch {
-    /* kayıt desteklenmiyorsa yoksay */
+    /* ignore when registration is unsupported */
   }
   return () => {
     stopped = true;

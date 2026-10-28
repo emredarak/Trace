@@ -1,24 +1,24 @@
-// Spark Open benzerlik puanlama — tek cagrida tum adaylar, madde madde
-// benzerlikler, kaynakta dogrulanan kanitlar ve hash'li kalici sonuclar.
+// Spark Open similarity scoring — all candidates in a single call, itemized
+// similarities, source-verified evidence, and hash-pinned persistent results.
 //
-// Akis:
-// 1. Sorgu + aday dosyalari (case_dossiers) okunur; yoksa buildDossier ile
-//    derlenir (Task 4). Dosya metinleri dossierText ile pakete girer.
-// 2. similar_results'ta queryHash+candidateHash'i guncel dosyalarla uyan
-//    adaylar onbellekten gelir; Spark onlara tekrar cagrilmaz.
-// 3. Kalan adaylar TEK Spark cagrisiyla puanlanir. Pakete ayrica ortak SAM
-//    etiketli delillerden deterministik secilen en fazla 3 gorsel eklenir
-//    (lib/uploads ile okunur; diskte olmayan dosya atlanir, hata olmaz).
-// 4. Cikti dogrulanir: bilinmeyen/tekrarli caseId elenir, puan ve guc
-//    1-10'a clamp'lenir, tur sabit sozlukten degilse madde duser, kanit
-//    alintisi kaynak-only metinde (deterministik alanlar + birebir
-//    transkript one cikanlari + SAM etiketleri; Glimmer ozeti haric)
-//    dogrulanamayan madde duser. Spark paket metni ozetleri icerebilir.
-// 5. Puanlanan sonuclar similar_results'a hash'lerle yazilir.
-// Model/anahtar hatasi, bozuk JSON veya zaman asiminda (SPARK_TIMEOUT_MS,
-// varsayilan 120000 ms) adaylar puansiz doner — mevcut yedek davranis;
-// puansiz sonuclar onbellege YAZILMAZ (anahtar gelince yeniden denenir).
-// Legacy lib/rerank.ts yolu aynen korunur; bu modul onu cagirmaz.
+// Flow:
+// 1. Query + candidate dossiers (case_dossiers) are read; when missing they are
+//    built with buildDossier (Task 4). Dossier texts enter the package via dossierText.
+// 2. Candidates whose queryHash+candidateHash match the current dossiers in
+//    similar_results come from the cache; Spark is not called again for them.
+// 3. Remaining candidates are scored with a SINGLE Spark call. The package also gets
+//    up to 3 deterministically chosen images from evidence sharing a common SAM
+//    label (read via lib/uploads; a file missing from disk is skipped, never an error).
+// 4. Output is validated: unknown/duplicate caseIds are dropped, score and strength
+//    are clamped to 1-10, items whose kind is not in the fixed vocabulary are dropped,
+//    items whose evidence quote is not verifiable in the source-only text (deterministic
+//    fields + verbatim transcript highlights + SAM labels; Glimmer summaries excluded)
+//    are dropped. The Spark package text may include summaries.
+// 5. Scored results are written to similar_results with hashes.
+// On model/key errors, malformed JSON, or timeouts (SPARK_TIMEOUT_MS,
+// default 120000 ms) candidates return unscored — the existing fallback behavior;
+// unscored results are NOT written to the cache (retried once a key arrives).
+// The legacy lib/rerank.ts path is kept as-is; this module never calls it.
 
 import type Database from "better-sqlite3";
 import { sparkChat } from "./spark-client";
@@ -31,21 +31,21 @@ import {
 } from "./dossier";
 import type { CaseDossier } from "./dossier";
 import type { CandidateMatch } from "./candidates";
-import { normalizeTurkish } from "./candidates";
+import { normalizeTextEnglish } from "./candidates";
 import { haversineMeters, formatDistance } from "./locations";
 import { contentTypeFor, readUpload } from "./uploads";
 
 export const SIMILARITY_KINDS = [
-  "ozet",
-  "suc-tipi",
-  "yontem",
-  "silah",
-  "konum",
-  "kisi",
-  "sorgu-ifadesi",
-  "delil-nesne",
-  "delil-notu",
-  "zaman",
+  "summary",
+  "crime-type",
+  "method",
+  "weapon",
+  "location",
+  "person",
+  "interview-quote",
+  "evidence-object",
+  "evidence-note",
+  "time",
 ] as const;
 
 export type SimilarityKind = (typeof SIMILARITY_KINDS)[number];
@@ -65,7 +65,7 @@ export interface ScoredCase {
   similarities: SimilarityItem[];
 }
 
-/** Ekli gorsel sayisi ust siniri (vaka cifti paketi basina). */
+/** Attached image cap (per case-pair package). */
 export const MAX_EVIDENCE_IMAGES = 3;
 
 function parseTimeoutEnv(): number {
@@ -73,7 +73,7 @@ function parseTimeoutEnv(): number {
   return Number.isFinite(n) && n > 0 ? n : 120_000;
 }
 
-/** Uzun zaman asimi butcesi: SPARK_TIMEOUT_MS env, varsayilan 120000 ms. */
+/** Long timeout budget: SPARK_TIMEOUT_MS env, default 120000 ms. */
 export const SPARK_TIMEOUT_MS = parseTimeoutEnv();
 
 function sparkTimeoutMs(): number {
@@ -117,7 +117,11 @@ function sparkModelName(): string {
   if (process.env.BASETEN_API_KEY) {
     return process.env.SPARK_MODEL ?? "muse-spark-open";
   }
-  return process.env.META_MODEL ?? "Llama-4-Maverick-17B-128E-Instruct-FP8";
+  return (
+    process.env.JUDGE_MODEL ??
+    process.env.META_MODEL ??
+    "Llama-4-Maverick-17B-128E-Instruct-FP8"
+  );
 }
 
 function clamp1to10(value: unknown): number | null {
@@ -139,7 +143,7 @@ function parseModelPayload(raw: string): unknown[] {
   } catch {
     const start = text.indexOf("[");
     const end = text.lastIndexOf("]");
-    if (start < 0 || end <= start) throw new Error("model yaniti JSON degil");
+    if (start < 0 || end <= start) throw new Error("model response is not JSON");
     parsed = JSON.parse(text.slice(start, end + 1));
   }
   if (Array.isArray(parsed)) return parsed;
@@ -148,19 +152,19 @@ function parseModelPayload(raw: string): unknown[] {
     if (Array.isArray(obj.results)) return obj.results;
     if (Array.isArray(obj.cases)) return obj.cases;
   }
-  throw new Error("model yaniti dizi degil");
+  throw new Error("model response is not an array");
 }
 
 function normalizeQuote(value: string): string {
   return value
-    .toLocaleLowerCase("tr-TR")
+    .toLowerCase()
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^["'“”«]+|["'“”»]+$/g, "")
     .trim();
 }
 
-/** Kanit, sorgu veya aday dosya metninde birebir (normalize) bulunmali. */
+/** Evidence must appear verbatim (normalized) in the query or candidate dossier text. */
 function evidenceVerified(evidence: string, ...sources: string[]): boolean {
   const needle = normalizeQuote(evidence);
   if (!needle) return false;
@@ -224,7 +228,7 @@ function caseNoOf(db: Database.Database, dossier: CaseDossier | null, caseId: st
       .get(caseId) as { caseNo?: unknown } | undefined;
     if (row && typeof row.caseNo === "string") return row.caseNo;
   } catch {
-    // tablo erisilemezse bos don
+    // return empty when the table is unreachable
   }
   return "";
 }
@@ -244,19 +248,19 @@ function fallbackText(db: Database.Database, dossier: CaseDossier | null, caseId
       .get(caseId) as Record<string, unknown> | undefined;
     if (row) {
       return [
-        `Vaka ${String(row.caseNo ?? "")} (id: ${caseId})`,
-        `ozet: ${String(row.summary ?? "")}`,
-        row.crimeType ? `suc tipi: ${String(row.crimeType)}` : "",
-        row.weapon ? `silah: ${String(row.weapon)}` : "",
-        row.mo ? `yontem: ${String(row.mo)}` : "",
+        `Case ${String(row.caseNo ?? "")} (id: ${caseId})`,
+        `summary: ${String(row.summary ?? "")}`,
+        row.crimeType ? `crime type: ${String(row.crimeType)}` : "",
+        row.weapon ? `weapon: ${String(row.weapon)}` : "",
+        row.mo ? `method: ${String(row.mo)}` : "",
       ]
         .filter(Boolean)
         .join("\n");
     }
   } catch {
-    // dus
+    // ignore
   }
-  return `Vaka (id: ${caseId})`;
+  return `Case (id: ${caseId})`;
 }
 
 interface CachedRow {
@@ -309,8 +313,8 @@ function readCached(
             typeof (s as SimilarityItem).description === "string" &&
             typeof (s as SimilarityItem).evidence === "string" &&
             typeof (s as SimilarityItem).strength === "number" &&
-            // Onbellek de kaynak-only dogrulamadan gecer (Glimmer
-            // ozetindeki ifade eski kayitta olsa bile kanit sayilmaz).
+            // Cached entries also pass source-only verification (an expression from a Glimmer
+            // summary in the old record still does not count as evidence).
             (!querySourceText && !candidateSourceText
               ? true
               : evidenceVerified(
@@ -365,7 +369,7 @@ function persistResult(
       new Date().toISOString(),
     );
   } catch {
-    // Kalici yazim basarisizsa puanlama sonucu yine doner.
+    // A failed persistent write still returns the scoring result.
   }
 }
 
@@ -389,14 +393,14 @@ function sharedSamLabels(a: CaseDossier, b: CaseDossier): string[] {
   const bLabels = new Set<string>();
   for (const ev of b.evidences) {
     for (const label of ev.samLabels) {
-      const n = normalizeTurkish(label);
+      const n = normalizeTextEnglish(label);
       if (n) bLabels.add(n);
     }
   }
   const out: string[] = [];
   for (const ev of a.evidences) {
     for (const label of ev.samLabels) {
-      const n = normalizeTurkish(label);
+      const n = normalizeTextEnglish(label);
       if (n && bLabels.has(n) && !out.includes(label)) out.push(label);
     }
   }
@@ -405,7 +409,7 @@ function sharedSamLabels(a: CaseDossier, b: CaseDossier): string[] {
 
 function sharedPersonNames(a: CaseDossier, b: CaseDossier): string[] {
   const key = (name: string | null, type: string) =>
-    name ? `${normalizeTurkish(name)}::${normalizeTurkish(type ?? "")}` : "";
+    name ? `${normalizeTextEnglish(name)}::${normalizeTextEnglish(type ?? "")}` : "";
   const bKeys = new Set<string>();
   for (const p of b.persons) {
     if (p.unidentified) continue;
@@ -422,21 +426,21 @@ function sharedPersonNames(a: CaseDossier, b: CaseDossier): string[] {
 
 function hintsFor(query: CaseDossier, cand: CaseDossier, channels: string[]): string {
   const parts: string[] = [];
-  if (channels.length > 0) parts.push(`aday kanallari: ${channels.join(", ")}`);
+  if (channels.length > 0) parts.push(`candidate channels: ${channels.join(", ")}`);
   const dist = minDistanceMeters(query, cand);
-  if (dist !== null) parts.push(`en yakin konum mesafesi: ${formatDistance(dist)}`);
+  if (dist !== null) parts.push(`nearest location distance: ${formatDistance(dist)}`);
   const labels = sharedSamLabels(query, cand);
-  if (labels.length > 0) parts.push(`ortak SAM etiketleri: ${labels.join(", ")}`);
+  if (labels.length > 0) parts.push(`shared SAM labels: ${labels.join(", ")}`);
   const persons = sharedPersonNames(query, cand);
-  if (persons.length > 0) parts.push(`ortak kisiler: ${persons.join(", ")}`);
-  return parts.length > 0 ? `Ipuclari [${cand.caseId}]: ${parts.join(" | ")}` : "";
+  if (persons.length > 0) parts.push(`shared persons: ${persons.join(", ")}`);
+  return parts.length > 0 ? `Hints [${cand.caseId}]: ${parts.join(" | ")}` : "";
 }
 
 /**
- * Ortak SAM etiketli delillerden deterministik sirayla en fazla
- * MAX_EVIDENCE_IMAGES gorsel secer. Adaylar giris sirasiyla, her adayda
- * once aday delili sonra sorgu delilleri taranir; dosya diskte yoksa
- * veya gorsel degilse atlanir, hicbir durumda hata firlatmaz.
+ * deterministically picks up to MAX_EVIDENCE_IMAGES images from evidence
+ * sharing a common SAM label. Candidates are visited in input order; for each
+ * candidate the candidate evidence is scanned first, then the query evidence.
+ * A file missing from disk or not an image is skipped, and nothing ever throws.
  */
 export function selectEvidenceImages(
   db: Database.Database,
@@ -478,22 +482,22 @@ export function selectEvidenceImages(
     const queryLabels = new Set<string>();
     for (const ev of query.evidences) {
       for (const label of ev.samLabels) {
-        const n = normalizeTurkish(label);
+        const n = normalizeTextEnglish(label);
         if (n) queryLabels.add(n);
       }
     }
     for (const candEv of cand.evidences) {
       if (images.length >= MAX_EVIDENCE_IMAGES) break;
       const shared = candEv.samLabels.some((l) =>
-        queryLabels.has(normalizeTurkish(l)),
+        queryLabels.has(normalizeTextEnglish(l)),
       );
       if (!shared) continue;
       tryAdd(cand.caseId, candEv.sourceId);
-      // Sorgu tarafindaki ayni etiketi tasiyan deliller de dogrulamaya girer.
-      const candLabels = new Set(candEv.samLabels.map((l) => normalizeTurkish(l)));
+      // Query-side evidence carrying the same label also enters verification.
+      const candLabels = new Set(candEv.samLabels.map((l) => normalizeTextEnglish(l)));
       for (const qEv of query.evidences) {
         if (images.length >= MAX_EVIDENCE_IMAGES) break;
-        if (qEv.samLabels.some((l) => candLabels.has(normalizeTurkish(l)))) {
+        if (qEv.samLabels.some((l) => candLabels.has(normalizeTextEnglish(l)))) {
           tryAdd(query.caseId, qEv.sourceId);
         }
       }
@@ -508,15 +512,15 @@ function buildPrompt(
   images: SparkImage[],
 ): string {
   const lines: string[] = [
-    "Asagidaki sorgu vakayi aday vakalarla karsilastir. Her aday icin buldugun her benzerligi ayri madde olarak yaz; her maddenin gucunu icerige bakarak 1-10 arasinda ver, sabit puan tablosu kullanma. Genel puani (score) benzerliklerin toplam gucune gore butunsel olarak 1-10 ver.",
-    `Benzerlik turleri (kind) yalnizca sunlardan biri olabilir: ${SIMILARITY_KINDS.join(", ")}.`,
-    "Her maddenin evidence alani, sorgu veya aday dosyada birebir gecen kisa bir alinti ya da SAM etiketi olmalidir; kaynakta olmayan alinti uydurma, o madde dusurulur.",
-    "Ekli gorseller varsa ortak SAM etiketli delillerin gorsel dogrulamasi icin kullan.",
+    "Compare the following query case against the candidate cases. For each candidate, write each similarity you find as a separate item; rate each item's strength 1-10 based on content, do not use a fixed score table. Rate the overall score 1-10 holistically based on the combined strength of the similarities.",
+    `Similarity kinds (kind) may only be one of: ${SIMILARITY_KINDS.join(", ")}.`,
+    "Each item's evidence field must be a short verbatim quote from the query or candidate dossier or a SAM label; do not invent quotes not in the source, such an item will be dropped.",
+    "If attached images exist, use them for visual verification of the shared SAM-labeled evidence.",
     "",
-    "Sorgu vaka dosyasi:",
+    "Query case dossier:",
     queryText,
     "",
-    "Aday vaka dosyalari:",
+    "Candidate case dossiers:",
   ];
   for (const e of entries) {
     lines.push("", e.text);
@@ -525,13 +529,13 @@ function buildPrompt(
   if (images.length > 0) {
     lines.push(
       "",
-      `Ekli gorseller (${images.length}): ${images.map((im, i) => `${i + 1}. vaka ${im.caseId} delil ${im.evidenceId}`).join("; ")}`,
+      `Attached images (${images.length}): ${images.map((im, i) => `${i + 1}. case ${im.caseId} evidence ${im.evidenceId}`).join("; ")}`,
     );
   }
   lines.push(
     "",
-    "Yalnizca su JSON dizisini dondur, baska metin yazma:",
-    '[{"caseId": "<aday id>", "score": <1-10>, "reason": "<kisa gerekce>", "similarities": [{"kind": "<tur>", "description": "<aciklama>", "strength": <1-10>, "evidence": "<kaynaktan birebir alinti/etiket>"}]}]',
+    "Return only this JSON array, no other text:",
+    '[{"caseId": "<candidate id>", "score": <1-10>, "reason": "<short reason>", "similarities": [{"kind": "<type>", "description": "<description>", "strength": <1-10>, "evidence": "<verbatim quote/label from source>"}]}]',
   );
   return lines.join("\n");
 }
@@ -540,7 +544,7 @@ async function withTimeout<T>(pending: Promise<T>, timeoutMs: number): Promise<T
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("spark zaman asimi")), timeoutMs);
+      timer = setTimeout(() => reject(new Error("spark timeout")), timeoutMs);
     });
     return await Promise.race([pending, timeout]);
   } finally {
@@ -565,7 +569,7 @@ export async function scoreCandidates(
   candidates: CandidateMatch[],
   spark?: SparkClientInput,
 ): Promise<ScoredCase[]> {
-  // Adaylari tekillestir, giris sirasi korunur.
+  // Deduplicate candidates, preserving input order.
   const seenInput = new Set<string>();
   const ordered: CandidateMatch[] = [];
   for (const c of candidates ?? []) {
@@ -620,7 +624,7 @@ export async function scoreCandidates(
   if (pending.length > 0) {
     const sparkFn = asSparkFn(spark);
     try {
-      // Gorseller yalniz bekleyen (puanlanacak) adaylar icin secilir.
+      // Images are selected only for pending (to-be-scored) candidates.
       const pendingDossiers = pending
         .map((c) => dossiers.get(c.caseId) ?? null)
         .filter((d): d is CaseDossier => d !== null);
@@ -638,7 +642,7 @@ export async function scoreCandidates(
             queryDossier && d
               ? hintsFor(queryDossier, d, [...c.channels] as string[])
               : c.channels.length > 0
-                ? `Ipuclari [${c.caseId}]: aday kanallari: ${c.channels.join(", ")}`
+                ? `Hints [${c.caseId}]: candidate channels: ${c.channels.join(", ")}`
                 : "",
         };
       });
@@ -666,7 +670,7 @@ export async function scoreCandidates(
           reason:
             typeof entry.reason === "string" && entry.reason.trim()
               ? entry.reason.trim()
-              : "model gerekce vermedi",
+              : "model gave no reason",
           similarities: validateSimilarities(
             entry.similarities,
             querySourceText,
@@ -679,18 +683,18 @@ export async function scoreCandidates(
           persistResult(db, queryId, scored, queryHash, d?.hash ?? "");
         }
       }
-      if (validCount === 0) throw new Error("model yanitinda gecerli aday yok");
-      // Modelin atladigi adaylar puansiz eklenir (kayip yok).
+      if (validCount === 0) throw new Error("no valid candidate in model response");
+      // Candidates skipped by the model are added unscored (no loss).
       for (const c of pending) {
         if (!resultsById.has(c.caseId)) {
           resultsById.set(
             c.caseId,
-            toUnscored(c.caseId, caseNos.get(c.caseId) ?? "", "model listesinde yok"),
+            toUnscored(c.caseId, caseNos.get(c.caseId) ?? "", "not in model list"),
           );
         }
       }
     } catch {
-      // Bozuk yanit / anahtar-model hatasi / zaman asimi: puansiz yedek.
+      // Malformed response / key-model error / timeout: unscored fallback.
       for (const c of pending) {
         if (!resultsById.has(c.caseId)) {
           resultsById.set(
@@ -698,7 +702,7 @@ export async function scoreCandidates(
             toUnscored(
               c.caseId,
               caseNos.get(c.caseId) ?? "",
-              "model yaniti kullanilamadi",
+              "model response unavailable",
             ),
           );
         }
@@ -710,7 +714,7 @@ export async function scoreCandidates(
   const all = ordered
     .map((c) => resultsById.get(c.caseId))
     .filter((s): s is ScoredCase => Boolean(s));
-  // Puanlilar once (puan azalan, esitlikte giris sirasi), puansizlar sonda.
+  // Scored first (score descending, input order breaking ties), unscored last.
   all.sort((x, y) => {
     if ((x.score > 0) !== (y.score > 0)) return x.score > 0 ? -1 : 1;
     if (x.score !== y.score) return y.score - x.score;

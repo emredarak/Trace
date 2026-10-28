@@ -25,12 +25,12 @@ export default async function LoginPage({
 
   return (
     <main>
-      <h1>Demo girişi</h1>
-      {params.error && <p>Hatalı parola.</p>}
+      <h1>Demo sign in</h1>
+      {params.error && <p>Incorrect password.</p>}
       <form action={login}>
-        <label htmlFor="passcode">Demo parolası</label>
+        <label htmlFor="passcode">Demo password</label>
         <input id="passcode" name="passcode" type="password" required />
-        <button type="submit">Giriş</button>
+        <button type="submit">Sign in</button>
       </form>
     </main>
   );

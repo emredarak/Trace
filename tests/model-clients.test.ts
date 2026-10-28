@@ -10,11 +10,17 @@ const ENV_KEYS = [
   "BASETEN_API_KEY",
   "BASETEN_API_URL",
   "SPARK_MODEL",
+  "MODEL_API_KEY",
   "META_API_KEY",
   "LLAMA_API_KEY",
   "META_API_URL",
   "META_MODEL",
   "GLIMMER_API_KEY",
+  "JUDGE_API_URL",
+  "JUDGE_MODEL",
+  "PROSECUTOR_API_URL",
+  "PROSECUTOR_MODEL",
+  "PROSECUTOR_API_KEY",
   "GLIMMER_API_URL",
   "GLIMMER_MODEL",
   "META_TIMEOUT_MS",
@@ -61,31 +67,31 @@ afterEach(() => {
 });
 
 describe("sparkChat", () => {
-  it("BASETEN_API_KEY varken Baseten URL/model/anahtarı seçilir (Meta env'leri dolu olsa bile)", async () => {
+  it("with BASETEN_API_KEY, Baseten URL/model/key is selected (even when Meta envs are set)", async () => {
     process.env.BASETEN_API_KEY = "baseten-key";
     process.env.BASETEN_API_URL = "https://baseten.example/v1/chat/completions";
     process.env.SPARK_MODEL = "spark-model";
     process.env.META_API_KEY = "meta-key";
     process.env.META_API_URL = "https://meta.example/v1/chat/completions";
     process.env.META_MODEL = "meta-model";
-    mockFetchReturning("spark yanıtı");
+    mockFetchReturning("spark response");
 
-    await expect(sparkChat("merhaba")).resolves.toBe("spark yanıtı");
+    await expect(sparkChat("hello")).resolves.toBe("spark response");
 
     const { url, init, body } = lastCall();
     expect(url).toBe("https://baseten.example/v1/chat/completions");
     expect(init.headers.Authorization).toBe("Bearer baseten-key");
     expect(body.model).toBe("spark-model");
-    expect(body.messages).toEqual([{ role: "user", content: "merhaba" }]);
+    expect(body.messages).toEqual([{ role: "user", content: "hello" }]);
   });
 
-  it("BASETEN_API_KEY yokken Meta API (META_API_KEY/META_API_URL/META_MODEL) seçilir", async () => {
+  it("without BASETEN_API_KEY, Meta API (META_API_KEY/META_API_URL/META_MODEL) is selected", async () => {
     process.env.META_API_KEY = "meta-key";
     process.env.META_API_URL = "https://meta.example/v1/chat/completions";
     process.env.META_MODEL = "meta-model";
-    mockFetchReturning("meta yanıtı");
+    mockFetchReturning("meta response");
 
-    await expect(sparkChat("merhaba")).resolves.toBe("meta yanıtı");
+    await expect(sparkChat("hello")).resolves.toBe("meta response");
 
     const { url, init, body } = lastCall();
     expect(url).toBe("https://meta.example/v1/chat/completions");
@@ -93,30 +99,52 @@ describe("sparkChat", () => {
     expect(body.model).toBe("meta-model");
   });
 
-  it("META_API_KEY yokken LLAMA_API_KEY yedeği kullanılır", async () => {
+  it("LLAMA_API_KEY is used as fallback when META_API_KEY is missing", async () => {
     process.env.LLAMA_API_KEY = "llama-key";
-    mockFetchReturning("llama yanıtı");
+    mockFetchReturning("llama response");
 
-    await expect(sparkChat("merhaba")).resolves.toBe("llama yanıtı");
+    await expect(sparkChat("hello")).resolves.toBe("llama response");
 
     const { init } = lastCall();
     expect(init.headers.Authorization).toBe("Bearer llama-key");
   });
 
-  it("hiçbir anahtar yokken hata fırlatır, fetch çağrılmaz", async () => {
-    mockFetchReturning("asla");
+  it("MODEL_API_KEY becomes the primary key when META_API_KEY is missing", async () => {
+    process.env.MODEL_API_KEY = "model-key";
+    mockFetchReturning("model response");
 
-    await expect(sparkChat("merhaba")).rejects.toThrow();
+    await expect(sparkChat("hello")).resolves.toBe("model response");
+
+    const { init } = lastCall();
+    expect(init.headers.Authorization).toBe("Bearer model-key");
+  });
+
+  it("JUDGE_MODEL takes precedence over META_MODEL", async () => {
+    process.env.META_API_KEY = "meta-key";
+    process.env.JUDGE_MODEL = "judge-model";
+    process.env.META_MODEL = "meta-model";
+    mockFetchReturning("arbiter response");
+
+    await expect(sparkChat("compare")).resolves.toBe("arbiter response");
+
+    const { body } = lastCall();
+    expect(body.model).toBe("judge-model");
+  });
+
+  it("throws when no key is set, fetch is not called", async () => {
+    mockFetchReturning("never");
+
+    await expect(sparkChat("hello")).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("görseller çok modlu içerik olarak gönderilir", async () => {
+  it("images are sent as multi-modal content", async () => {
     process.env.BASETEN_API_KEY = "baseten-key";
     process.env.BASETEN_API_URL = "https://baseten.example/v1/chat/completions";
     process.env.SPARK_MODEL = "spark-model";
-    mockFetchReturning("görsel yanıtı");
+    mockFetchReturning("image response");
 
-    await sparkChat("karşılaştır", [
+    await sparkChat("compare", [
       {
         caseId: "case-1",
         evidenceId: "ev-1",
@@ -127,23 +155,23 @@ describe("sparkChat", () => {
     const { body } = lastCall();
     const content = body.messages[0].content;
     expect(Array.isArray(content)).toBe(true);
-    expect(content[0]).toEqual({ type: "text", text: "karşılaştır" });
+    expect(content[0]).toEqual({ type: "text", text: "compare" });
     expect(content[1].type).toBe("image_url");
     expect(content[1].image_url.url).toBe("data:image/jpeg;base64,AAAA");
   });
 });
 
 describe("glimmerChat", () => {
-  it("GLIMMER_* env'leri tanımlıysa Glimmer URL/model/anahtarı kullanılır", async () => {
+  it("when GLIMMER_* envs are set, Glimmer URL/model/key is used", async () => {
     process.env.GLIMMER_API_KEY = "glimmer-key";
     process.env.GLIMMER_API_URL = "https://glimmer.example/v1/chat/completions";
     process.env.GLIMMER_MODEL = "glimmer-model";
     process.env.META_API_KEY = "meta-key";
     process.env.META_API_URL = "https://meta.example/v1/chat/completions";
     process.env.META_MODEL = "meta-model";
-    mockFetchReturning("glimmer yanıtı");
+    mockFetchReturning("glimmer response");
 
-    await expect(glimmerChat("özetle")).resolves.toBe("glimmer yanıtı");
+    await expect(glimmerChat("summarize")).resolves.toBe("glimmer response");
 
     const { url, init, body } = lastCall();
     expect(url).toBe("https://glimmer.example/v1/chat/completions");
@@ -151,13 +179,13 @@ describe("glimmerChat", () => {
     expect(body.model).toBe("glimmer-model");
   });
 
-  it("GLIMMER_* tanımsızsa chat katmanına (Meta env'leri) düşer", async () => {
+  it("when GLIMMER_* is unset, falls back to the chat layer (Meta envs)", async () => {
     process.env.META_API_KEY = "meta-key";
     process.env.META_API_URL = "https://meta.example/v1/chat/completions";
     process.env.META_MODEL = "meta-model";
-    mockFetchReturning("meta yanıtı");
+    mockFetchReturning("meta response");
 
-    await expect(glimmerChat("özetle")).resolves.toBe("meta yanıtı");
+    await expect(glimmerChat("summarize")).resolves.toBe("meta response");
 
     const { url, init, body } = lastCall();
     expect(url).toBe("https://meta.example/v1/chat/completions");
@@ -165,28 +193,45 @@ describe("glimmerChat", () => {
     expect(body.model).toBe("meta-model");
   });
 
-  it("hiçbir anahtar yokken hata fırlatır", async () => {
-    mockFetchReturning("asla");
+  it("PROSECUTOR_* envs take precedence over GLIMMER_* and Meta envs", async () => {
+    process.env.PROSECUTOR_API_KEY = "prosecutor-key";
+    process.env.PROSECUTOR_API_URL = "https://prosecutor.example/v1/chat/completions";
+    process.env.PROSECUTOR_MODEL = "prosecutor-model";
+    process.env.GLIMMER_API_KEY = "glimmer-key";
+    process.env.GLIMMER_API_URL = "https://glimmer.example/v1/chat/completions";
+    process.env.GLIMMER_MODEL = "glimmer-model";
+    mockFetchReturning("compiler response");
 
-    await expect(glimmerChat("özetle")).rejects.toThrow();
+    await expect(glimmerChat("summarize")).resolves.toBe("compiler response");
+
+    const { url, init, body } = lastCall();
+    expect(url).toBe("https://prosecutor.example/v1/chat/completions");
+    expect(init.headers.Authorization).toBe("Bearer prosecutor-key");
+    expect(body.model).toBe("prosecutor-model");
+  });
+
+  it("throws when no key is set", async () => {
+    mockFetchReturning("never");
+
+    await expect(glimmerChat("summarize")).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
-describe("chatCompletion (parametrik katman)", () => {
-  it("açık url/model/anahtar parametreleri env'den önce gelir", async () => {
+describe("chatCompletion (parametric layer)", () => {
+  it("explicit url/model/key params take precedence over env", async () => {
     process.env.META_API_KEY = "meta-key";
     process.env.META_API_URL = "https://meta.example/v1/chat/completions";
     process.env.META_MODEL = "meta-model";
-    mockFetchReturning("parametrik yanıt");
+    mockFetchReturning("parametric response");
 
     await expect(
-      chatCompletion("selam", {
+      chatCompletion("hi", {
         apiKey: "explicit-key",
         url: "https://explicit.example/chat/completions",
         model: "explicit-model",
       }),
-    ).resolves.toBe("parametrik yanıt");
+    ).resolves.toBe("parametric response");
 
     const { url, init, body } = lastCall();
     expect(url).toBe("https://explicit.example/chat/completions");
@@ -194,15 +239,15 @@ describe("chatCompletion (parametrik katman)", () => {
     expect(body.model).toBe("explicit-model");
   });
 
-  it("anahtar yokken hata fırlatır (mevcut davranış)", async () => {
-    mockFetchReturning("asla");
-    await expect(chatCompletion("selam")).rejects.toThrow(
+  it("throws when the key is missing (current behavior)", async () => {
+    mockFetchReturning("never");
+    await expect(chatCompletion("hi")).rejects.toThrow(
       "META_API_KEY is not set",
     );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("hic cevap vermeyen ucta kisa timeout ile reddeder (AbortSignal fetch'e gider)", async () => {
+  it("unresponsive endpoint rejects with a short timeout (AbortSignal goes to fetch)", async () => {
     process.env.META_API_KEY = "meta-key";
     fetchMock = vi.fn(
       (_url: unknown, init?: { signal?: AbortSignal }) =>
@@ -215,13 +260,13 @@ describe("chatCompletion (parametrik katman)", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      chatCompletion("selam", { timeoutMs: 20 }),
+      chatCompletion("hi", { timeoutMs: 20 }),
     ).rejects.toThrow();
     const [, init] = fetchMock.mock.calls[0] as [string, { signal?: unknown }];
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("GLIMMER_TIMEOUT_MS env'i Glimmer cagrisina kisa timeout olarak yansir", async () => {
+  it("GLIMMER_TIMEOUT_MS env is reflected as a short timeout on the Glimmer call", async () => {
     process.env.GLIMMER_API_KEY = "glimmer-key";
     process.env.GLIMMER_API_URL = "https://glimmer.example/v1/chat/completions";
     process.env.GLIMMER_TIMEOUT_MS = "20";
@@ -235,11 +280,11 @@ describe("chatCompletion (parametrik katman)", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(glimmerChat("özetle")).rejects.toThrow();
+    await expect(glimmerChat("summarize")).rejects.toThrow();
   });
 });
 
-describe("varsayılan istemci bağlantıları", () => {
+describe("default client wiring", () => {
   function makeCase(
     overrides: Partial<CaseRecord> & Pick<CaseRecord, "id" | "summary">,
   ): CaseRecord {
@@ -252,15 +297,15 @@ describe("varsayılan istemci bağlantıları", () => {
     };
   }
 
-  it("rerank varsayılan istemcisi Spark katmanını kullanır", async () => {
+  it("rerank default client uses the Spark layer", async () => {
     process.env.BASETEN_API_KEY = "baseten-key";
     process.env.BASETEN_API_URL = "https://baseten.example/v1/chat/completions";
     process.env.SPARK_MODEL = "spark-model";
-    const candidate = makeCase({ id: "case-a", summary: "su kenarında saldırı" });
-    const query = makeCase({ id: "query", summary: "su kenarında saldırı" });
+    const candidate = makeCase({ id: "case-a", summary: "waterfront attack" });
+    const query = makeCase({ id: "query", summary: "waterfront attack" });
     mockFetchReturning(
       JSON.stringify([
-        { caseId: "case-a", score: 9, reason: "çok benzer", quote: candidate.summary },
+        { caseId: "case-a", score: 9, reason: "very similar", quote: candidate.summary },
       ]),
     );
 
@@ -273,16 +318,16 @@ describe("varsayılan istemci bağlantıları", () => {
     expect(body.model).toBe("spark-model");
   });
 
-  it("fieldBrief varsayılan istemcisi Glimmer katmanını kullanır", async () => {
+  it("fieldBrief default client uses the Glimmer layer", async () => {
     process.env.GLIMMER_API_KEY = "glimmer-key";
     process.env.GLIMMER_API_URL = "https://glimmer.example/v1/chat/completions";
     process.env.GLIMMER_MODEL = "glimmer-model";
-    mockFetchReturning("Tek cümle özet.");
+    mockFetchReturning("One-sentence summary.");
     const entries = [
-      { type: "transcript", note: "gece beyaz arabayı gördüm" },
+      { type: "transcript", note: "I saw the white car at night" },
     ] as Parameters<typeof fieldBrief>[0];
 
-    await expect(fieldBrief(entries)).resolves.toBe("Tek cümle özet.");
+    await expect(fieldBrief(entries)).resolves.toBe("One-sentence summary.");
 
     const { url, body } = lastCall();
     expect(url).toBe("https://glimmer.example/v1/chat/completions");

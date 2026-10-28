@@ -5,7 +5,7 @@ import { buildDossier, type CaseDossier } from "../../../../../lib/dossier";
 import { findCandidates } from "../../../../../lib/candidates";
 import { scoreCandidates } from "../../../../../lib/similarity";
 
-/** Tek istekte calistirilacak zenginlestirme isi ust siniri. */
+/** Max enrichment jobs to run in a single request. */
 const ENRICHMENT_JOB_LIMIT = 5;
 
 function similarResultLimit(): number {
@@ -43,11 +43,11 @@ export async function GET(
   const fresh = !queryRow.needsRerank;
   const limit = similarResultLimit();
 
-  // Bekleyen zenginlestirme islerini sinirli sayida calistir; hata akisi bozmaz.
+  // Run a bounded number of pending enrichment jobs; errors never break the flow.
   try {
     await processPendingJobs(db, ENRICHMENT_JOB_LIMIT);
   } catch {
-    // Zenginlestirme basarisiz olsa da benzerlik kalan veriyle surer.
+    // Even when enrichment fails, similarity continues with the remaining data.
   }
   const pendingEnrichment = hasPendingEnrichment(db);
 
@@ -61,7 +61,7 @@ export async function GET(
     try {
       dossiers.push(await buildDossier(db, row.id));
     } catch {
-      // Tek vakanin dosyasi derlenemezse digerleri yine de aday olabilir.
+      // When one case dossier fails to build, the others can still become candidates.
     }
   }
 

@@ -42,9 +42,9 @@ export function evidenceHasContent(draft: {
 }
 
 export function validateEvidenceDraft(draft: CaseEvidenceDraft): string | null {
-  if (!draft.title.trim()) return "Delil Başlığı zorunludur.";
+  if (!draft.title.trim()) return "Evidence title is required.";
   if (!evidenceHasContent(draft)) {
-    return "Görsel, ses ya da nottan en az biri gereklidir.";
+    return "At least one of image, audio or note is required.";
   }
   return null;
 }
@@ -66,9 +66,9 @@ export function normalizeEvidenceInput(raw: {
 }
 
 const LEGACY_TITLES: Record<string, string> = {
-  transcript: "İfade",
-  "photo-marking": "Fotoğraf",
-  note: "Not",
+  transcript: "Statement",
+  "photo-marking": "Photo",
+  note: "Note",
 };
 
 export function toEvidenceResponse(
@@ -79,7 +79,7 @@ export function toEvidenceResponse(
   const type = typeof row.type === "string" && row.type ? row.type : "evidence";
   const title =
     text(row.title) ??
-    (type === "evidence" ? "Delil" : (LEGACY_TITLES[type] ?? type));
+    (type === "evidence" ? "Evidence" : (LEGACY_TITLES[type] ?? type));
   return {
     id: String(row.id),
     caseId: String(row.caseId),

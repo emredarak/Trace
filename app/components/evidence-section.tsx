@@ -82,13 +82,13 @@ function EvidenceCard({ evidence }: { evidence: CaseEvidenceDraft }) {
       {isPhotoMarking ? (
         <span>
           {marking
-            ? `(${boxes.length} kutu) `
-            : `${evidence.note || "(işaret bilgisi okunamadı)"} `}
+            ? `(${boxes.length} boxes) `
+            : `${evidence.note || "(marking info unreadable)"} `}
         </span>
       ) : null}
       {showNote ? <span>{evidence.note} </span> : null}
-      {evidence.image && !imageSrc ? <span>Görsel: {evidence.image.name} </span> : null}
-      {evidence.audio && !audioSrc ? <span>Ses: {evidence.audio.name} </span> : null}
+      {evidence.image && !imageSrc ? <span>Image: {evidence.image.name} </span> : null}
+      {evidence.audio && !audioSrc ? <span>Audio: {evidence.audio.name} </span> : null}
       {imageSrc ? (
         <img
           src={imageSrc}
@@ -113,7 +113,7 @@ export function EvidenceSection({
   dirty,
   status,
 }: EvidenceSectionProps) {
-  // undefined: panel kapalı, null: yeni delil, draft: düzenlenen delil.
+  // undefined: panel closed, null: new evidence, draft: evidence being edited.
   const [editor, setEditor] = useState<CaseEvidenceDraft | null | undefined>(undefined);
 
   function handleConfirm(draft: CaseEvidenceDraft) {
@@ -145,10 +145,10 @@ export function EvidenceSection({
         id={`${idPrefix}-deliller-baslik`}
         style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}
       >
-        Deliller
+        Evidence
       </h2>
 
-      {evidences.length === 0 ? <p style={textStyle}>Ekli delil yok.</p> : null}
+      {evidences.length === 0 ? <p style={textStyle}>No evidence added.</p> : null}
       <ul style={{ paddingLeft: "1.25rem" }}>
         {evidences.map((evidence) => (
           <li
@@ -166,10 +166,10 @@ export function EvidenceSection({
             {!readOnly ? (
               <>
                 <button type="button" onClick={() => setEditor(evidence)} style={buttonStyle}>
-                  Düzenle
+                  Edit
                 </button>{" "}
                 <button type="button" onClick={() => removeEvidence(evidence)} style={buttonStyle}>
-                  Sil
+                  Delete
                 </button>
               </>
             ) : null}
@@ -179,7 +179,7 @@ export function EvidenceSection({
 
       {!readOnly ? (
         <button type="button" onClick={() => setEditor(null)} style={buttonStyle}>
-          + Delil Ekle
+          + Add Evidence
         </button>
       ) : null}
 
@@ -192,10 +192,10 @@ export function EvidenceSection({
       {dirty && !readOnly ? (
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "1rem" }}>
           <button type="button" onClick={() => void onSave?.()} style={buttonStyle}>
-            Kaydet
+            Save
           </button>
           <button type="button" onClick={() => onReset?.()} style={buttonStyle}>
-            Vazgeç
+            Cancel
           </button>
         </div>
       ) : null}

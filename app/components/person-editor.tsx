@@ -53,12 +53,12 @@ const badgeStyle: React.CSSProperties = {
   lineHeight: 1.5,
 };
 
-const PERSON_TYPES: PersonType[] = ["maktul", "tanik", "supheli"];
+const PERSON_TYPES: PersonType[] = ["victim", "witness", "suspect"];
 
 const CONTACT_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "Belirtilmedi" },
-  { value: "ulasildi", label: "Ulaşıldı" },
-  { value: "ulasilamadi", label: "Ulaşılamadı" },
+  { value: "", label: "Not specified" },
+  { value: "reached", label: "Reached" },
+  { value: "unreached", label: "Not reached" },
 ];
 
 let fallbackIdCounter = 0;
@@ -78,7 +78,7 @@ export function PersonEditor({
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const id = (name: string) => `${uid}-${name}`;
 
-  const [type, setType] = useState<PersonType>(initial?.type ?? "maktul");
+  const [type, setType] = useState<PersonType>(initial?.type ?? "victim");
   const [name, setName] = useState(initial?.name ?? "");
   const [age, setAge] = useState(initial?.age ?? "");
   const [gender, setGender] = useState(initial?.gender ?? "");
@@ -101,27 +101,27 @@ export function PersonEditor({
 
   const typeColor = personTypeColor(type);
   const contactBadge =
-    contactStatus === "ulasildi"
-      ? { bg: "#005C1F", fg: "#FFFFFF", label: "Ulaşıldı" }
-      : contactStatus === "ulasilamadi"
-        ? { bg: "#B34700", fg: "#FFFFFF", label: "Ulaşılamadı" }
+    contactStatus === "reached"
+      ? { bg: "#005C1F", fg: "#FFFFFF", label: "Reached" }
+      : contactStatus === "unreached"
+        ? { bg: "#B34700", fg: "#FFFFFF", label: "Not reached" }
         : null;
 
   function handleConfirm() {
     if (!unidentified && !name.trim()) {
-      setError("Ad Soyad zorunludur.");
+      setError("Full name is required.");
       return;
     }
     const ageText = age.trim();
     if (ageText !== "") {
       const ageNum = Number(ageText);
       if (!Number.isInteger(ageNum) || ageNum < 0 || ageNum > 120) {
-        setError("Yaş 0 ile 120 arasında bir tam sayı olmalıdır.");
+        setError("Age must be a whole number between 0 and 120.");
         return;
       }
     }
     setError("");
-    const related = type === "maktul" ? "" : relatedVictimId;
+    const related = type === "victim" ? "" : relatedVictimId;
     onConfirm({
       id: initial?.id ?? newId(),
       name: name.trim(),
@@ -133,9 +133,9 @@ export function PersonEditor({
       relationship: related ? relationship.trim() : "",
       unidentified,
       contactStatus,
-      audioFile: type === "maktul" ? null : (initial?.audioFile ?? null),
-      audio: type === "maktul" ? null : audio,
-      removeAudio: type === "maktul" ? true : removeAudio,
+      audioFile: type === "victim" ? null : (initial?.audioFile ?? null),
+      audio: type === "victim" ? null : audio,
+      removeAudio: type === "victim" ? true : removeAudio,
     });
   }
 
@@ -168,7 +168,7 @@ export function PersonEditor({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={isEdit ? "Kişiyi Düzenle" : "Kişi Ekle"}
+        aria-label={isEdit ? "Edit Person" : "Add Person"}
         style={{
           background: "#ffffff",
           color: "#111111",
@@ -183,11 +183,11 @@ export function PersonEditor({
         }}
       >
         <h2 style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}>
-          {isEdit ? "Kişiyi Düzenle" : "Kişi Ekle"}
+          {isEdit ? "Edit Person" : "Add Person"}
         </h2>
 
         <fieldset style={{ margin: "0 0 1rem", padding: "0.75rem" }}>
-          <legend style={textStyle}>Tür</legend>
+          <legend style={textStyle}>Type</legend>
           {PERSON_TYPES.map((t) => (
             <label
               key={t}
@@ -216,7 +216,7 @@ export function PersonEditor({
         </fieldset>
 
         <label htmlFor={id("name")} style={textStyle}>
-          Ad Soyad
+          Full Name
         </label>
         <input
           id={id("name")}
@@ -230,7 +230,7 @@ export function PersonEditor({
         />
 
         <label htmlFor={id("age")} style={textStyle}>
-          Yaş
+          Age
         </label>
         <input
           id={id("age")}
@@ -246,7 +246,7 @@ export function PersonEditor({
         />
 
         <label htmlFor={id("gender")} style={textStyle}>
-          Cinsiyet
+          Gender
         </label>
         <select
           id={id("gender")}
@@ -255,13 +255,13 @@ export function PersonEditor({
           style={fieldStyle}
         >
           <option value=""></option>
-          <option value="kadın">kadın</option>
-          <option value="erkek">erkek</option>
-          <option value="bilinmiyor">bilinmiyor</option>
+          <option value="female">female</option>
+          <option value="male">male</option>
+          <option value="unknown">unknown</option>
         </select>
 
         <label htmlFor={id("note")} style={textStyle}>
-          Not
+          Note
         </label>
         <input
           id={id("note")}
@@ -271,10 +271,10 @@ export function PersonEditor({
           style={fieldStyle}
         />
 
-        {type !== "maktul" ? (
+        {type !== "victim" ? (
           <>
             <label htmlFor={id("relatedVictimId")} style={textStyle}>
-              İlişkili Maktül
+              Related Victim
             </label>
             <select
               id={id("relatedVictimId")}
@@ -291,7 +291,7 @@ export function PersonEditor({
             </select>
 
             <label htmlFor={id("relationship")} style={textStyle}>
-              İlişki
+              Relationship
             </label>
             <input
               id={id("relationship")}
@@ -312,7 +312,7 @@ export function PersonEditor({
               setError("");
             }}
           />{" "}
-          Kimliği Tespit Edilemedi
+          Unidentified
         </label>
         {unidentified ? (
           <p style={{ ...textStyle, margin: "0 0 1rem" }}>
@@ -323,13 +323,13 @@ export function PersonEditor({
                 color: "#000000",
               }}
             >
-              Kimliği Tespit Edilemedi
+              Unidentified
             </span>
           </p>
         ) : null}
 
         <label htmlFor={id("contactStatus")} style={textStyle}>
-          Ulaşılma Durumu
+          Contact Status
         </label>
         <select
           id={id("contactStatus")}
@@ -357,10 +357,10 @@ export function PersonEditor({
           </p>
         ) : null}
 
-        {type !== "maktul" ? (
+        {type !== "victim" ? (
           <>
             <label htmlFor={id("audio")} style={textStyle}>
-              Sorgu Ses Kaydı
+              Interview Audio Recording
             </label>
             <input
               id={id("audio")}
@@ -373,7 +373,7 @@ export function PersonEditor({
               style={fieldStyle}
             />
             {audio ? (
-              <p style={textStyle}>Seçili ses: {audio.name}</p>
+              <p style={textStyle}>Selected audio: {audio.name}</p>
             ) : initial?.audioFile && !removeAudio ? (
               <p style={textStyle}>
                 <audio
@@ -386,7 +386,7 @@ export function PersonEditor({
                   onClick={() => setRemoveAudio(true)}
                   style={buttonStyle}
                 >
-                  Ses Kaydını Kaldır
+                  Remove Audio Recording
                 </button>
               </p>
             ) : null}
@@ -401,10 +401,10 @@ export function PersonEditor({
 
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
           <button type="button" onClick={onClose} style={buttonStyle}>
-            Vazgeç
+            Cancel
           </button>
           <button type="button" onClick={handleConfirm} style={buttonStyle}>
-            {isEdit ? "Kaydet" : "Kişiyi Kullan"}
+            {isEdit ? "Save" : "Use This Person"}
           </button>
         </div>
       </div>

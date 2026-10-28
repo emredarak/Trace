@@ -45,73 +45,73 @@ function stubGeolocation(impl: {
 }
 
 describe("LocationPicker", () => {
-  it("başlık boşken hata gösterir ve onConfirm çağrılmaz; dolunca taslak taşınır", () => {
+  it("shows error when title empty and moves draft on confirm when filled", () => {
     const onConfirm = vi.fn();
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={onConfirm} />,
     );
     expect(
-      screen.getByRole("dialog", { name: "Konum Seç" }),
+      screen.getByRole("dialog", { name: "Select Location" }),
     ).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Bu Konumu Kullan" }));
-    expect(screen.getByRole("alert").textContent).toMatch(/başlığ/i);
+    fireEvent.click(screen.getByRole("button", { name: "Use This Location" }));
+    expect(screen.getByRole("alert").textContent).toMatch(/location title/i);
     expect(onConfirm).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText(/Konum Başlığı/), {
-      target: { value: "Köprü altı" },
+    fireEvent.change(screen.getByLabelText(/Location Title/), {
+      target: { value: "Under the bridge" },
     });
-    fireEvent.change(screen.getByLabelText("Konum Not"), {
-      target: { value: "delil bulundu" },
+    fireEvent.change(screen.getByLabelText("Location Note"), {
+      target: { value: "evidence found" },
     });
-    fireEvent.change(screen.getByLabelText(/Öncelik/), {
-      target: { value: "kritik" },
+    fireEvent.change(screen.getByLabelText(/Priority/), {
+      target: { value: "critical" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Bu Konumu Kullan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use This Location" }));
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
     const draft = onConfirm.mock.calls[0][0] as CaseLocationDraft;
-    expect(draft.title).toBe("Köprü altı");
-    expect(draft.note).toBe("delil bulundu");
-    expect(draft.kind).toBe("iliskili");
-    expect(draft.priority).toBe("kritik");
+    expect(draft.title).toBe("Under the bridge");
+    expect(draft.note).toBe("evidence found");
+    expect(draft.kind).toBe("related");
+    expect(draft.priority).toBe("critical");
     expect(typeof draft.id).toBe("string");
     expect(draft.id.length).toBeGreaterThan(0);
   });
 
-  it("öncelik yalnızca İlişkili seçiliyken görünür", () => {
+  it("priority only visible when Related selected", () => {
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={vi.fn()} />,
     );
-    expect(screen.getByLabelText(/Öncelik/)).toBeTruthy();
+    expect(screen.getByLabelText(/Priority/)).toBeTruthy();
 
-    fireEvent.click(screen.getByLabelText("Olay Yeri"));
-    expect(screen.queryByLabelText(/Öncelik/)).toBeNull();
+    fireEvent.click(screen.getByLabelText("Crime Scene"));
+    expect(screen.queryByLabelText(/Priority/)).toBeNull();
 
-    fireEvent.click(screen.getByLabelText("İlişkili Konum"));
-    expect(screen.getByLabelText(/Öncelik/)).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Related Location"));
+    expect(screen.getByLabelText(/Priority/)).toBeTruthy();
   });
 
-  it("Olay Yeri seçiminde öncelik taslağa null yazılır", () => {
+  it("crime-scene selection writes null priority to draft", () => {
     const onConfirm = vi.fn();
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={onConfirm} />,
     );
-    fireEvent.change(screen.getByLabelText(/Konum Başlığı/), {
-      target: { value: "Olay noktası" },
+    fireEvent.change(screen.getByLabelText(/Location Title/), {
+      target: { value: "Incident point" },
     });
-    fireEvent.click(screen.getByLabelText("Olay Yeri"));
-    fireEvent.click(screen.getByRole("button", { name: "Bu Konumu Kullan" }));
+    fireEvent.click(screen.getByLabelText("Crime Scene"));
+    fireEvent.click(screen.getByRole("button", { name: "Use This Location" }));
     const draft = onConfirm.mock.calls[0][0] as CaseLocationDraft;
-    expect(draft.kind).toBe("olay-yeri");
+    expect(draft.kind).toBe("crime-scene");
     expect(draft.priority).toBeNull();
   });
 
-  it("adres sonucunda tıklanan nokta taslak koordinatı olur, hata çıkmaz", async () => {
+  it("clicked address result becomes draft coordinates, no error", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => [
-        { display_name: "Test Adres, Ankara", lat: "39.93", lon: "32.85" },
+        { display_name: "Test Address, Ankara", lat: "39.93", lon: "32.85" },
       ],
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -119,34 +119,34 @@ describe("LocationPicker", () => {
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={onConfirm} />,
     );
-    fireEvent.change(screen.getByLabelText(/Konum Başlığı/), {
-      target: { value: "Aranan yer" },
+    fireEvent.change(screen.getByLabelText(/Location Title/), {
+      target: { value: "Searched place" },
     });
-    fireEvent.change(screen.getByLabelText("Konum Not"), {
-      target: { value: "not korunur" },
+    fireEvent.change(screen.getByLabelText("Location Note"), {
+      target: { value: "note preserved" },
     });
-    fireEvent.change(screen.getByLabelText(/Adres/), {
-      target: { value: "Test Adres" },
+    fireEvent.change(screen.getByLabelText(/address/i), {
+      target: { value: "Test Address" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Ara" }));
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("accept-language=tr");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("accept-language=en");
     expect(String(fetchMock.mock.calls[0][0])).toContain("limit=5");
 
     fireEvent.click(
-      await screen.findByRole("button", { name: /Test Adres, Ankara/ }),
+      await screen.findByRole("button", { name: /Test Address, Ankara/ }),
     );
     expect(screen.queryByRole("alert")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Bu Konumu Kullan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use This Location" }));
     const draft = onConfirm.mock.calls[0][0] as CaseLocationDraft;
     expect(draft.latitude).toBeCloseTo(39.93);
     expect(draft.longitude).toBeCloseTo(32.85);
-    expect(draft.title).toBe("Aranan yer");
+    expect(draft.title).toBe("Searched place");
   });
 
-  it("adres sonucu yoksa hata görünür ve başlık/not dolu kalır", async () => {
+  it("no address result shows error and keeps title/note", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => [] }),
@@ -154,56 +154,56 @@ describe("LocationPicker", () => {
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={vi.fn()} />,
     );
-    fireEvent.change(screen.getByLabelText(/Konum Başlığı/), {
-      target: { value: "Başlığım" },
+    fireEvent.change(screen.getByLabelText(/Location Title/), {
+      target: { value: "My title" },
     });
-    fireEvent.change(screen.getByLabelText("Konum Not"), {
-      target: { value: "Notum" },
+    fireEvent.change(screen.getByLabelText("Location Note"), {
+      target: { value: "My note" },
     });
-    fireEvent.change(screen.getByLabelText(/Adres/), {
-      target: { value: "olmayan yer" },
+    fireEvent.change(screen.getByLabelText(/address/i), {
+      target: { value: "nonexistent place" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Ara" }));
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(
-      /bulunamadı|aranamadı/i,
+      /address not found/i,
     );
     expect(
-      (screen.getByLabelText(/Konum Başlığı/) as HTMLInputElement).value,
-    ).toBe("Başlığım");
-    expect((screen.getByLabelText("Konum Not") as HTMLInputElement).value).toBe(
-      "Notum",
+      (screen.getByLabelText(/Location Title/) as HTMLInputElement).value,
+    ).toBe("My title");
+    expect((screen.getByLabelText("Location Note") as HTMLInputElement).value).toBe(
+      "My note",
     );
   });
 
-  it("adres aramada ağ hatasında hata görünür ve başlık/not dolu kalır", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ağ yok")));
+  it("address search network error shows error and keeps title/note", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("no network")));
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={vi.fn()} />,
     );
-    fireEvent.change(screen.getByLabelText(/Konum Başlığı/), {
-      target: { value: "Başlığım" },
+    fireEvent.change(screen.getByLabelText(/Location Title/), {
+      target: { value: "My title" },
     });
-    fireEvent.change(screen.getByLabelText("Konum Not"), {
-      target: { value: "Notum" },
+    fireEvent.change(screen.getByLabelText("Location Note"), {
+      target: { value: "My note" },
     });
-    fireEvent.change(screen.getByLabelText(/Adres/), {
-      target: { value: "bir yer" },
+    fireEvent.change(screen.getByLabelText(/address/i), {
+      target: { value: "somewhere" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Ara" }));
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     expect((await screen.findByRole("alert")).textContent).toMatch(
-      /aranamadı|bağlantı/i,
+      /could not search the address/i,
     );
     expect(
-      (screen.getByLabelText(/Konum Başlığı/) as HTMLInputElement).value,
-    ).toBe("Başlığım");
-    expect((screen.getByLabelText("Konum Not") as HTMLInputElement).value).toBe(
-      "Notum",
+      (screen.getByLabelText(/Location Title/) as HTMLInputElement).value,
+    ).toBe("My title");
+    expect((screen.getByLabelText("Location Note") as HTMLInputElement).value).toBe(
+      "My note",
     );
   });
 
-  it("Konumuma Git başarısında koordinat alınır", () => {
+  it("Go to My Location success takes coordinates", () => {
     stubGeolocation({
       getCurrentPosition: (ok) =>
         ok({ coords: { latitude: 41.02, longitude: 28.97 } }),
@@ -212,53 +212,53 @@ describe("LocationPicker", () => {
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={onConfirm} />,
     );
-    fireEvent.change(screen.getByLabelText(/Konum Başlığı/), {
-      target: { value: "GPS noktası" },
+    fireEvent.change(screen.getByLabelText(/Location Title/), {
+      target: { value: "GPS point" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Konumuma Git" }));
-    fireEvent.click(screen.getByRole("button", { name: "Bu Konumu Kullan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to My Location" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use This Location" }));
     const draft = onConfirm.mock.calls[0][0] as CaseLocationDraft;
     expect(draft.latitude).toBeCloseTo(41.02);
     expect(draft.longitude).toBeCloseTo(28.97);
   });
 
-  it("Konumuma Git reddinde okunabilir hata görünür", () => {
+  it("Go to My Location denial shows readable error", () => {
     stubGeolocation({
       getCurrentPosition: (_ok, err) => err?.({ message: "denied" }),
     });
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={vi.fn()} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Konumuma Git" }));
-    expect(screen.getByRole("alert").textContent).toMatch(/konum alınamadı/i);
+    fireEvent.click(screen.getByRole("button", { name: "Go to My Location" }));
+    expect(screen.getByRole("alert").textContent).toMatch(/could not get your location/i);
   });
 
-  it("harita seçimi temizlenince koordinatsız kaydedilir", () => {
+  it("cleared map selection saves without coordinates", () => {
     const onConfirm = vi.fn();
     render(
       <LocationPicker initial={null} onClose={vi.fn()} onConfirm={onConfirm} />,
     );
-    fireEvent.change(screen.getByLabelText(/Konum Başlığı/), {
-      target: { value: "Harita noktası" },
+    fireEvent.change(screen.getByLabelText(/Location Title/), {
+      target: { value: "Map point" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Harita noktası seç" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Harita seçimini temizle" }),
+      screen.getByRole("button", { name: "Clear map selection" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Bu Konumu Kullan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use This Location" }));
     const draft = onConfirm.mock.calls[0][0] as CaseLocationDraft;
     expect(draft.latitude).toBeUndefined();
     expect(draft.longitude).toBeUndefined();
   });
 
-  it("düzenleme modunda alanlar dolu gelir ve Kaydet aynı id ile döner", () => {
+  it("edit mode prefills fields and Save returns same id", () => {
     const onConfirm = vi.fn();
     const initial: CaseLocationDraft = {
       id: "loc-1",
-      title: "Eski başlık",
-      note: "eski not",
-      kind: "iliskili",
-      priority: "rutin",
+      title: "Old title",
+      note: "old note",
+      kind: "related",
+      priority: "routine",
       latitude: 39.9,
       longitude: 32.8,
     };
@@ -269,23 +269,23 @@ describe("LocationPicker", () => {
         onConfirm={onConfirm}
       />,
     );
-    expect(screen.getByRole("dialog", { name: "Konumu Düzenle" })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: "Edit Location" })).toBeTruthy();
     expect(
-      (screen.getByLabelText(/Konum Başlığı/) as HTMLInputElement).value,
-    ).toBe("Eski başlık");
-    fireEvent.click(screen.getByRole("button", { name: "Kaydet" }));
+      (screen.getByLabelText(/Location Title/) as HTMLInputElement).value,
+    ).toBe("Old title");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     const draft = onConfirm.mock.calls[0][0] as CaseLocationDraft;
     expect(draft.id).toBe("loc-1");
-    expect(draft.priority).toBe("rutin");
+    expect(draft.priority).toBe("routine");
     expect(draft.latitude).toBeCloseTo(39.9);
   });
 
-  it("Vazgeç onClose çağırır", () => {
+  it("Cancel calls onClose", () => {
     const onClose = vi.fn();
     render(
       <LocationPicker initial={null} onClose={onClose} onConfirm={vi.fn()} />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Vazgeç" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

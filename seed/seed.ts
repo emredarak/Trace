@@ -1,6 +1,6 @@
-// seed/seed.ts — KURGU örnek vaka setini gerçek API (POST /api/cases) üzerinden yükler.
-// Tüm kayıtlar kurgudur: caseNo TR-SEED-*, özetler "[Kurgu]" öneklidir.
-// Kullanım:  TRACE_BASE_URL=http://localhost:3000 node seed/seed.ts
+// seed/seed.ts — Fiction sample case set loaded via real API (POST /api/cases).
+// All records are fictional: caseNo TR-SEED-*, summaries prefixed "[Fiction]".
+// Usage:  TRACE_BASE_URL=http://localhost:3000 node seed/seed.ts
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +20,7 @@ for (const record of seed) {
   const { caseNo: _seedNo, ...input } = record;
   const res = await fetch(`${BASE}/api/cases`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Cookie: "trace_demo=1" },
     body: JSON.stringify(input),
   });
   if (res.status !== 201) {
@@ -33,4 +33,4 @@ for (const record of seed) {
     ok++;
   }
 }
-console.log(`${ok}/${seed.length} kurgu vaka yüklendi.`);
+console.log(`${ok}/${seed.length} fictional cases loaded.`);

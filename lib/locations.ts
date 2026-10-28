@@ -1,5 +1,5 @@
-export type LocationKind = "olay-yeri" | "iliskili";
-export type LocationPriority = "kritik" | "onemli" | "rutin";
+export type LocationKind = "crime-scene" | "related";
+export type LocationPriority = "critical" | "important" | "routine";
 
 export interface LocationLike {
   kind?: LocationKind | string | null;
@@ -27,19 +27,19 @@ export interface CoordLike {
 }
 
 const COLORS: Record<string, { pin: string; badgeFg: string }> = {
-  "olay-yeri": { pin: "#C00000", badgeFg: "#FFFFFF" },
-  kritik: { pin: "#B34700", badgeFg: "#FFFFFF" },
-  onemli: { pin: "#FFD400", badgeFg: "#000000" },
-  rutin: { pin: "#0050A0", badgeFg: "#FFFFFF" },
-  etiketsiz: { pin: "#5A5A5A", badgeFg: "#FFFFFF" },
+  "crime-scene": { pin: "#C00000", badgeFg: "#FFFFFF" },
+  critical: { pin: "#B34700", badgeFg: "#FFFFFF" },
+  important: { pin: "#FFD400", badgeFg: "#000000" },
+  routine: { pin: "#0050A0", badgeFg: "#FFFFFF" },
+  untagged: { pin: "#5A5A5A", badgeFg: "#FFFFFF" },
 };
 
 function colorKey(loc: LocationLike): string {
-  if (loc.kind === "olay-yeri") return "olay-yeri";
-  if (loc.priority === "kritik" || loc.priority === "onemli" || loc.priority === "rutin") {
+  if (loc.kind === "crime-scene") return "crime-scene";
+  if (loc.priority === "critical" || loc.priority === "important" || loc.priority === "routine") {
     return loc.priority;
   }
-  return "etiketsiz";
+  return "untagged";
 }
 
 export function locationColor(loc: LocationLike): {
@@ -52,27 +52,27 @@ export function locationColor(loc: LocationLike): {
 }
 
 export function locationLabel(loc: LocationLike): string {
-  if (loc.kind === "olay-yeri") return "Olay Yeri";
+  if (loc.kind === "crime-scene") return "Crime Scene";
   switch (loc.priority) {
-    case "kritik":
-      return "Kritik";
-    case "onemli":
-      return "Önemli";
-    case "rutin":
-      return "Rutin";
+    case "critical":
+      return "Critical";
+    case "important":
+      return "Important";
+    case "routine":
+      return "Routine";
     default:
-      return "İlişkili Konum";
+      return "Related Location";
   }
 }
 
 function sortKey(loc: LocationLike): number {
-  if (loc.kind === "olay-yeri") return 0;
+  if (loc.kind === "crime-scene") return 0;
   switch (loc.priority) {
-    case "kritik":
+    case "critical":
       return 1;
-    case "onemli":
+    case "important":
       return 2;
-    case "rutin":
+    case "routine":
       return 3;
     default:
       return 4;

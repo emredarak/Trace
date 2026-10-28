@@ -115,16 +115,16 @@ async function runJob(
   transcribeClient: TranscriptionClient | undefined,
   markingClient: MarkingClient | undefined,
 ): Promise<boolean> {
-  if (!job.refId) throw new Error("is referansi (refId) yok");
+  if (!job.refId) throw new Error("job reference (refId) is missing");
   if (job.kind === "transcribe") {
     const person = db
       .prepare("SELECT audioFile FROM case_persons WHERE id = ? AND caseId = ?")
       .get(job.refId, job.caseId) as { audioFile: unknown } | undefined;
     if (person) {
       const file = text(person.audioFile);
-      if (!file) throw new Error("kisi ses dosyasi yok");
+      if (!file) throw new Error("person audio file is missing");
       const audio = readUpload(file);
-      if (!audio) throw new Error(`ses dosyasi diskte yok: ${file}`);
+      if (!audio) throw new Error(`audio file not on disk: ${file}`);
       const transcript = await transcribe(audio, file, transcribeClient);
       const res = db
         .prepare(
@@ -142,9 +142,9 @@ async function runJob(
       .get(job.refId, job.caseId) as { audioFile: unknown } | undefined;
     if (evidence) {
       const file = text(evidence.audioFile);
-      if (!file) throw new Error("delil ses dosyasi yok");
+      if (!file) throw new Error("evidence audio file is missing");
       const audio = readUpload(file);
-      if (!audio) throw new Error(`ses dosyasi diskte yok: ${file}`);
+      if (!audio) throw new Error(`audio file not on disk: ${file}`);
       const transcript = await transcribe(audio, file, transcribeClient);
       const res = db
         .prepare(
@@ -157,7 +157,7 @@ async function runJob(
         .get(job.refId, job.caseId) as { audioFile: unknown } | undefined;
       return Boolean(now && text(now.audioFile) && text(now.audioFile) !== file);
     }
-    throw new Error("transcribe hedefi bulunamadi (kisi/delil kaydi yok)");
+    throw new Error("transcribe target not found (no person/evidence record)");
   }
   if (job.kind === "sam") {
     const evidence = db
@@ -165,12 +165,12 @@ async function runJob(
       .get(job.refId, job.caseId) as
       | { title: unknown; note: unknown; imageFile: unknown }
       | undefined;
-    if (!evidence) throw new Error("sam hedefi bulunamadi (delil kaydi yok)");
+    if (!evidence) throw new Error("sam target not found (no evidence record)");
     const file = text(evidence.imageFile);
-    if (!file) throw new Error("delil gorsel dosyasi yok");
+    if (!file) throw new Error("evidence image file is missing");
     const image = readUpload(file);
-    if (!image) throw new Error(`gorsel dosyasi diskte yok: ${file}`);
-    const hint = text(evidence.title) ?? text(evidence.note) ?? "delil";
+    if (!image) throw new Error(`image file not on disk: ${file}`);
+    const hint = text(evidence.title) ?? text(evidence.note) ?? "evidence";
     const marking = await markPhoto(image, hint, markingClient);
     const res = db
       .prepare(
@@ -183,7 +183,7 @@ async function runJob(
       .get(job.refId, job.caseId) as { imageFile: unknown } | undefined;
     return Boolean(now && text(now.imageFile) && text(now.imageFile) !== file);
   }
-  throw new Error(`desteklenmeyen is turu: ${job.kind}`);
+  throw new Error(`unsupported job type: ${job.kind}`);
 }
 
 export async function processPendingJobs(

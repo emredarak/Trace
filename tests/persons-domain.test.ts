@@ -10,211 +10,211 @@ import { validateCaseInput } from "../lib/case-schema";
 import { closeDb, getDb, initDb, insertCase } from "../lib/db";
 
 describe("personTypeLabel / personTypeColor", () => {
-  it("tip etiketlerini döner", () => {
-    expect(personTypeLabel("maktul")).toBe("Maktül");
-    expect(personTypeLabel("tanik")).toBe("Tanık");
-    expect(personTypeLabel("supheli")).toBe("Şüpheli");
+  it("returns type labels", () => {
+    expect(personTypeLabel("victim")).toBe("Victim");
+    expect(personTypeLabel("witness")).toBe("Witness");
+    expect(personTypeLabel("suspect")).toBe("Suspect");
   });
 
-  it("spec hex renklerini döner", () => {
-    expect(personTypeColor("maktul")).toEqual({ bg: "#990000", fg: "#FFFFFF" });
-    expect(personTypeColor("supheli")).toEqual({ bg: "#6B21A8", fg: "#FFFFFF" });
-    expect(personTypeColor("tanik")).toEqual({ bg: "#0050A0", fg: "#FFFFFF" });
+  it("returns spec hex colors", () => {
+    expect(personTypeColor("victim")).toEqual({ bg: "#990000", fg: "#FFFFFF" });
+    expect(personTypeColor("suspect")).toEqual({ bg: "#6B21A8", fg: "#FFFFFF" });
+    expect(personTypeColor("witness")).toEqual({ bg: "#0050A0", fg: "#FFFFFF" });
   });
 
-  it("cinsiyet listesini döner", () => {
-    expect(PERSON_GENDERS).toEqual(["kadın", "erkek", "bilinmiyor"]);
+  it("returns the gender list", () => {
+    expect(PERSON_GENDERS).toEqual(["female", "male", "unknown"]);
   });
 });
 
 describe("normalizePersonInput", () => {
-  it("tanıkta ilişki alanlarını korur ve metinleri kırpar", () => {
+  it("keeps relation fields for witnesses and trims text", () => {
     expect(
       normalizePersonInput({
-        id: " tanik-1 ",
-        name: "  Ayşe Yılmaz ",
+        id: " witness-1 ",
+        name: "  Alice Johnson ",
         age: 34,
-        gender: "kadın",
-        note: "  olay yerindeydi ",
-        type: "tanik",
-        relatedVictimId: " maktul-1 ",
-        relationship: " eşi ",
+        gender: "female",
+        note: "  was at the scene ",
+        type: "witness",
+        relatedVictimId: " victim-1 ",
+        relationship: " spouse ",
         unidentified: false,
-        contactStatus: "ulasildi",
+        contactStatus: "reached",
       }),
     ).toEqual({
-      id: "tanik-1",
-      name: "Ayşe Yılmaz",
+      id: "witness-1",
+      name: "Alice Johnson",
       age: 34,
-      gender: "kadın",
-      note: "olay yerindeydi",
-      type: "tanik",
-      relatedVictimId: "maktul-1",
-      relationship: "eşi",
+      gender: "female",
+      note: "was at the scene",
+      type: "witness",
+      relatedVictimId: "victim-1",
+      relationship: "spouse",
       unidentified: false,
-      contactStatus: "ulasildi",
+      contactStatus: "reached",
     });
   });
 
-  it("maktülde ilişki alanlarını null'a zorlar", () => {
+  it("forces relation fields to null for victims", () => {
     const p = normalizePersonInput({
-      name: "Maktül Kişi",
-      type: "maktul",
-      relatedVictimId: "baskasi",
-      relationship: "eşi",
+      name: "Victim Person",
+      type: "victim",
+      relatedVictimId: "someone-else",
+      relationship: "spouse",
     });
     expect(p.relatedVictimId).toBeNull();
     expect(p.relationship).toBeNull();
   });
 
-  it("ilişkili maktül yoksa ilişki metnini de null yapar", () => {
+  it("nulls the relation text when there is no related victim", () => {
     const p = normalizePersonInput({
-      name: "Tanık",
-      type: "supheli",
-      relationship: "komşusu",
+      name: "Witness",
+      type: "suspect",
+      relationship: "neighbor",
     });
     expect(p.relatedVictimId).toBeNull();
     expect(p.relationship).toBeNull();
   });
 
-  it("işaretsiz boş ad hata, işaretli boş ad kabul edilir", () => {
-    expect(() => normalizePersonInput({ name: "  ", type: "tanik" })).toThrow();
-    expect(() => normalizePersonInput({ type: "tanik" })).toThrow();
-    const p = normalizePersonInput({ name: "  ", type: "tanik", unidentified: true });
+  it("unchecked empty name errors, checked empty name accepted", () => {
+    expect(() => normalizePersonInput({ name: "  ", type: "witness" })).toThrow();
+    expect(() => normalizePersonInput({ type: "witness" })).toThrow();
+    const p = normalizePersonInput({ name: "  ", type: "witness", unidentified: true });
     expect(p.name).toBeNull();
     expect(p.unidentified).toBe(true);
   });
 
-  it("yaş: -1/121/1.5 hata, boş ve sınır değerler kabul", () => {
+  it("age: -1/121/1.5 error, empty and boundary values accepted", () => {
     for (const age of [-1, 121, 1.5]) {
-      expect(() => normalizePersonInput({ name: "A", type: "maktul", age })).toThrow();
+      expect(() => normalizePersonInput({ name: "A", type: "victim", age })).toThrow();
     }
-    expect(normalizePersonInput({ name: "A", type: "maktul" }).age).toBeNull();
-    expect(normalizePersonInput({ name: "A", type: "maktul", age: "" }).age).toBeNull();
-    expect(normalizePersonInput({ name: "A", type: "maktul", age: 0 }).age).toBe(0);
-    expect(normalizePersonInput({ name: "A", type: "maktul", age: 120 }).age).toBe(120);
-    expect(normalizePersonInput({ name: "A", type: "maktul", age: "   " }).age).toBeNull();
-    expect(normalizePersonInput({ name: "A", type: "maktul", age: " 34 " }).age).toBe(34);
+    expect(normalizePersonInput({ name: "A", type: "victim" }).age).toBeNull();
+    expect(normalizePersonInput({ name: "A", type: "victim", age: "" }).age).toBeNull();
+    expect(normalizePersonInput({ name: "A", type: "victim", age: 0 }).age).toBe(0);
+    expect(normalizePersonInput({ name: "A", type: "victim", age: 120 }).age).toBe(120);
+    expect(normalizePersonInput({ name: "A", type: "victim", age: "   " }).age).toBeNull();
+    expect(normalizePersonInput({ name: "A", type: "victim", age: " 34 " }).age).toBe(34);
   });
 
-  it("geçersiz tip/cinsiyet/iletişim durumu hata verir", () => {
-    expect(() => normalizePersonInput({ name: "A", type: "baska" })).toThrow();
+  it("invalid type/gender/contact status errors", () => {
+    expect(() => normalizePersonInput({ name: "A", type: "other" })).toThrow();
     expect(() => normalizePersonInput({ name: "A" })).toThrow();
     expect(
-      () => normalizePersonInput({ name: "A", type: "maktul", gender: "diger" }),
+      () => normalizePersonInput({ name: "A", type: "victim", gender: "diverse" }),
     ).toThrow();
     expect(
-      () => normalizePersonInput({ name: "A", type: "maktul", contactStatus: "belki" }),
+      () => normalizePersonInput({ name: "A", type: "victim", contactStatus: "maybe" }),
     ).toThrow();
     expect(
-      normalizePersonInput({ name: "A", type: "maktul", contactStatus: "ulasilamadi" })
+      normalizePersonInput({ name: "A", type: "victim", contactStatus: "unreached" })
         .contactStatus,
-    ).toBe("ulasilamadi");
-    expect(normalizePersonInput({ name: "A", type: "maktul" }).contactStatus).toBeNull();
-    expect(normalizePersonInput({ name: "A", type: "maktul", gender: "" }).gender).toBeNull();
+    ).toBe("unreached");
+    expect(normalizePersonInput({ name: "A", type: "victim" }).contactStatus).toBeNull();
+    expect(normalizePersonInput({ name: "A", type: "victim", gender: "" }).gender).toBeNull();
   });
 
-  it("nesne olmayan giriş hata verir", () => {
+  it("non-object input errors", () => {
     expect(() => normalizePersonInput(null)).toThrow();
-    expect(() => normalizePersonInput("kişi")).toThrow();
+    expect(() => normalizePersonInput("person")).toThrow();
   });
 });
 
 describe("normalizePersonsInput", () => {
-  it("dizi olmayan giriş hata verir, boş dizi kabul edilir", () => {
+  it("non-array input errors, empty array accepted", () => {
     expect(() => normalizePersonsInput({})).toThrow();
     expect(normalizePersonsInput([])).toEqual([]);
   });
 
-  it("maktül olmayan kişiye ilişki hata verir", () => {
+  it("relation to a non-victim person errors", () => {
     expect(() =>
       normalizePersonsInput([
-        { id: "t1", name: "Tanık", type: "tanik" },
-        { id: "s1", name: "Şüpheli", type: "supheli", relatedVictimId: "t1" },
+        { id: "t1", name: "Witness", type: "witness" },
+        { id: "s1", name: "Suspect", type: "suspect", relatedVictimId: "t1" },
       ]),
     ).toThrow();
   });
 
-  it("dizide olmayan kişiye ilişki hata verir", () => {
+  it("relation to a person not in the array errors", () => {
     expect(() =>
       normalizePersonsInput([
-        { id: "s1", name: "Şüpheli", type: "supheli", relatedVictimId: "yok" },
+        { id: "s1", name: "Suspect", type: "suspect", relatedVictimId: "missing" },
       ]),
     ).toThrow();
   });
 
-  it("kimliği olmayan maktüle ilişki kurulamaz", () => {
+  it("cannot relate to an unidentified victim", () => {
     expect(() =>
       normalizePersonsInput([
-        { name: "Maktül", type: "maktul" },
-        { id: "s1", name: "Şüpheli", type: "supheli", relatedVictimId: "yok" },
+        { name: "Victim", type: "victim" },
+        { id: "s1", name: "Suspect", type: "suspect", relatedVictimId: "missing" },
       ]),
     ).toThrow();
   });
 
-  it("yinelenen tanımlı kişi id'si hata verir", () => {
+  it("duplicate defined person id errors", () => {
     expect(() =>
       normalizePersonsInput([
-        { id: "m1", name: "Maktül", type: "maktul" },
-        { id: "m1", name: "Başka", type: "tanik" },
+        { id: "m1", name: "Victim", type: "victim" },
+        { id: "m1", name: "Other", type: "witness" },
       ]),
     ).toThrow(/duplicate person\.id/);
   });
 
-  it("aynı dizideki istemci kimlikli maktüle ilişki kabul edilir (maktül sonra da olabilir)", () => {
+  it("relation to a client-id victim in the same array accepted (victim may come later)", () => {
     const persons = normalizePersonsInput([
       {
         id: "s1",
-        name: "Şüpheli",
-        type: "supheli",
+        name: "Suspect",
+        type: "suspect",
         relatedVictimId: "m1",
-        relationship: "komşusu",
+        relationship: "neighbor",
       },
-      { id: "m1", name: "Maktül", type: "maktul" },
+      { id: "m1", name: "Victim", type: "victim" },
     ]);
     expect(persons[0].relatedVictimId).toBe("m1");
-    expect(persons[0].relationship).toBe("komşusu");
+    expect(persons[0].relationship).toBe("neighbor");
   });
 });
 
 describe("validateCaseInput persons", () => {
-  it("persons dizisini normalize eder, geçersiz ilişkiyi reddeder", () => {
+  it("normalizes the persons array, rejects invalid relations", () => {
     const out = validateCaseInput({
-      summary: "vaka",
-      persons: [{ id: "m1", name: "Maktül", type: "maktul" }],
+      summary: "case",
+      persons: [{ id: "m1", name: "Victim", type: "victim" }],
     });
     expect(out.persons).toHaveLength(1);
-    expect(out.persons?.[0]).toMatchObject({ id: "m1", type: "maktul" });
+    expect(out.persons?.[0]).toMatchObject({ id: "m1", type: "victim" });
     expect(() =>
       validateCaseInput({
-        summary: "vaka",
-        persons: [{ name: "T", type: "tanik", relatedVictimId: "yok" }],
+        summary: "case",
+        persons: [{ name: "T", type: "witness", relatedVictimId: "missing" }],
       }),
     ).toThrow();
-    expect(validateCaseInput({ summary: "vaka" }).persons).toBeUndefined();
+    expect(validateCaseInput({ summary: "case" }).persons).toBeUndefined();
   });
 });
 
-describe("insertCase persons (iki aşamalı)", () => {
+describe("insertCase persons (two-phase)", () => {
   beforeEach(() => {
     process.env.TRACE_DB_PATH = ":memory:";
     closeDb();
     initDb();
   });
 
-  it("maktül dizide sonra gelse bile ilişkili kişileri case_persons'a yazar", () => {
+  it("writes related persons to case_persons even when the victim comes later in the array", () => {
     const rec = insertCase({
-      summary: "kişili vaka",
+      summary: "case with person",
       persons: normalizePersonsInput([
         {
           id: "s1",
-          name: "Şüpheli",
-          type: "supheli",
+          name: "Suspect",
+          type: "suspect",
           relatedVictimId: "m1",
-          relationship: "komşusu",
+          relationship: "neighbor",
         },
-        { id: "m1", name: "Maktül", type: "maktul", unidentified: false },
-        { name: "Adsız", type: "tanik", unidentified: true },
+        { id: "m1", name: "Victim", type: "victim", unidentified: false },
+        { name: "Nameless", type: "witness", unidentified: true },
       ]),
     });
     const rows = getDb()
@@ -226,11 +226,11 @@ describe("insertCase persons (iki aşamalı)", () => {
     expect(rows[0]).toMatchObject({
       id: "s1",
       relatedVictimId: "m1",
-      relationship: "komşusu",
+      relationship: "neighbor",
     });
-    expect(rows[1]).toMatchObject({ id: "m1", type: "maktul", relatedVictimId: null });
+    expect(rows[1]).toMatchObject({ id: "m1", type: "victim", relatedVictimId: null });
     expect(rows[2].id).toBeTruthy();
     expect(rows[2].id).not.toBe("s1");
-    expect(rows[2]).toMatchObject({ name: "Adsız", unidentified: 1 });
+    expect(rows[2]).toMatchObject({ name: "Nameless", unidentified: 1 });
   });
 });

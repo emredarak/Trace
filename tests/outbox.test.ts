@@ -14,10 +14,10 @@ function okJson(body: unknown = {}): Response {
   });
 }
 
-describe("çevrimdışı kuyruk ve eşitleme", () => {
-  it("çevrimdışıyken 2 giriş kuyruğa girer, çevrimiçiyken ikisi de sırayla gönderilir", async () => {
+describe("offline queue and sync", () => {
+  it("offline queues 2 entries, online sends both in order", async () => {
     const calls: { url: string; body: unknown }[] = [];
-    // Çevrimdışı: fetch her zaman patlar.
+    // Offline: fetch always throws.
     const offlineFetch = async () => {
       throw new TypeError("fetch failed");
     };
@@ -28,15 +28,15 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
 
     await outbox.queue({
       url: "/api/cases/abc/entries",
-      body: { type: "note", note: "birinci" },
+      body: { type: "note", note: "first" },
     });
     await outbox.queue({
       url: "/api/cases/abc/entries",
-      body: { type: "note", note: "ikinci" },
+      body: { type: "note", note: "second" },
     });
     expect(await outbox.pending()).toBe(2);
 
-    // Çevrimiçi: fetch başarır.
+    // Online: fetch succeeds.
     const onlineFetch = async (input: unknown, init?: RequestInit) => {
       const url = typeof input === "string" ? input : String(input);
       calls.push({ url, body: JSON.parse(init?.body as string) });
@@ -53,15 +53,15 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
       "/api/cases/abc/entries",
       "/api/cases/abc/entries",
     ]);
-    // Sıra korunur: gövdeler kuyruğa giriş sırasıyla gider.
+    // Order preserved: bodies go in queue insertion order.
     expect(calls.map((c) => (c.body as { note: string }).note)).toEqual([
-      "birinci",
-      "ikinci",
+      "first",
+      "second",
     ]);
     expect(await outbox.pending()).toBe(0);
   });
 
-  it("katı FIFO: ilk gönderim başarısız olursa sonrakiler denenmez", async () => {
+  it("strict FIFO: if the first send fails, later ones are not attempted", async () => {
     const calls: string[] = [];
     let mode: "fail-first" | "ok" = "fail-first";
     const outbox = createOutbox({
@@ -70,7 +70,7 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
         const note = (JSON.parse(init?.body as string) as { note: string })
           .note;
         calls.push(note);
-        if (mode === "fail-first" && note === "birinci") {
+        if (mode === "fail-first" && note === "first") {
           return new Response("hata", { status: 500 });
         }
         return okJson({ ok: true });
@@ -78,25 +78,25 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
     });
     await outbox.queue({
       url: "/api/cases/abc/entries",
-      body: { type: "note", note: "birinci" },
+      body: { type: "note", note: "first" },
     });
     await outbox.queue({
       url: "/api/cases/abc/entries",
-      body: { type: "note", note: "ikinci" },
+      body: { type: "note", note: "second" },
     });
     const first = await outbox.sync();
     expect(first.failed).toBe(1);
-    // İkinci kayıt denenmedi: varış sırası kuyruk sırasını izler.
-    expect(calls).toEqual(["birinci"]);
+    // Second record not attempted: arrival order follows queue order.
+    expect(calls).toEqual(["first"]);
     expect(await outbox.pending()).toBe(2);
     mode = "ok";
     const second = await outbox.sync();
     expect(second.sent).toBe(2);
-    expect(calls).toEqual(["birinci", "birinci", "ikinci"]);
+    expect(calls).toEqual(["first", "first", "second"]);
     expect(await outbox.pending()).toBe(0);
   });
 
-  it("çakışmada sunucu kaydı esas alınır (409 kuyruktan düşer)", async () => {
+  it("on conflict the server record wins (409 drops from queue)", async () => {
     const outbox = createOutbox({
       store: createMemoryStore(),
       fetchFn: (async () =>
@@ -106,7 +106,7 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
     });
     await outbox.queue({
       url: "/api/cases/abc/entries",
-      body: { type: "note", note: "çakışan" },
+      body: { type: "note", note: "conflicting" },
     });
     const report = await outbox.sync();
     expect(report.conflicts).toBe(1);
@@ -114,7 +114,7 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
     expect(await outbox.pending()).toBe(0);
   });
 
-  it("başarısız gönderim kuyrukta kalır, sonra tekrar denenir", async () => {
+  it("failed sends stay queued, then retried", async () => {
     let fail = true;
     const outbox = createOutbox({
       store: createMemoryStore(),
@@ -125,7 +125,7 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
     });
     await outbox.queue({
       url: "/api/cases",
-      body: { summary: "tekrar" },
+      body: { summary: "retry" },
     });
     const first = await outbox.sync();
     expect(first.failed).toBe(1);
@@ -136,7 +136,7 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
     expect(await outbox.pending()).toBe(0);
   });
 
-  it("çevrimdışı çekilen fotoğraf Blob olarak saklanır, çevrimiçiyken dosyasıyla birlikte gider", async () => {
+  it("offline-taken photo is stored as Blob, sent with its file when online", async () => {
     const bytes = new Uint8Array([1, 2, 3, 4]);
     const file = new Blob([bytes.buffer as ArrayBuffer], { type: "image/jpeg" });
     let receivedBytes: number[] = [];
@@ -154,20 +154,20 @@ describe("çevrimdışı kuyruk ve eşitleme", () => {
     await outbox.queue({
       url: "/api/cases/abc/mark-photo",
       blob: file,
-      blobName: "delil.jpg",
-      meta: { hint: "kovan" },
+      blobName: "evidence.jpg",
+      meta: { hint: "casing" },
     });
     expect(await outbox.pending()).toBe(1);
     const report = await outbox.sync();
     expect(report.sent).toBe(1);
-    expect(receivedHint).toBe("kovan");
+    expect(receivedHint).toBe("casing");
     expect(receivedBytes).toEqual([1, 2, 3, 4]);
     expect(await outbox.pending()).toBe(0);
   });
 });
 
 describe("public/sw.js", () => {
-  it("POST /api/* isteklerini yakalar ve kuyruk mekanizması içerir", () => {
+  it("captures POST /api/* requests and includes queue machinery", () => {
     const sw = readFileSync(join(__dirname, "..", "public", "sw.js"), "utf8");
     expect(sw).toMatch(/POST/);
     expect(sw).toMatch(/PATCH/);
@@ -175,10 +175,10 @@ describe("public/sw.js", () => {
     expect(sw).toMatch(/locations/);
     expect(sw).toMatch(/\/api\//);
     expect(sw).toMatch(/fetch/);
-    // Kuyruk sinyali: 202 kabul yanıtı + sync/flush mantığı.
+    // Queue signal: 202 accept response + sync/flush logic.
     expect(sw).toMatch(/202/);
     expect(sw).toMatch(/sync/i);
-    // Kuyruk yazılamazsa/gövde okunamazsa yeniden denenebilir 503 dönülür.
+    // Returns retryable 503 when the queue is unwritable or the body unreadable.
     expect(sw).toMatch(/503/);
     expect(sw).not.toMatch(/507/);
   });

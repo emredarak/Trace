@@ -39,9 +39,9 @@ beforeEach(() => {
 });
 
 describe("POST /api/cases/[id]/links", () => {
-  it("onay 201 döner", async () => {
-    const a = await create("birinci vaka");
-    const b = await create("ikinci vaka");
+  it("approval returns 201", async () => {
+    const a = await create("first case");
+    const b = await create("second case");
     const res = await approveLink(
       postRequest(`http://localhost/api/cases/${a.id}/links`, { targetId: b.id }),
       linkParams(a.id),
@@ -53,9 +53,9 @@ describe("POST /api/cases/[id]/links", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("tekrar onay tek kayıt bırakır", async () => {
-    const a = await create("birinci vaka");
-    const b = await create("ikinci vaka");
+  it("repeat approval leaves a single record", async () => {
+    const a = await create("first case");
+    const b = await create("second case");
     const url = `http://localhost/api/cases/${a.id}/links`;
     const first = await approveLink(postRequest(url, { targetId: b.id }), linkParams(a.id));
     const second = await approveLink(postRequest(url, { targetId: b.id }), linkParams(a.id));
@@ -67,8 +67,8 @@ describe("POST /api/cases/[id]/links", () => {
     expect(rows).toHaveLength(1);
   });
 
-  it("hedefsiz onay 400 döner", async () => {
-    const a = await create("birinci vaka");
+  it("approval without a target returns 400", async () => {
+    const a = await create("first case");
     const res = await approveLink(
       postRequest(`http://localhost/api/cases/${a.id}/links`, {}),
       linkParams(a.id),
@@ -76,8 +76,8 @@ describe("POST /api/cases/[id]/links", () => {
     expect(res.status).toBe(400);
   });
 
-  it("olmayan kayda onay 404 döner", async () => {
-    const b = await create("ikinci vaka");
+  it("approval for a missing record returns 404", async () => {
+    const b = await create("second case");
     const res = await approveLink(
       postRequest("http://localhost/api/cases/yok/links", { targetId: b.id }),
       linkParams("yok"),
@@ -92,9 +92,9 @@ describe("POST /api/cases/[id]/links", () => {
 });
 
 describe("DELETE /api/cases/[id]/links", () => {
-  it("silme onayı kaldırır", async () => {
-    const a = await create("birinci vaka");
-    const b = await create("ikinci vaka");
+  it("removal drops the approval", async () => {
+    const a = await create("first case");
+    const b = await create("second case");
     const url = `http://localhost/api/cases/${a.id}/links`;
     await approveLink(postRequest(url, { targetId: b.id }), linkParams(a.id));
     const res = await removeLink(

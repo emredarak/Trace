@@ -18,22 +18,22 @@ beforeEach(() => {
 });
 
 describe("POST /api/cases", () => {
-  it("kayıt özetle 201 ve { id, caseNo } döner", async () => {
-    const res = await createCase(postRequest({ summary: "gece hırsızlık" }));
+  it("creates with summary returning 201 and { id, caseNo }", async () => {
+    const res = await createCase(postRequest({ summary: "night theft" }));
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.id).toBeTruthy();
     expect(body.caseNo).toMatch(/^TR-\d{4}$/);
   });
 
-  it("özetsiz kayıt 400 döner", async () => {
+  it("returns 400 without a summary", async () => {
     for (const bad of [{}, { summary: "" }, { summary: "   " }]) {
       const res = await createCase(postRequest(bad));
       expect(res.status).toBe(400);
     }
   });
 
-  it("caseNo otomatik artar (TR-0001, TR-0002)", async () => {
+  it("auto-increments caseNo (TR-0001, TR-0002)", async () => {
     const first = await (
       await createCase(postRequest({ summary: "a" }))
     ).json();
@@ -44,14 +44,14 @@ describe("POST /api/cases", () => {
     expect(second.caseNo).toBe("TR-0002");
   });
 
-  it("yinelenen kişi id'leri 400 döner ve vaka sayısı değişmez", async () => {
+  it("duplicate person ids return 400 and case count is unchanged", async () => {
     const before = await (await listCases()).json();
     const res = await createCase(
       postRequest({
-        summary: "yinelenen kişili vaka",
+        summary: "case with duplicate person",
         persons: [
-          { id: "m1", name: "Maktül", type: "maktul" },
-          { id: "m1", name: "Başka", type: "tanik" },
+          { id: "m1", name: "Victim", type: "victim" },
+          { id: "m1", name: "Other", type: "witness" },
         ],
       }),
     );
@@ -60,20 +60,20 @@ describe("POST /api/cases", () => {
     expect(after).toHaveLength(before.length);
   });
 
-  it("başka vakaya ait kişi id'si 400 döner ve vaka sayısı değişmez (geri alma)", async () => {
+  it("person id from another case returns 400 and case count is unchanged (rollback)", async () => {
     const first = await createCase(
       postRequest({
-        summary: "ilk vaka",
-        persons: [{ id: "m1", name: "Maktül", type: "maktul" }],
+        summary: "first case",
+        persons: [{ id: "m1", name: "Victim", type: "victim" }],
       }),
     );
     expect(first.status).toBe(201);
     const before = await (await listCases()).json();
     const res = await createCase(
       postRequest({
-        summary: "ikinci vaka",
-        locations: [{ title: "Konum", note: "not" }],
-        persons: [{ id: "m1", name: "Çakışan", type: "maktul" }],
+        summary: "second case",
+        locations: [{ title: "Location", note: "note" }],
+        persons: [{ id: "m1", name: "Conflicting", type: "victim" }],
       }),
     );
     expect(res.status).toBe(400);
@@ -82,35 +82,35 @@ describe("POST /api/cases", () => {
     expect(after).toHaveLength(1);
   });
 
-  it("GPS olmadan konum metni yeterlidir", async () => {
+  it("location text suffices without GPS", async () => {
     const res = await createCase(
-      postRequest({ summary: "olay", locationText: "çarşı meydanı" }),
+      postRequest({ summary: "incident", locationText: "bazaar square" }),
     );
     expect(res.status).toBe(201);
   });
 });
 
 describe("GET /api/cases", () => {
-  it("kayıtları CaseRecord[] olarak döner", async () => {
-    await createCase(postRequest({ summary: "kayıtlı vaka" }));
+  it("returns records as CaseRecord[]", async () => {
+    await createCase(postRequest({ summary: "registered case" }));
     const res = await listCases();
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(Array.isArray(body)).toBe(true);
     expect(body).toHaveLength(1);
-    expect(body[0].summary).toBe("kayıtlı vaka");
+    expect(body[0].summary).toBe("registered case");
     expect(body[0].caseNo).toBe("TR-0001");
   });
 });
 
 describe("POST /api/cases/[id]/entries", () => {
-  it("delil ekleme 201 döner ve kayda yansır", async () => {
+  it("adding evidence returns 201 and is reflected in the record", async () => {
     const created = await (
-      await createCase(postRequest({ summary: "delilli vaka" }))
+      await createCase(postRequest({ summary: "case with evidence" }))
     ).json();
 
     const res = await addEntry(
-      postRequest({ type: "note", note: "kısa not" }),
+      postRequest({ type: "note", note: "short note" }),
       { params: Promise.resolve({ id: created.id }) },
     );
     expect(res.status).toBe(201);
@@ -125,22 +125,22 @@ describe("POST /api/cases/[id]/entries", () => {
     expect(record.entries).toHaveLength(1);
     expect(record.entries[0]).toMatchObject({
       type: "note",
-      note: "kısa not",
+      note: "short note",
     });
   });
 
-  it("olmayan kayda ekleme 404 döner", async () => {
+  it("returns 404 when adding to a missing record", async () => {
     const res = await addEntry(postRequest({ type: "note" }), {
       params: Promise.resolve({ id: "yok" }),
     });
     expect(res.status).toBe(404);
   });
 
-  it("türsüz ekleme 400 döner", async () => {
+  it("returns 400 when adding without a type", async () => {
     const created = await (
-      await createCase(postRequest({ summary: "vaka" }))
+      await createCase(postRequest({ summary: "case" }))
     ).json();
-    const res = await addEntry(postRequest({ note: "türsüz" }), {
+    const res = await addEntry(postRequest({ note: "typeless" }), {
       params: Promise.resolve({ id: created.id }),
     });
     expect(res.status).toBe(400);

@@ -48,7 +48,7 @@ export function LocationsSection({
   dirty,
   status,
 }: LocationsSectionProps) {
-  // undefined: panel kapalı, null: yeni konum, draft: düzenlenen konum.
+  // undefined: panel closed, null: new location, draft: location being edited.
   const [picker, setPicker] = useState<CaseLocationDraft | null | undefined>(
     undefined,
   );
@@ -70,7 +70,7 @@ export function LocationsSection({
         })),
     [sorted],
   );
-  const hasCrimeScene = locations.some((l) => l.kind === "olay-yeri");
+  const hasCrimeScene = locations.some((l) => l.kind === "crime-scene");
 
   function handleConfirm(draft: CaseLocationDraft) {
     if (picker) {
@@ -101,7 +101,7 @@ export function LocationsSection({
         id={`${idPrefix}-konumlar-baslik`}
         style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}
       >
-        Konumlar
+        Locations
       </h2>
 
       {!hasCrimeScene ? (
@@ -117,13 +117,13 @@ export function LocationsSection({
             margin: "0 0 1rem",
           }}
         >
-          Bu vakada Olay Yeri olarak işaretlenmiş konum yok.
+          No location in this case is marked as Crime Scene.
         </p>
       ) : null}
 
       <MapPicker points={points} readOnly height={260} />
 
-      {sorted.length === 0 ? <p style={textStyle}>Ekli konum yok.</p> : null}
+      {sorted.length === 0 ? <p style={textStyle}>No locations added.</p> : null}
       <ul style={{ paddingLeft: "1.25rem" }}>
         {sorted.map((loc) => {
           const color = locationColor(loc);
@@ -166,14 +166,14 @@ export function LocationsSection({
                     onClick={() => setPicker(loc)}
                     style={buttonStyle}
                   >
-                    Düzenle
+                    Edit
                   </button>{" "}
                   <button
                     type="button"
                     onClick={() => removeLocation(loc)}
                     style={buttonStyle}
                   >
-                    Sil
+                    Delete
                   </button>
                 </>
               ) : null}
@@ -188,7 +188,7 @@ export function LocationsSection({
           onClick={() => setPicker(null)}
           style={buttonStyle}
         >
-          + Konum Ekle
+          + Add Location
         </button>
       ) : null}
 
@@ -212,10 +212,10 @@ export function LocationsSection({
             onClick={() => void onSave?.()}
             style={buttonStyle}
           >
-            Kaydet
+            Save
           </button>
           <button type="button" onClick={() => onReset?.()} style={buttonStyle}>
-            Vazgeç
+            Cancel
           </button>
         </div>
       ) : null}
