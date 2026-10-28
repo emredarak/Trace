@@ -178,10 +178,94 @@ describe("buildDossier", () => {
     expect(suspect.transcriptHighlights.map((h) => h.text)).toContain("beyaz araci gordum");
   });
 
-  it("istemci verilmezse de (anahtarsiz) dosya derlenir, ag cagrisi basarisizligi dosyayi bozmaz", async () => {
+  it("istemci hatasinda (enjekte sahte) dosya derlenir, ag basarisizligi dosyayi bozmaz", async () => {
     const rec = seedFullCase();
-    const d = await buildDossier(getDb(), rec.id);
+    const throwing = {
+      summarize: vi.fn(async () => {
+        throw new Error("ag yok");
+      }),
+    };
+    const d = await buildDossier(getDb(), rec.id, throwing);
+    expect(throwing.summarize).toHaveBeenCalled();
     expect(d.persons.find((p) => p.sourceId === "per-1")!.transcriptHighlights.length).toBeGreaterThan(0);
+    expect(d.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary ?? null).toBeNull();
+  });
+
+  it("deterministik olmayan Glimmer ciktisi hash'i degistirmez: ikinci derlemede Glimmer cagrilmaz, ozet korunur", async () => {
+    const rec = seedFullCase();
+    let n = 0;
+    const changing = { summarize: vi.fn(async () => `degisken ozet ${++n}`) };
+    const first = await buildDossier(getDb(), rec.id, changing);
+    const callsAfterFirst = changing.summarize.mock.calls.length;
+    expect(callsAfterFirst).toBeGreaterThan(0);
+    getDb().prepare("UPDATE case_dossiers SET updatedAt = '2000-01-01T00:00:00.000Z' WHERE caseId = ?").run(rec.id);
+
+    const second = await buildDossier(getDb(), rec.id, changing);
+    expect(changing.summarize).toHaveBeenCalledTimes(callsAfterFirst);
+    expect(second.hash).toBe(first.hash);
+    expect(second.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary).toBe(
+      first.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary,
+    );
+    expect(dossierRow(rec.id).updatedAt).toBe("2000-01-01T00:00:00.000Z");
+  });
+
+  it("kaynak kismen degisince degismeyen transkriptin ozeti onbellekten gelir, Glimmer cagrilmaz", async () => {
+    const rec = seedFullCase();
+    const first = await buildDossier(getDb(), rec.id, fakeGlimmer);
+    getDb().prepare("UPDATE cases SET summary = 'Sadece olay ozeti degisti' WHERE id = ?").run(rec.id);
+
+    const other = { summarize: vi.fn(async () => "BAMASKA OZET") };
+    const second = await buildDossier(getDb(), rec.id, other);
+    expect(second.hash).not.toBe(first.hash);
+    expect(other.summarize).not.toHaveBeenCalled();
+    expect(second.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary).toBe(
+      "Supheli beyaz aracla kactigini anlatti.",
+    );
+    expect(dossierRow(rec.id).hash).toBe(second.hash);
+  });
+
+  it("transkript degisince yalniz o transkript icin Glimmer yeniden cagrilir", async () => {
+    const rec = seedFullCase();
+    await buildDossier(getDb(), rec.id, fakeGlimmer);
+    const changedTranscript = JSON.stringify({
+      text: "yeni ifade: kirmizi motor goruldu",
+      segments: [{ speaker: "supheli", text: "kirmizi motor goruldu" }],
+    });
+    getDb().prepare("UPDATE case_persons SET transcript = ? WHERE id = 'per-1'").run(changedTranscript);
+    const spy = { summarize: vi.fn(async () => "yeni ozet") };
+    const d = await buildDossier(getDb(), rec.id, spy);
+    // per-1 degisti (1 cagri); ev-1 transkripti ayni, ozeti onbellekten (cagri yok)
+    expect(spy.summarize).toHaveBeenCalledTimes(1);
+    expect(d.persons.find((p) => p.sourceId === "per-1")!.transcriptSummary).toBe("yeni ozet");
+    expect(d.evidences[0].transcriptSummary).toBe("Transkript ozeti.");
+  });
+
+  it("one cikanlar en uzun segmentlerden secilir, asil sirada sunulur (en fazla 5)", async () => {
+    const rec = insertCase({ summary: "uzun transkriptli vaka" });
+    const db = getDb();
+    const segments = [
+      { speaker: "a", text: "kisa" },
+      { speaker: "a", text: "bu cok daha uzun bir ifade segmentidir bir" },
+      { speaker: "a", text: "orta uzunlukta segment" },
+      { speaker: "a", text: "en uzun segment budur ve oldukca detayli bilgi icerir evet" },
+      { speaker: "a", text: "k" },
+      { speaker: "a", text: "ikinci uzun segment de burada yer aliyor iste" },
+      { speaker: "a", text: "bir baska orta boy segment daha burada" },
+    ];
+    db.prepare(
+      "INSERT INTO case_persons (id, caseId, name, type, unidentified, transcript, createdAt) VALUES (?,?,?,?,?,?,?)",
+    ).run("per-long", rec.id, "Uzun Anlatan", "tanik", 0, JSON.stringify({ text: segments.map((s) => s.text).join(" "), segments }), rec.createdAt);
+    const d = await buildDossier(db, rec.id, { summarize: async () => "ozet" });
+    const highlights = d.persons[0].transcriptHighlights;
+    expect(highlights).toHaveLength(5);
+    // En kisa iki segment ("kisa", "k") disarida; kalanlar asil sirada
+    expect(highlights.map((h) => h.text)).toEqual([
+      "bu cok daha uzun bir ifade segmentidir bir",
+      "orta uzunlukta segment",
+      "en uzun segment budur ve oldukca detayli bilgi icerir evet",
+      "ikinci uzun segment de burada yer aliyor iste",
+      "bir baska orta boy segment daha burada",
+    ]);
   });
 
   it("olmayan vaka icin hata firlatir", async () => {

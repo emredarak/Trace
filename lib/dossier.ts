@@ -6,10 +6,15 @@
 // transkriptten birebir alintidir ve kaynak kayit id'sini tasir; Glimmer
 // ozeti ayri alanda durur, uydurma alinti one cikana giremez.
 //
-// Sonuc case_dossiers'a hash ile yazilir; icerik ayniysa satir yeniden
-// yazilmaz (updatedAt korunur). Kisi/konum/delil yoklugu, bozuk
-// zenginlestirme JSON'u veya Glimmer hatasi dosyayi bozmaz; yalnizca
-// olmayan vaka hata firlatir.
+// Sonuc case_dossiers'a hash ile yazilir. Hash yalniz deterministik
+// kaynaktan (ham transkript metni ve transcriptHash parmak izi dahil,
+// Glimmer ozetleri haric) hesaplanir; ayni deterministik icerikte
+// Glimmer hic cagrilmaz ve kayitli dosya aynen doner (updatedAt korunur).
+// Kismen degisimde, transkripti degismeyen kayitlarin ozetleri onceki
+// dosyadan (sourceId + transcriptHash anahtariyla) yeniden kullanilir.
+// Kisi/konum/delil yoklugu, bozuk zenginlestirme JSON'u veya Glimmer
+// hatasi dosyayi bozmaz; yalnizca olmayan vaka hata firlatir.
+// Not: ozet istemi transkripti 4000 karakterde keser (bilinen sinir).
 //
 // Musteri kalibi field-brief.ts ile ayni: testler sahte istemci enjekte
 // eder, uretim glimmerChat kullanir; ag hatasi ozeti bos birakir.
@@ -112,6 +117,8 @@ export interface DossierPerson {
   unidentified: boolean;
   contactStatus: string | null;
   transcriptHighlights: DossierTranscriptHighlight[];
+  /** Deterministik transkript parmak izi; ozet onbellegi bununla anahtarlanir. */
+  transcriptHash: string | null;
   /** Glimmer ozeti; transkript yoksa veya Glimmer basarisizsa null. */
   transcriptSummary: string | null;
 }
@@ -125,6 +132,8 @@ export interface DossierEvidence {
   samLabels: string[];
   markingBoxes: Box[];
   transcriptHighlights: DossierTranscriptHighlight[];
+  /** Deterministik transkript parmak izi; ozet onbellegi bununla anahtarlanir. */
+  transcriptHash: string | null;
   /** Glimmer ozeti; transkript yoksa veya Glimmer basarisizsa null. */
   transcriptSummary: string | null;
 }
@@ -213,25 +222,33 @@ function highlightsFor(
   transcript: Transcript | null,
 ): DossierTranscriptHighlight[] {
   if (!transcript) return [];
-  const out: DossierTranscriptHighlight[] = [];
   if (transcript.segments.length > 0) {
-    for (const seg of transcript.segments) {
-      if (out.length >= MAX_TRANSCRIPT_HIGHLIGHTS) break;
-      const segText = seg.text.trim();
-      if (!segText) continue;
-      out.push({
-        sourceId,
-        speaker: seg.speaker?.trim() ? seg.speaker.trim() : null,
-        text: segText.slice(0, MAX_HIGHLIGHT_CHARS),
-      });
-    }
-    return out;
+    // En bilgilendirici (en uzun) segmentleri sec, asil sirayla sun.
+    const indexed = transcript.segments
+      .map((seg, index) => ({ seg, index, segText: seg.text.trim() }))
+      .filter((e) => e.segText.length > 0);
+    const selected = [...indexed]
+      .sort((a, b) => b.segText.length - a.segText.length || a.index - b.index)
+      .slice(0, MAX_TRANSCRIPT_HIGHLIGHTS)
+      .sort((a, b) => a.index - b.index);
+    return selected.map(({ seg, segText }) => ({
+      sourceId,
+      speaker: seg.speaker?.trim() ? seg.speaker.trim() : null,
+      text: segText.slice(0, MAX_HIGHLIGHT_CHARS),
+    }));
   }
   const full = transcript.text.trim();
   if (!full) return [];
   return [
     { sourceId, speaker: null, text: full.slice(0, MAX_HIGHLIGHT_CHARS) },
   ];
+}
+
+function transcriptHashOf(transcript: Transcript | null): string | null {
+  if (!transcript) return null;
+  return createHash("sha256")
+    .update(JSON.stringify(transcript))
+    .digest("hex");
 }
 
 async function summarizeTranscript(
@@ -293,11 +310,18 @@ export async function buildDossier(
     longitude: num(r.longitude),
   }));
 
-  const persons: DossierPerson[] = [];
-  for (const r of personRows) {
+  // Once deterministik iskelet: ozetler haric tum alanlar + ham transkript.
+  // Hash yalniz bundan hesaplanir; Glimmer serbest metni hash'e girmez.
+  interface PersonDraft extends Omit<DossierPerson, "transcriptSummary"> {
+    transcript: Transcript | null;
+  }
+  interface EvidenceDraft extends Omit<DossierEvidence, "transcriptSummary"> {
+    transcript: Transcript | null;
+  }
+  const personDrafts: PersonDraft[] = personRows.map((r) => {
     const sourceId = String(r.id);
     const transcript = parseTranscript(r.transcript);
-    persons.push({
+    return {
       sourceId,
       name: text(r.name),
       type: typeof r.type === "string" && r.type ? r.type : "kisi",
@@ -309,12 +333,11 @@ export async function buildDossier(
       unidentified: Boolean(r.unidentified),
       contactStatus: text(r.contactStatus),
       transcriptHighlights: highlightsFor(sourceId, transcript),
-      transcriptSummary: await summarizeTranscript(client, transcript),
-    });
-  }
-
-  const evidences: DossierEvidence[] = [];
-  for (const r of evidenceRows) {
+      transcriptHash: transcriptHashOf(transcript),
+      transcript,
+    };
+  });
+  const evidenceDrafts: EvidenceDraft[] = evidenceRows.map((r) => {
     const sourceId = String(r.id);
     const transcript = parseTranscript(r.transcript);
     const boxes = parseMarkingBoxes(r.marking);
@@ -322,7 +345,7 @@ export async function buildDossier(
     for (const b of boxes) {
       if (!samLabels.includes(b.label)) samLabels.push(b.label);
     }
-    evidences.push({
+    return {
       sourceId,
       type: typeof r.type === "string" && r.type ? r.type : "evidence",
       title: text(r.title),
@@ -330,11 +353,12 @@ export async function buildDossier(
       samLabels,
       markingBoxes: boxes,
       transcriptHighlights: highlightsFor(sourceId, transcript),
-      transcriptSummary: await summarizeTranscript(client, transcript),
-    });
-  }
+      transcriptHash: transcriptHashOf(transcript),
+      transcript,
+    };
+  });
 
-  const content: Omit<CaseDossier, "hash"> = {
+  const base: Omit<CaseDossier, "hash" | "persons" | "evidences"> = {
     caseId: String(caseRow.id),
     caseNo: String(caseRow.caseNo ?? ""),
     status: text(caseRow.status) ?? "open",
@@ -348,17 +372,88 @@ export async function buildDossier(
       occurredAt: text(caseRow.occurredAt),
     },
     locations,
-    persons,
-    evidences,
+  };
+  const stripTranscript = <T extends { transcript: Transcript | null }>(
+    draft: T,
+  ) => {
+    const { transcript, ...rest } = draft;
+    // Ham transkript metni degisim tespitine girer (ozet girmez).
+    return { ...rest, transcriptText: transcript?.text ?? null };
+  };
+  const deterministic = {
+    ...base,
+    persons: personDrafts.map(stripTranscript),
+    evidences: evidenceDrafts.map(stripTranscript),
   };
   const hash = createHash("sha256")
-    .update(JSON.stringify(content))
+    .update(JSON.stringify(deterministic))
     .digest("hex");
-  const dossier: CaseDossier = { ...content, hash };
 
   const existing = db
-    .prepare("SELECT hash FROM case_dossiers WHERE caseId = ?")
-    .get(caseId) as { hash: string } | undefined;
+    .prepare("SELECT hash, json FROM case_dossiers WHERE caseId = ?")
+    .get(caseId) as { hash: string; json: string } | undefined;
+
+  // Ayni deterministik icerik: Glimmer hic cagrilmaz, kayitli dosya doner.
+  let previous: CaseDossier | null = null;
+  if (existing) {
+    try {
+      previous = JSON.parse(existing.json) as CaseDossier;
+    } catch {
+      previous = null;
+    }
+    if (existing.hash === hash && previous && previous.hash === hash) {
+      return previous;
+    }
+  }
+
+  // Degismeyen transkriptlerin ozetleri onceki dosyadan yeniden kullanilir.
+  const summaryCache = new Map<string, string>();
+  if (previous) {
+    for (const entry of [...previous.persons, ...previous.evidences]) {
+      if (entry.transcriptHash && entry.transcriptSummary) {
+        summaryCache.set(
+          `${entry.sourceId}:${entry.transcriptHash}`,
+          entry.transcriptSummary,
+        );
+      }
+    }
+  }
+  const resolveSummary = async (
+    sourceId: string,
+    transcriptHash: string | null,
+    transcript: Transcript | null,
+  ): Promise<string | null> => {
+    if (!transcript || !transcriptHash) return null;
+    const cached = summaryCache.get(`${sourceId}:${transcriptHash}`);
+    if (cached !== undefined) return cached;
+    return summarizeTranscript(client, transcript);
+  };
+
+  const persons: DossierPerson[] = [];
+  for (const { transcript, ...rest } of personDrafts) {
+    persons.push({
+      ...rest,
+      transcriptSummary: await resolveSummary(
+        rest.sourceId,
+        rest.transcriptHash,
+        transcript,
+      ),
+    });
+  }
+  const evidences: DossierEvidence[] = [];
+  for (const { transcript, ...rest } of evidenceDrafts) {
+    evidences.push({
+      ...rest,
+      transcriptSummary: await resolveSummary(
+        rest.sourceId,
+        rest.transcriptHash,
+        transcript,
+      ),
+    });
+  }
+
+  const dossier: CaseDossier = { ...base, persons, evidences, hash };
+
   if (!existing || existing.hash !== hash) {
     db.prepare(
       `INSERT INTO case_dossiers (caseId, version, hash, json, updatedAt)
