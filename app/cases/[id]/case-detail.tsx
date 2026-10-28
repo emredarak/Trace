@@ -27,6 +27,19 @@ interface SimilarResponse {
   pendingEnrichment?: boolean;
 }
 
+export const SIMILARITY_KIND_LABELS: Record<string, string> = {
+  ozet: "Özet",
+  "suc-tipi": "Suç Tipi",
+  yontem: "Yöntem",
+  silah: "Silah",
+  konum: "Konum",
+  kisi: "Kişi",
+  "sorgu-ifadesi": "Sorgu İfadesi",
+  "delil-nesne": "Delil Nesnesi",
+  "delil-notu": "Delil Notu",
+  zaman: "Zaman",
+};
+
 const layoutCss = [
   ".trace-case-layout{display:flex;flex-direction:column;gap:1rem}",
   "@media(min-width:48rem){.trace-case-layout{flex-direction:row;align-items:flex-start}",
@@ -933,7 +946,9 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                     <ul>
                       {r.similarities.map((s, i) => (
                         <li key={`${s.kind}-${i}`}>
-                          <strong>{s.kind}: </strong>
+                          <strong>
+                            {SIMILARITY_KIND_LABELS[s.kind] ?? s.kind}:{" "}
+                          </strong>
                           {s.description} ({s.strength}/10)
                           {s.evidence ? (
                             <>

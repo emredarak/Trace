@@ -69,6 +69,7 @@ liste ön filtre/aday sırasıyla, skor "0 (puanlanmadı)" olarak gelir).
 | `GLIMMER_API_URL` / `GLIMMER_MODEL` | Glimmer uç noktası / model adı (yoksa `META_API_URL`/`META_MODEL`) |
 | `SIMILAR_RESULT_LIMIT` | Gösterilecek benzer vaka sayısı (varsayılan 5) |
 | `SPARK_TIMEOUT_MS` | Spark çağrısı zaman aşımı, ms (varsayılan 120000) |
+| `META_TIMEOUT_MS` / `GLIMMER_TIMEOUT_MS` / `META_TRANSCRIBE_TIMEOUT_MS` / `META_SAM_TIMEOUT_MS` | Chat/Glimmer, Transcribe ve SAM çağrısı zaman aşımı, ms (varsayılan 120000) |
 | `META_TRANSCRIBE_URL` / `META_TRANSCRIBE_MODEL` | Voice Transcribe uç noktası / model geçersiz kılma |
 | `META_SAM_URL` / `META_SAM_MODEL` | SAM 3.1 uç noktası / model geçersiz kılma |
 | `TRACE_DB_PATH` / `TRACE_UPLOAD_DIR` | SQLite dosyası / yükleme dizini (varsayılan `trace.db` / `uploads`) |

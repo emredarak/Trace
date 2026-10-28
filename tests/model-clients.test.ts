@@ -17,6 +17,8 @@ const ENV_KEYS = [
   "GLIMMER_API_KEY",
   "GLIMMER_API_URL",
   "GLIMMER_MODEL",
+  "META_TIMEOUT_MS",
+  "GLIMMER_TIMEOUT_MS",
 ] as const;
 
 let savedEnv: Record<string, string | undefined>;
@@ -198,6 +200,42 @@ describe("chatCompletion (parametrik katman)", () => {
       "META_API_KEY is not set",
     );
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("hic cevap vermeyen ucta kisa timeout ile reddeder (AbortSignal fetch'e gider)", async () => {
+    process.env.META_API_KEY = "meta-key";
+    fetchMock = vi.fn(
+      (_url: unknown, init?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new Error("aborted")),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      chatCompletion("selam", { timeoutMs: 20 }),
+    ).rejects.toThrow();
+    const [, init] = fetchMock.mock.calls[0] as [string, { signal?: unknown }];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("GLIMMER_TIMEOUT_MS env'i Glimmer cagrisina kisa timeout olarak yansir", async () => {
+    process.env.GLIMMER_API_KEY = "glimmer-key";
+    process.env.GLIMMER_API_URL = "https://glimmer.example/v1/chat/completions";
+    process.env.GLIMMER_TIMEOUT_MS = "20";
+    fetchMock = vi.fn(
+      (_url: unknown, init?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new Error("aborted")),
+          );
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(glimmerChat("özetle")).rejects.toThrow();
   });
 });
 

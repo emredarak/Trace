@@ -9,6 +9,12 @@
 //                           when unset (server-side default applies)
 //
 // Tests inject a fake TranscriptionClient; no network access in tests.
+//
+// Bounded timeout: META_TRANSCRIBE_TIMEOUT_MS env (default 120000 ms) or
+// the timeoutMs argument of transcribe(); a never-resolving client/fetch
+// rejects with a timeout error instead of hanging enrichment.
+
+import { resolveTimeoutMs, withModelTimeout } from "./model-timeout";
 
 export interface TranscriptSegment {
   speaker?: string;
@@ -93,6 +99,9 @@ const defaultTranscriptionClient: TranscriptionClient = {
 
     const res = await fetch(url, {
       method: "POST",
+      signal: AbortSignal.timeout(
+        resolveTimeoutMs(undefined, "META_TRANSCRIBE_TIMEOUT_MS"),
+      ),
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
     });
@@ -107,6 +116,7 @@ export async function transcribe(
   audio: Buffer,
   filename = "audio.wav",
   client: TranscriptionClient = clientOverride ?? defaultTranscriptionClient,
+  timeoutMs?: number,
 ): Promise<Transcript> {
   if (!Buffer.isBuffer(audio) || audio.length === 0) {
     throw new Error("ses verisi boş");
@@ -114,5 +124,10 @@ export async function transcribe(
   if (audio.length > MAX_AUDIO_BYTES) {
     throw new Error("ses dosyası çok büyük (en fazla 25MB)");
   }
-  return normalizeTranscript(await client.transcribeAudio(audio, filename));
+  const result = await withModelTimeout(
+    client.transcribeAudio(audio, filename),
+    resolveTimeoutMs(timeoutMs, "META_TRANSCRIBE_TIMEOUT_MS"),
+    "transcription zaman asimi (timeout)",
+  );
+  return normalizeTranscript(result);
 }

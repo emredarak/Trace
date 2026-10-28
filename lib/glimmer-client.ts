@@ -6,14 +6,20 @@
 // dedicated Glimmer endpoint. Keys come from env only, never hardcoded.
 
 import { chatCompletion } from "./meta-client";
+import { parseTimeoutMs } from "./model-timeout";
 
 export async function glimmerChat(prompt: string): Promise<string> {
   const hasGlimmerEnv =
     process.env.GLIMMER_API_URL !== undefined ||
     process.env.GLIMMER_MODEL !== undefined ||
     process.env.GLIMMER_API_KEY !== undefined;
+  // GLIMMER_TIMEOUT_MS overrides the shared META_TIMEOUT_MS default.
+  const timeoutMs =
+    process.env.GLIMMER_TIMEOUT_MS !== undefined
+      ? parseTimeoutMs(process.env.GLIMMER_TIMEOUT_MS)
+      : undefined;
   if (!hasGlimmerEnv) {
-    return chatCompletion(prompt);
+    return chatCompletion(prompt, { timeoutMs });
   }
   return chatCompletion(prompt, {
     apiKey:
@@ -22,5 +28,6 @@ export async function glimmerChat(prompt: string): Promise<string> {
       process.env.LLAMA_API_KEY,
     url: process.env.GLIMMER_API_URL ?? process.env.META_API_URL,
     model: process.env.GLIMMER_MODEL ?? process.env.META_MODEL,
+    timeoutMs,
   });
 }

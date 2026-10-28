@@ -11,7 +11,9 @@
 //    (lib/uploads ile okunur; diskte olmayan dosya atlanir, hata olmaz).
 // 4. Cikti dogrulanir: bilinmeyen/tekrarli caseId elenir, puan ve guc
 //    1-10'a clamp'lenir, tur sabit sozlukten degilse madde duser, kanit
-//    alintisi kaynak dosya metninde dogrulanamayan madde duser.
+//    alintisi kaynak-only metinde (deterministik alanlar + birebir
+//    transkript one cikanlari + SAM etiketleri; Glimmer ozeti haric)
+//    dogrulanamayan madde duser. Spark paket metni ozetleri icerebilir.
 // 5. Puanlanan sonuclar similar_results'a hash'lerle yazilir.
 // Model/anahtar hatasi, bozuk JSON veya zaman asiminda (SPARK_TIMEOUT_MS,
 // varsayilan 120000 ms) adaylar puansiz doner — mevcut yedek davranis;
@@ -21,7 +23,12 @@
 import type Database from "better-sqlite3";
 import { sparkChat } from "./spark-client";
 import type { SparkImage } from "./spark-client";
-import { buildDossier, dossierText, getDossier } from "./dossier";
+import {
+  buildDossier,
+  dossierSourceText,
+  dossierText,
+  getDossier,
+} from "./dossier";
 import type { CaseDossier } from "./dossier";
 import type { CandidateMatch } from "./candidates";
 import { normalizeTurkish } from "./candidates";
@@ -222,6 +229,13 @@ function caseNoOf(db: Database.Database, dossier: CaseDossier | null, caseId: st
   return "";
 }
 
+/** Source-only verification corpus: deterministic fields + verbatim
+ * highlights + SAM labels; Glimmer summary text is excluded. */
+function sourceText(db: Database.Database, dossier: CaseDossier | null, caseId: string): string {
+  if (dossier) return dossierSourceText(dossier);
+  return fallbackText(db, null, caseId);
+}
+
 function fallbackText(db: Database.Database, dossier: CaseDossier | null, caseId: string): string {
   if (dossier) return dossierText(dossier);
   try {
@@ -260,6 +274,8 @@ function readCached(
   queryHash: string,
   candidateHash: string,
   caseNo: string,
+  querySourceText = "",
+  candidateSourceText = "",
 ): ScoredCase | null {
   if (!queryHash || !candidateHash) return null;
   let row: CachedRow | undefined;
@@ -292,7 +308,16 @@ function readCached(
             KIND_SET.has((s as SimilarityItem).kind) &&
             typeof (s as SimilarityItem).description === "string" &&
             typeof (s as SimilarityItem).evidence === "string" &&
-            typeof (s as SimilarityItem).strength === "number",
+            typeof (s as SimilarityItem).strength === "number" &&
+            // Onbellek de kaynak-only dogrulamadan gecer (Glimmer
+            // ozetindeki ifade eski kayitta olsa bile kanit sayilmaz).
+            (!querySourceText && !candidateSourceText
+              ? true
+              : evidenceVerified(
+                  (s as SimilarityItem).evidence,
+                  candidateSourceText,
+                  querySourceText,
+                )),
         );
       }
     } catch {
@@ -559,15 +584,18 @@ export async function scoreCandidates(
 
   const queryDossier = await loadDossier(db, queryId);
   const queryText = fallbackText(db, queryDossier, queryId);
+  const querySourceText = sourceText(db, queryDossier, queryId);
   const queryHash = queryDossier?.hash ?? "";
 
   const dossiers = new Map<string, CaseDossier | null>();
   const texts = new Map<string, string>();
+  const sourceTexts = new Map<string, string>();
   const caseNos = new Map<string, string>();
   for (const c of ordered) {
     const d = await loadDossier(db, c.caseId);
     dossiers.set(c.caseId, d);
     texts.set(c.caseId, fallbackText(db, d, c.caseId));
+    sourceTexts.set(c.caseId, sourceText(db, d, c.caseId));
     caseNos.set(c.caseId, caseNoOf(db, d, c.caseId));
   }
 
@@ -582,6 +610,8 @@ export async function scoreCandidates(
       queryHash,
       d?.hash ?? "",
       caseNos.get(c.caseId) ?? "",
+      querySourceText,
+      sourceTexts.get(c.caseId) ?? "",
     );
     if (cached) resultsById.set(c.caseId, cached);
     else pending.push(c);
@@ -639,8 +669,8 @@ export async function scoreCandidates(
               : "model gerekce vermedi",
           similarities: validateSimilarities(
             entry.similarities,
-            queryText,
-            texts.get(caseId) ?? "",
+            querySourceText,
+            sourceTexts.get(caseId) ?? "",
           ),
         };
         resultsById.set(caseId, scored);

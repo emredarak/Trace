@@ -138,6 +138,60 @@ describe("scoreCandidates", () => {
     ]);
   });
 
+  it("yalniz Glimmer ozetinde gecen ifade kanit sayilmaz; madde duser, kaynak alinti korunur", async () => {
+    const query = insertCase({
+      summary: "gece market onunde bicakli saldiri beyaz arac kacti",
+      crimeType: "yaralama",
+      weapon: "bicak",
+    });
+    const cand = insertCase({
+      summary: "gece market onunde bicakli saldiri olayi",
+      crimeType: "yaralama",
+      weapon: "bicak",
+    });
+    // Adayda transkriptli kisi: one cikan kaynaktir, Glimmer ozeti kaynak degildir.
+    const transcript = JSON.stringify({
+      text: "supheli: gece gordum",
+      segments: [{ speaker: "supheli", text: "gece gordum" }],
+    });
+    getDb()
+      .prepare(
+        "INSERT INTO case_persons (id, caseId, name, type, unidentified, transcript, createdAt) VALUES (?,?,?,?,?,?,?)",
+      )
+      .run("per-glimmer", cand.id, "Supheli A", "supheli", 0, transcript, new Date().toISOString());
+    const GLIMMER_ONLY = "supheli mor ucakla kactigini soyledi";
+    const glimmer = {
+      summarize: async () => `Ozet: ${GLIMMER_ONLY}.`,
+    };
+    await buildDossier(getDb(), query.id, glimmer);
+    await buildDossier(getDb(), cand.id, glimmer);
+
+    const spark = vi.fn(async () =>
+      JSON.stringify([
+        {
+          caseId: cand.id,
+          score: 8,
+          reason: "benzer",
+          similarities: [
+            { kind: "sorgu-ifadesi", description: "sadece ozette var", strength: 9, evidence: GLIMMER_ONLY },
+            { kind: "ozet", description: "gercek kaynak", strength: 8, evidence: "bicakli saldiri olayi" },
+          ],
+        },
+      ]),
+    );
+
+    const scored = await scoreCandidates(
+      getDb(),
+      query.id,
+      [{ caseId: cand.id, channels: ["text"] }],
+      spark,
+    );
+    expect(scored).toHaveLength(1);
+    expect(scored[0].similarities).toEqual([
+      { kind: "ozet", description: "gercek kaynak", strength: 8, evidence: "bicakli saldiri olayi" },
+    ]);
+  });
+
   it("bozuk JSON ve istemci hatasinda adaylar puansiz doner, kayip olmaz", async () => {
     const { query, a, b, candidates } = await seedQueryAndCandidates();
 

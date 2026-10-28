@@ -88,6 +88,15 @@ describe("markPhoto (lib)", () => {
       markPhoto(Buffer.from("foto"), "bıçak", failing),
     ).rejects.toThrow("sam çöktü");
   });
+
+  it("hic cevap vermeyen istemci kisa timeout ile reddeder", async () => {
+    const hanging = {
+      markImage: () => new Promise<never>(() => {}),
+    };
+    await expect(
+      markPhoto(Buffer.from("foto"), "bıçak", hanging, 20),
+    ).rejects.toThrow(/zaman asimi|timeout/i);
+  });
 });
 
 describe("POST /api/cases/[id]/mark-photo", () => {

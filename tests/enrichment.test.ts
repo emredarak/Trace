@@ -167,6 +167,40 @@ describe("processPendingJobs", () => {
     expect(JSON.parse(after.transcript).text).toContain("gece gordum");
   });
 
+  it("hic cevap vermeyen Transcribe'da is zaman asimiyla failed+retryable olur, kayit kaybolmaz", async () => {
+    process.env.META_TRANSCRIBE_TIMEOUT_MS = "20";
+    try {
+      const caseId = await makeCase();
+      const personId = await makePerson(caseId);
+      await uploadPersonAudio(
+        formReq({}, { file: new File(["ses"], "s.mp3", { type: "audio/mpeg" }) }),
+        { params: Promise.resolve({ id: caseId, personId }) },
+      );
+      const hanging = { transcribeAudio: () => new Promise<never>(() => {}) };
+      const out = await processPendingJobs(getDb(), 10, {
+        transcribe: hanging,
+        markPhoto: fakeMark,
+      });
+      expect(out).toEqual({ done: 0, failed: 1 });
+      expect(jobs()[0]).toMatchObject({ status: "failed", attempts: 1 });
+      expect(String(jobs()[0].lastError)).toMatch(/zaman asimi|timeout/i);
+      const person = getDb()
+        .prepare("SELECT audioFile, transcript FROM case_persons WHERE id=?")
+        .get(personId) as { audioFile: string; transcript: unknown };
+      expect(person.audioFile).toBeTruthy();
+      expect(existsSync(join(uploadDir, person.audioFile))).toBe(true);
+      expect(person.transcript ?? null).toBeNull();
+      // Retryable: sonraki calisma basarili istemciyle isi tamamlar.
+      const out2 = await processPendingJobs(getDb(), 10, {
+        transcribe: fakeTranscribe,
+        markPhoto: fakeMark,
+      });
+      expect(out2).toEqual({ done: 1, failed: 0 });
+    } finally {
+      delete process.env.META_TRANSCRIBE_TIMEOUT_MS;
+    }
+  });
+
   it("attempts >= 3 olan failed is yeniden denenmez", async () => {
     const caseId = await makeCase();
     const personId = await makePerson(caseId);

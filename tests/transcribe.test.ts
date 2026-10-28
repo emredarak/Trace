@@ -94,6 +94,15 @@ describe("transcribe (lib)", () => {
       transcribe(Buffer.from("ses"), "a.wav", failing),
     ).rejects.toThrow("servis çöktü");
   });
+
+  it("hic cevap vermeyen istemci kisa timeout ile reddeder", async () => {
+    const hanging = {
+      transcribeAudio: () => new Promise<never>(() => {}),
+    };
+    await expect(
+      transcribe(Buffer.from("ses"), "a.wav", hanging, 20),
+    ).rejects.toThrow(/zaman asimi|timeout/i);
+  });
 });
 
 describe("POST /api/cases/[id]/transcribe", () => {

@@ -405,10 +405,15 @@ describe("Vaka detay + benzer liste", () => {
       expect(link.textContent).not.toContain(r.caseId);
     }
     const first = within(list).getByText(RESULTS[0].reason).closest("li") as HTMLElement;
-    expect(within(first).getByText(/suc-tipi/)).toBeTruthy();
+    expect(within(first).getByText(/^Suç Tipi:/)).toBeTruthy();
+    expect(within(first).queryByText(/suc-tipi/)).toBeNull();
     expect(first.textContent).toContain("ikisi de hırsızlık");
     expect(first.textContent).toContain("9/10");
-    expect(within(first).getByText(/^silah:/)).toBeTruthy();
+    expect(within(first).getByText(/^Silah:/)).toBeTruthy();
+    const third = within(list).getByText(RESULTS[1].reason).closest("li") as HTMLElement;
+    expect(within(third).getByText(/^Yöntem:/)).toBeTruthy();
+    const fourth = within(list).getByText(RESULTS[2].reason).closest("li") as HTMLElement;
+    expect(within(fourth).getByText(/^Konum:/)).toBeTruthy();
     expect(first.textContent).toContain("ikisinde de bıçak");
     expect(first.textContent).toContain("8/10");
   });

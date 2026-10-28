@@ -22,6 +22,7 @@
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 import { glimmerChat } from "./glimmer-client";
+import { resolveTimeoutMs, withModelTimeout } from "./model-timeout";
 import type { Transcript } from "./transcribe";
 import type { Box } from "./mark-photo";
 
@@ -263,7 +264,13 @@ async function summarizeTranscript(
     body.slice(0, 4000),
   ].join("\n");
   try {
-    const out = await client.summarize(prompt);
+    // Bounded timeout (GLIMMER_TIMEOUT_MS, default 120000 ms): a hanging
+    // Glimmer degrades exactly like an error — summary stays null.
+    const out = await withModelTimeout(
+      client.summarize(prompt),
+      resolveTimeoutMs(undefined, "GLIMMER_TIMEOUT_MS"),
+      "glimmer zaman asimi (timeout)",
+    );
     return typeof out === "string" && out.trim() ? out.trim() : null;
   } catch {
     return null;
@@ -490,7 +497,20 @@ export function getDossier(
   }
 }
 
+/**
+ * Source-only text for evidence verification: deterministic dossier fields
+ * + verbatim transcript highlights + SAM labels, EXCLUDING Glimmer-generated
+ * transcript summaries. A phrase invented by Glimmer must never verify.
+ */
+export function dossierSourceText(d: CaseDossier): string {
+  return buildDossierText(d, false);
+}
+
 export function dossierText(d: CaseDossier): string {
+  return buildDossierText(d, true);
+}
+
+function buildDossierText(d: CaseDossier, includeSummaries: boolean): string {
   const lines: string[] = [];
   lines.push(
     `Vaka ${d.caseNo} (id: ${d.caseId}, durum: ${d.status}) [${d.event.sourceId}]`,
@@ -536,7 +556,7 @@ export function dossierText(d: CaseDossier): string {
         `  Sorgu one cikani [${h.sourceId}]: ${h.speaker ? `${h.speaker}: ` : ""}${h.text}`,
       );
     }
-    if (p.transcriptSummary) {
+    if (includeSummaries && p.transcriptSummary) {
       lines.push(`  Sorgu ozeti [${p.sourceId}]: ${p.transcriptSummary}`);
     }
   }
@@ -556,7 +576,7 @@ export function dossierText(d: CaseDossier): string {
         `  Delil transkript one cikani [${h.sourceId}]: ${h.speaker ? `${h.speaker}: ` : ""}${h.text}`,
       );
     }
-    if (ev.transcriptSummary) {
+    if (includeSummaries && ev.transcriptSummary) {
       lines.push(
         `  Delil transkript ozeti [${ev.sourceId}]: ${ev.transcriptSummary}`,
       );

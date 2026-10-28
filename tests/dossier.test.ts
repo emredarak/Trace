@@ -268,6 +268,23 @@ describe("buildDossier", () => {
     ]);
   });
 
+  it("hic cevap vermeyen Glimmer kisa timeout ile ozetsiz derler; one cikanlar kalir, kayit yazilir", async () => {
+    const rec = seedFullCase();
+    process.env.GLIMMER_TIMEOUT_MS = "20";
+    try {
+      const hanging = { summarize: () => new Promise<string>(() => {}) };
+      const d = await buildDossier(getDb(), rec.id, hanging);
+      const suspect = d.persons.find((p) => p.sourceId === "per-1")!;
+      expect(suspect.transcriptSummary ?? null).toBeNull();
+      expect(suspect.transcriptHighlights.map((h) => h.text)).toContain(
+        "beyaz araci gordum",
+      );
+      expect(dossierRow(rec.id).hash).toBe(d.hash);
+    } finally {
+      delete process.env.GLIMMER_TIMEOUT_MS;
+    }
+  });
+
   it("olmayan vaka icin hata firlatir", async () => {
     await expect(buildDossier(getDb(), "yok-boyle-id", fakeGlimmer)).rejects.toThrow();
   });

@@ -9,6 +9,12 @@
 //                    when unset (server-side default applies)
 //
 // Tests inject a fake MarkingClient; no network access in tests.
+//
+// Bounded timeout: META_SAM_TIMEOUT_MS env (default 120000 ms) or the
+// timeoutMs argument of markPhoto(); a never-resolving client/fetch
+// rejects with a timeout error instead of hanging enrichment.
+
+import { resolveTimeoutMs, withModelTimeout } from "./model-timeout";
 
 export interface Box {
   x: number;
@@ -95,6 +101,9 @@ const defaultMarkingClient: MarkingClient = {
 
     const res = await fetch(url, {
       method: "POST",
+      signal: AbortSignal.timeout(
+        resolveTimeoutMs(undefined, "META_SAM_TIMEOUT_MS"),
+      ),
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
     });
@@ -109,6 +118,7 @@ export async function markPhoto(
   image: Buffer,
   hint: string,
   client: MarkingClient = clientOverride ?? defaultMarkingClient,
+  timeoutMs?: number,
 ): Promise<Marking> {
   if (!Buffer.isBuffer(image) || image.length === 0) {
     throw new Error("görüntü verisi boş");
@@ -119,5 +129,10 @@ export async function markPhoto(
   if (typeof hint !== "string" || hint.trim().length === 0) {
     throw new Error("ipucu gerekli");
   }
-  return normalizeMarking(await client.markImage(image, hint.trim()));
+  const result = await withModelTimeout(
+    client.markImage(image, hint.trim()),
+    resolveTimeoutMs(timeoutMs, "META_SAM_TIMEOUT_MS"),
+    "marking zaman asimi (timeout)",
+  );
+  return normalizeMarking(result);
 }

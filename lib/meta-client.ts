@@ -9,6 +9,12 @@
 //
 // Callers (spark-client, glimmer-client) may pass explicit url/model/apiKey
 // and multimodal image parts; explicit options win over the META_* env vars.
+//
+// Bounded timeout: META_TIMEOUT_MS env (default 120000 ms, consistent with
+// SPARK_TIMEOUT_MS) or options.timeoutMs; applied via AbortSignal.timeout
+// so a never-resolving endpoint rejects instead of hanging the request.
+
+import { resolveTimeoutMs } from "./model-timeout";
 
 const DEFAULT_API_URL =
   "https://api.llama.com/compat/v1/chat/completions";
@@ -25,6 +31,8 @@ export interface ChatCompletionOptions {
   url?: string;
   model?: string;
   images?: ChatCompletionImage[];
+  /** Bounded fetch timeout in ms; defaults to META_TIMEOUT_MS or 120000. */
+  timeoutMs?: number;
 }
 
 interface ChatMessagePart {
@@ -67,6 +75,9 @@ export async function chatCompletion(
 
   const res = await fetch(url, {
     method: "POST",
+    signal: AbortSignal.timeout(
+      resolveTimeoutMs(options.timeoutMs, "META_TIMEOUT_MS"),
+    ),
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
