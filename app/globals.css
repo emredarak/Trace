@@ -38,6 +38,15 @@ body {
   line-height: 1.55;
 }
 
+/* Animated ambient background (canvas, see ambient-background.tsx) */
+.ambient-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.72;
+}
+
 main {
   position: relative;
   z-index: 1;
