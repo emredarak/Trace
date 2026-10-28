@@ -25,7 +25,7 @@ interface LocationPickerProps {
 const textStyle: React.CSSProperties = {
   fontSize: "1rem",
   lineHeight: 1.5,
-  color: "#111111",
+  color: "var(--text)",
 };
 
 const fieldStyle: React.CSSProperties = {
@@ -34,21 +34,12 @@ const fieldStyle: React.CSSProperties = {
   boxSizing: "border-box",
   fontSize: "1rem",
   lineHeight: 1.5,
-  padding: "0.75rem",
+  padding: "0.7rem 0.8rem",
   margin: "0.25rem 0 1rem",
-  color: "#111111",
-  background: "#ffffff",
-};
-
-const buttonStyle: React.CSSProperties = {
-  fontSize: "1rem",
-  lineHeight: 1.5,
-  padding: "0.6rem 1rem",
-  color: "#111111",
-  background: "#ffffff",
-  border: "1px solid #111111",
-  borderRadius: "0.4rem",
-  cursor: "pointer",
+  color: "var(--text)",
+  background: "var(--panel-2)",
+  border: "1px solid var(--line)",
+  borderRadius: "10px",
 };
 
 const PRIORITIES: { value: string; label: string; priority: LocationPriority | null }[] = [
@@ -168,7 +159,12 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
 
   return (
     <div
+      className="editor-backdrop"
       onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          onClose();
+          return;
+        }
         if (e.key !== "Enter") return;
         const target = e.target as HTMLElement | null;
         if (!target) return;
@@ -182,42 +178,30 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
           e.preventDefault();
         }
       }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-        padding: "1rem",
-        boxSizing: "border-box",
-      }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={isEdit ? "Edit Location" : "Select Location"}
-        style={{
-          background: "#ffffff",
-          color: "#111111",
-          width: "100%",
-          maxWidth: "40rem",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          borderRadius: "0.6rem",
-          padding: "1.25rem",
-          boxSizing: "border-box",
-          ...textStyle,
-        }}
+        className="editor-dialog"
+        style={{ ...textStyle, maxWidth: "48rem" }}
       >
-        <h2 style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}>
-          {isEdit ? "Edit Location" : "Select Location"}
-        </h2>
-
-        <fieldset style={{ margin: "0 0 1rem", padding: "0.75rem" }}>
-          <legend style={textStyle}>Type</legend>
-          <label style={{ ...textStyle, display: "block", marginBottom: "0.5rem" }}>
+        <div className="editor-head">
+          <div>
+            <h2>{isEdit ? "Edit Location" : "Select Location"}</h2>
+            <p className="editor-sub">
+              Name the place first, then pin it by searching an address or
+              clicking the map. Coordinates are optional.
+            </p>
+          </div>
+          <button type="button" className="editor-close" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="editor-body">
+        <p className="editor-section-title">Type</p>
+        <div className="choice-row" role="radiogroup" aria-label="Type">
+          <label className="choice-chip">
             <input
               type="radio"
               name={id("kind")}
@@ -226,7 +210,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
             />{" "}
             Crime Scene
           </label>
-          <label style={{ ...textStyle, display: "block" }}>
+          <label className="choice-chip">
             <input
               type="radio"
               name={id("kind")}
@@ -235,7 +219,7 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
             />{" "}
             Related Location
           </label>
-        </fieldset>
+        </div>
 
         <label htmlFor={id("title")} style={textStyle}>
           Location Title *
@@ -346,10 +330,10 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
             }}
             style={{ ...fieldStyle, margin: 0, flex: "1 1 14rem", width: "auto" }}
           />
-          <button type="button" onClick={() => void searchAddress()} style={buttonStyle}>
+          <button type="button" className="btn-ghost" onClick={() => void searchAddress()}>
             Search
           </button>
-          <button type="button" onClick={locateMe} style={buttonStyle}>
+          <button type="button" className="btn-ghost" onClick={locateMe}>
             Go to My Location
           </button>
         </div>
@@ -360,7 +344,8 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
               <li key={`${r.lat}-${r.lon}-${i}`} style={textStyle}>
                 <button
                   type="button"
-                  style={{ ...buttonStyle, textAlign: "left" }}
+                  className="btn-ghost"
+                  style={{ textAlign: "left", width: "100%", whiteSpace: "normal", borderRadius: "10px" }}
                   onClick={() => {
                     setPick({
                       latitude: Number.parseFloat(r.lat),
@@ -384,8 +369,8 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
             Selected coordinates: ({pick.latitude.toFixed(6)}, {pick.longitude.toFixed(6)}){" "}
             <button
               type="button"
+              className="btn-danger"
               onClick={() => setPick(null)}
-              style={buttonStyle}
             >
               Clear map selection
             </button>
@@ -402,11 +387,13 @@ export function LocationPicker({ initial, onClose, onConfirm }: LocationPickerPr
           </p>
         ) : null}
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <button type="button" onClick={onClose} style={buttonStyle}>
+        </div>
+
+        <div className="editor-foot">
+          <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" onClick={handleConfirm} style={buttonStyle}>
+          <button type="button" className="btn-save-solid" onClick={handleConfirm}>
             {isEdit ? "Save" : "Use This Location"}
           </button>
         </div>

@@ -20,7 +20,7 @@ interface PersonEditorProps {
 const textStyle: React.CSSProperties = {
   fontSize: "1rem",
   lineHeight: 1.5,
-  color: "#111111",
+  color: "var(--text)",
 };
 
 const fieldStyle: React.CSSProperties = {
@@ -29,28 +29,20 @@ const fieldStyle: React.CSSProperties = {
   boxSizing: "border-box",
   fontSize: "1rem",
   lineHeight: 1.5,
-  padding: "0.75rem",
+  padding: "0.7rem 0.8rem",
   margin: "0.25rem 0 1rem",
-  color: "#111111",
-  background: "#ffffff",
-};
-
-const buttonStyle: React.CSSProperties = {
-  fontSize: "1rem",
-  lineHeight: 1.5,
-  padding: "0.6rem 1rem",
-  color: "#111111",
-  background: "#ffffff",
-  border: "1px solid #111111",
-  borderRadius: "0.4rem",
-  cursor: "pointer",
+  color: "var(--text)",
+  background: "var(--panel-2)",
+  border: "1px solid var(--line)",
+  borderRadius: "10px",
 };
 
 const badgeStyle: React.CSSProperties = {
-  padding: "0.25rem 0.6rem",
-  borderRadius: "0.4rem",
-  fontSize: "1rem",
-  lineHeight: 1.5,
+  padding: "0.16rem 0.6rem",
+  borderRadius: "999px",
+  fontSize: "0.78rem",
+  fontWeight: 750,
+  lineHeight: 1.4,
 };
 
 const PERSON_TYPES: PersonType[] = ["victim", "witness", "suspect"];
@@ -141,7 +133,12 @@ export function PersonEditor({
 
   return (
     <div
+      className="editor-backdrop"
       onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          onClose();
+          return;
+        }
         if (e.key !== "Enter") return;
         const target = e.target as HTMLElement | null;
         if (!target) return;
@@ -153,46 +150,31 @@ export function PersonEditor({
           e.preventDefault();
         }
       }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-        padding: "1rem",
-        boxSizing: "border-box",
-      }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={isEdit ? "Edit Person" : "Add Person"}
-        style={{
-          background: "#ffffff",
-          color: "#111111",
-          width: "100%",
-          maxWidth: "40rem",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          borderRadius: "0.6rem",
-          padding: "1.25rem",
-          boxSizing: "border-box",
-          ...textStyle,
-        }}
+        className="editor-dialog"
+        style={textStyle}
       >
-        <h2 style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}>
-          {isEdit ? "Edit Person" : "Add Person"}
-        </h2>
-
-        <fieldset style={{ margin: "0 0 1rem", padding: "0.75rem" }}>
-          <legend style={textStyle}>Type</legend>
+        <div className="editor-head">
+          <div>
+            <h2>{isEdit ? "Edit Person" : "Add Person"}</h2>
+            <p className="editor-sub">
+              First pick the person&apos;s role, then add the details you
+              have — everything except the name can be completed later.
+            </p>
+          </div>
+          <button type="button" className="editor-close" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="editor-body">
+        <p className="editor-section-title">Type</p>
+        <div className="choice-row" role="radiogroup" aria-label="Type">
           {PERSON_TYPES.map((t) => (
-            <label
-              key={t}
-              style={{ ...textStyle, display: "block", marginBottom: "0.5rem" }}
-            >
+            <label key={t} className="choice-chip">
               <input
                 type="radio"
                 name={id("type")}
@@ -202,18 +184,9 @@ export function PersonEditor({
               {personTypeLabel(t)}
             </label>
           ))}
-          <p style={{ ...textStyle, margin: "0.5rem 0 0" }}>
-            <span
-              style={{
-                ...badgeStyle,
-                background: typeColor.bg,
-                color: typeColor.fg,
-              }}
-            >
-              {personTypeLabel(type)}
-            </span>
-          </p>
-        </fieldset>
+        </div>
+
+        <p className="editor-section-title">Identity</p>
 
         <label htmlFor={id("name")} style={textStyle}>
           Full Name
@@ -384,7 +357,7 @@ export function PersonEditor({
                 <button
                   type="button"
                   onClick={() => setRemoveAudio(true)}
-                  style={buttonStyle}
+                  className="btn-danger"
                 >
                   Remove Audio Recording
                 </button>
@@ -399,11 +372,13 @@ export function PersonEditor({
           </p>
         ) : null}
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <button type="button" onClick={onClose} style={buttonStyle}>
+        </div>
+
+        <div className="editor-foot">
+          <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" onClick={handleConfirm} style={buttonStyle}>
+          <button type="button" className="btn-save-solid" onClick={handleConfirm}>
             {isEdit ? "Save" : "Use This Person"}
           </button>
         </div>

@@ -16,7 +16,7 @@ interface EvidenceEditorProps {
 const textStyle: React.CSSProperties = {
   fontSize: "1rem",
   lineHeight: 1.5,
-  color: "#111111",
+  color: "var(--text)",
 };
 
 const fieldStyle: React.CSSProperties = {
@@ -25,21 +25,12 @@ const fieldStyle: React.CSSProperties = {
   boxSizing: "border-box",
   fontSize: "1rem",
   lineHeight: 1.5,
-  padding: "0.75rem",
+  padding: "0.7rem 0.8rem",
   margin: "0.25rem 0 1rem",
-  color: "#111111",
-  background: "#ffffff",
-};
-
-const buttonStyle: React.CSSProperties = {
-  fontSize: "1rem",
-  lineHeight: 1.5,
-  padding: "0.6rem 1rem",
-  color: "#111111",
-  background: "#ffffff",
-  border: "1px solid #111111",
-  borderRadius: "0.4rem",
-  cursor: "pointer",
+  color: "var(--text)",
+  background: "var(--panel-2)",
+  border: "1px solid var(--line)",
+  borderRadius: "10px",
 };
 
 let fallbackIdCounter = 0;
@@ -94,7 +85,12 @@ export function EvidenceEditor({
 
   return (
     <div
+      className="editor-backdrop"
       onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          onClose();
+          return;
+        }
         if (e.key !== "Enter") return;
         const target = e.target as HTMLElement | null;
         if (
@@ -105,38 +101,27 @@ export function EvidenceEditor({
           e.preventDefault();
         }
       }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.6)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-        padding: "1rem",
-        boxSizing: "border-box",
-      }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={isEdit ? "Edit Evidence" : "Add Evidence"}
-        style={{
-          background: "#ffffff",
-          color: "#111111",
-          width: "100%",
-          maxWidth: "40rem",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          borderRadius: "0.6rem",
-          padding: "1.25rem",
-          boxSizing: "border-box",
-          ...textStyle,
-        }}
+        className="editor-dialog"
+        style={textStyle}
       >
-        <h2 style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}>
-          {isEdit ? "Edit Evidence" : "Add Evidence"}
-        </h2>
+        <div className="editor-head">
+          <div>
+            <h2>{isEdit ? "Edit Evidence" : "Add Evidence"}</h2>
+            <p className="editor-sub">
+              A title plus a photo, an audio file or a note is enough — you
+              can complete the rest later.
+            </p>
+          </div>
+          <button type="button" className="editor-close" aria-label="Close" onClick={onClose}>
+            ×
+          </button>
+        </div>
+        <div className="editor-body">
 
         <label htmlFor={id("title")} style={textStyle}>
           Evidence Title *
@@ -175,7 +160,7 @@ export function EvidenceEditor({
               alt={initial.title}
               style={{ maxWidth: "100%", maxHeight: "12rem", display: "block" }}
             />{" "}
-            <button type="button" onClick={() => setRemoveImage(true)} style={buttonStyle}>
+            <button type="button" onClick={() => setRemoveImage(true)} className="btn-danger">
               Remove Image
             </button>
           </p>
@@ -200,7 +185,7 @@ export function EvidenceEditor({
         ) : initial?.audioFile && !removeAudio ? (
           <p style={textStyle}>
             <audio controls src={evidenceFileUrl(initial.audioFile)} />{" "}
-            <button type="button" onClick={() => setRemoveAudio(true)} style={buttonStyle}>
+            <button type="button" onClick={() => setRemoveAudio(true)} className="btn-danger">
               Remove Audio
             </button>
           </p>
@@ -225,12 +210,13 @@ export function EvidenceEditor({
             {error}
           </p>
         ) : null}
+        </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-          <button type="button" onClick={onClose} style={buttonStyle}>
+        <div className="editor-foot">
+          <button type="button" className="btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" onClick={handleConfirm} style={buttonStyle}>
+          <button type="button" className="btn-save-solid" onClick={handleConfirm}>
             {isEdit ? "Save" : "Use Evidence"}
           </button>
         </div>

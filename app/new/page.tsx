@@ -10,11 +10,11 @@ import type { CasePersonDraft } from "../../lib/persons";
 import type { CaseEvidenceDraft } from "../../lib/evidences";
 
 const wrap: React.CSSProperties = {
-  maxWidth: "28rem",
+  maxWidth: "62rem",
   margin: "0 auto",
-  padding: "1rem",
+  padding: "1.75rem clamp(1rem,3vw,2.5rem) 4rem",
   fontSize: "1rem",
-  lineHeight: 1.5,
+  lineHeight: 1.55,
 };
 
 interface CreatedBody {

@@ -24,18 +24,7 @@ export interface LocationsSectionProps {
 const textStyle: React.CSSProperties = {
   fontSize: "1rem",
   lineHeight: 1.5,
-  color: "#f1f5f9",
-};
-
-const buttonStyle: React.CSSProperties = {
-  fontSize: "1rem",
-  lineHeight: 1.5,
-  padding: "0.6rem 1rem",
-  color: "#111111",
-  background: "#ffffff",
-  border: "1px solid #111111",
-  borderRadius: "0.4rem",
-  cursor: "pointer",
+  color: "var(--text)",
 };
 
 export function LocationsSection({
@@ -88,94 +77,72 @@ export function LocationsSection({
   return (
     <section
       aria-labelledby={`${idPrefix}-konumlar-baslik`}
-      style={{
-        ...textStyle,
-        background: "#1e293b",
-        border: "1px solid #334155",
-        borderRadius: "0.6rem",
-        padding: "1rem",
-        margin: "0 0 1rem",
-      }}
+      className="record-section"
+      style={{ ...textStyle, margin: "0 0 1rem" }}
     >
-      <h2
-        id={`${idPrefix}-konumlar-baslik`}
-        style={{ ...textStyle, fontSize: "1.25rem", margin: "0 0 1rem" }}
-      >
-        Locations
-      </h2>
+      <div className="record-head">
+        <h2 id={`${idPrefix}-konumlar-baslik`}>Locations</h2>
+        <span className="record-count">
+          {sorted.length} {sorted.length === 1 ? "place" : "places"}
+        </span>
+      </div>
 
       {!hasCrimeScene ? (
         <p
           role="note"
           style={{
             ...textStyle,
-            color: "#111111",
-            background: "#fff3cd",
-            border: "1px solid #111111",
-            borderRadius: "0.4rem",
-            padding: "0.75rem",
+            color: "#f7d774",
+            background: "rgba(242,179,61,.1)",
+            border: "1px solid rgba(242,179,61,.55)",
+            borderRadius: "10px",
+            padding: "0.7rem 0.9rem",
             margin: "0 0 1rem",
+            fontSize: "0.92rem",
           }}
         >
           No location in this case is marked as Crime Scene.
         </p>
       ) : null}
 
-      <MapPicker points={points} readOnly height={260} />
+      <div className="map-clip">
+        <MapPicker points={points} readOnly height={280} />
+      </div>
 
       {sorted.length === 0 ? <p style={textStyle}>No locations added.</p> : null}
-      <ul style={{ paddingLeft: "1.25rem" }}>
+      <ul className="record-list">
         {sorted.map((loc) => {
           const color = locationColor(loc);
           return (
-            <li
-              key={loc.id}
-              style={{
-                ...textStyle,
-                marginBottom: "0.75rem",
-                background: "#1e293b",
-                border: "1px solid #334155",
-                borderRadius: "0.6rem",
-                padding: "0.9rem 1rem",
-              }}
-            >
-              <strong>{loc.title} </strong>
-              <span
-                style={{
-                  background: color.badgeBg,
-                  color: color.badgeFg,
-                  padding: "0.25rem 0.6rem",
-                  borderRadius: "0.4rem",
-                  fontSize: "1rem",
-                  lineHeight: 1.5,
-                }}
-              >
-                {locationLabel(loc)}
-              </span>{" "}
-              {loc.note ? <span>{loc.note} </span> : null}
-              {typeof loc.latitude === "number" &&
-              typeof loc.longitude === "number" ? (
-                <span>
-                  ({loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}){" "}
-                </span>
-              ) : null}
+            <li key={loc.id} className="record-card" style={textStyle}>
+              <span className="pin-dot" style={{ background: color.pin }} aria-hidden="true" />
+              <div className="record-main">
+                <div>
+                  <strong>{loc.title}</strong>{" "}
+                  <span
+                    className="badge-small"
+                    style={{ background: color.badgeBg, color: color.badgeFg }}
+                  >
+                    {locationLabel(loc)}
+                  </span>
+                </div>
+                {loc.note ? <p className="record-note">{loc.note}</p> : null}
+                {typeof loc.latitude === "number" &&
+                typeof loc.longitude === "number" ? (
+                  <p className="record-meta">
+                    {loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}
+                  </p>
+                ) : null}
+              </div>
               {!readOnly ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setPicker(loc)}
-                    style={buttonStyle}
-                  >
+                <div className="record-actions">
+                  <button type="button" className="btn-ghost" onClick={() => setPicker(loc)}>
                     Edit
-                  </button>{" "}
-                  <button
-                    type="button"
-                    onClick={() => removeLocation(loc)}
-                    style={buttonStyle}
-                  >
+                  </button>
+                  <button type="button" className="btn-danger" onClick={() => removeLocation(loc)}>
                     Delete
                   </button>
-                </>
+                </div>
               ) : null}
             </li>
           );
@@ -183,11 +150,7 @@ export function LocationsSection({
       </ul>
 
       {!readOnly ? (
-        <button
-          type="button"
-          onClick={() => setPicker(null)}
-          style={buttonStyle}
-        >
+        <button type="button" className="btn-add" onClick={() => setPicker(null)}>
           + Add Location
         </button>
       ) : null}
@@ -207,14 +170,10 @@ export function LocationsSection({
             marginTop: "1rem",
           }}
         >
-          <button
-            type="button"
-            onClick={() => void onSave?.()}
-            style={buttonStyle}
-          >
+          <button type="button" className="btn-save-solid" onClick={() => void onSave?.()}>
             Save
           </button>
-          <button type="button" onClick={() => onReset?.()} style={buttonStyle}>
+          <button type="button" className="btn-ghost" onClick={() => onReset?.()}>
             Cancel
           </button>
         </div>

@@ -394,6 +394,21 @@ describe("Case detail + similar list", () => {
     }
   });
 
+  it("similar details stay collapsed until expanded, expand/collapse all works", async () => {
+    stubFetch();
+    renderPage();
+
+    const list = await screen.findByRole("list", { name: /similar/i });
+    const first = within(list).getByText(RESULTS[0].reason).closest("li") as HTMLElement;
+    expect(within(first).queryByText(/^Crime Type:/)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /expand all/i }));
+    expect(within(first).getByText(/^Crime Type:/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse all/i }));
+    expect(within(first).queryByText(/^Crime Type:/)).toBeNull();
+  });
+
   it("card shows case-number link instead of raw id plus similarity items", async () => {
     stubFetch();
     renderPage();
@@ -405,14 +420,17 @@ describe("Case detail + similar list", () => {
       expect(link.textContent).not.toContain(r.caseId);
     }
     const first = within(list).getByText(RESULTS[0].reason).closest("li") as HTMLElement;
+    fireEvent.click(within(first).getByRole("button", { name: /show details/i }));
     expect(within(first).getByText(/^Crime Type:/)).toBeTruthy();
     expect(within(first).queryByText(/crime-type/)).toBeNull();
     expect(first.textContent).toContain("theft in both");
     expect(first.textContent).toContain("9/10");
     expect(within(first).getByText(/^Weapon:/)).toBeTruthy();
     const third = within(list).getByText(RESULTS[1].reason).closest("li") as HTMLElement;
+    fireEvent.click(within(third).getByRole("button", { name: /show details/i }));
     expect(within(third).getByText(/^Method:/)).toBeTruthy();
     const fourth = within(list).getByText(RESULTS[2].reason).closest("li") as HTMLElement;
+    fireEvent.click(within(fourth).getByRole("button", { name: /show details/i }));
     expect(within(fourth).getByText(/^Location:/)).toBeTruthy();
     expect(first.textContent).toContain("knife in both");
     expect(first.textContent).toContain("8/10");

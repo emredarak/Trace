@@ -17,6 +17,8 @@ export interface MapPoint {
   note?: string;
   kind?: LocationKind | string | null;
   priority?: LocationPriority | string | null;
+  color?: string;
+  ageLabel?: string;
 }
 
 interface MapPickerProps {
@@ -25,6 +27,7 @@ interface MapPickerProps {
   onPick?: (point: MapPoint) => void;
   readOnly?: boolean;
   height?: number;
+  showDistances?: boolean;
 }
 
 const DEFAULT_CENTER: MapPoint = { latitude: 39.93, longitude: 32.85 };
@@ -51,8 +54,9 @@ function pointInfoHtml(p: MapPoint): string {
   const title = p.title?.trim() ? p.title : "Location";
   const lines = [
     `<strong>${escapeHtml(title)}</strong>`,
-    `<span style="background:${color.badgeBg};color:${color.badgeFg};padding:0.1rem 0.45rem;border-radius:0.4rem;">${escapeHtml(locationLabel(p))}</span>`,
+    `<span style="background:${p.color ?? color.badgeBg};color:#ffffff;padding:0.1rem 0.45rem;border-radius:0.4rem;">${escapeHtml(locationLabel(p))}</span>`,
   ];
+  if (p.ageLabel?.trim()) lines.push(escapeHtml(p.ageLabel));
   if (p.note?.trim()) lines.push(`Note: ${escapeHtml(p.note)}`);
   lines.push(`(${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)})`);
   return lines.join("<br/>");
@@ -98,6 +102,7 @@ export default function MapPicker({
   onPick,
   readOnly = false,
   height = 260,
+  showDistances = true,
 }: MapPickerProps) {
   const divRef = useRef<HTMLDivElement | null>(null);
   const [failed, setFailed] = useState(false);
@@ -157,7 +162,7 @@ export default function MapPicker({
         if (!group) return;
         group.clearLayers();
 
-        for (const pair of distancePairs(points)) {
+        for (const pair of showDistances ? distancePairs(points) : []) {
           const a = points[pair.aIndex];
           const b = points[pair.bIndex];
           if (!a || !b) continue;
@@ -184,12 +189,13 @@ export default function MapPicker({
 
         for (const p of points) {
           const color = locationColor(p);
+          const pin = p.color ?? color.pin;
           const marker = L.circleMarker([p.latitude, p.longitude], {
             radius: 8,
-            color: color.pin,
-            fillColor: color.pin,
-            fillOpacity: 0.9,
-            weight: 2,
+            color: "#ffffff",
+            fillColor: pin,
+            fillOpacity: 0.95,
+            weight: 1.5,
           }).addTo(group);
           marker.bindTooltip(pointInfoHtml(p), {
             className: "trace-map-tooltip",
@@ -265,7 +271,7 @@ export default function MapPicker({
     return () => {
       cancelled = true;
     };
-  }, [points, pick, readOnly]);
+  }, [points, pick, readOnly, showDistances]);
 
   if (failed) {
     return <p>Could not load the map (you may be offline); use the text location instead.</p>;

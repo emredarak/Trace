@@ -24,7 +24,7 @@ export default async function LoginPage({
   }
 
   return (
-    <main>
+    <main style={{ maxWidth: "30rem" }}>
       <h1>Demo sign in</h1>
       {params.error && <p>Incorrect password.</p>}
       <form action={login}>

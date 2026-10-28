@@ -41,40 +41,42 @@ export const SIMILARITY_KIND_LABELS: Record<string, string> = {
 };
 
 const layoutCss = [
-  ".trace-case-layout{display:flex;flex-direction:column;gap:1rem}",
-  "@media(min-width:48rem){.trace-case-layout{flex-direction:row;align-items:flex-start}",
-  ".trace-case-layout>section{flex:1;min-width:0}}",
+  ".trace-case-layout{display:grid;grid-template-columns:1fr;gap:1.25rem;align-items:start}",
+  "@media(min-width:64rem){.trace-case-layout{grid-template-columns:minmax(0,1.35fr) minmax(20rem,1fr)}",
+  ".trace-case-layout>section{min-width:0}}",
+  ".trace-similar{position:sticky;top:5.4rem;max-height:calc(100vh - 6.8rem);overflow-y:auto}",
+  "@media(max-width:63.9rem){.trace-similar{position:static;max-height:none;overflow:visible}}",
+  ".case-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;margin:1rem 0 1.25rem}",
+  ".case-fields p{margin:0;background:var(--panel-2);border:1px solid var(--line-soft);border-radius:10px;padding:.65rem .8rem;font-size:.92rem;overflow-wrap:anywhere}",
+  "@media(max-width:44rem){.case-fields{grid-template-columns:1fr}}",
 ].join("");
 
 const mainStyle: React.CSSProperties = {
-  maxWidth: "56rem",
+  maxWidth: "92rem",
   margin: "0 auto",
-  padding: "1rem",
+  padding: "1.75rem clamp(1rem,3vw,2.5rem) 4rem",
   fontSize: "1rem",
-  lineHeight: 1.5,
+  lineHeight: 1.55,
 };
 
 const cardStyle: React.CSSProperties = {
-  border: "1px solid #ccc",
-  borderRadius: "0.5rem",
-  padding: "1rem",
+  background: "var(--panel)",
+  border: "1px solid var(--line-soft)",
+  borderRadius: "var(--radius)",
+  padding: "1.25rem 1.35rem",
   marginBottom: "1rem",
 };
 
 const badgeStyle: React.CSSProperties = {
   display: "inline-block",
-  background: "#fff3bf",
-  border: "1px solid #e6a800",
+  background: "var(--gold)",
+  color: "var(--gold-ink)",
+  border: "1px solid var(--gold)",
   borderRadius: "999px",
   padding: "0.25rem 0.75rem",
-  fontSize: "0.9rem",
+  fontSize: "0.85rem",
+  fontWeight: 750,
   marginBottom: "1rem",
-};
-
-const approveButtonStyle: React.CSSProperties = {
-  fontSize: "1rem",
-  padding: "0.6rem 1rem",
-  cursor: "pointer",
 };
 
 function toEvidenceDraft(e: Evidence): CaseEvidenceDraft {
@@ -246,6 +248,9 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   const [similar, setSimilar] = useState<SimilarResponse | null>(null);
   const [similarError, setSimilarError] = useState("");
   const [approved, setApproved] = useState<Record<string, boolean>>({});
+  const [expandedSimilar, setExpandedSimilar] = useState<
+    Record<string, boolean>
+  >({});
   const [approveError, setApproveError] = useState<Record<string, string>>({});
   const [approving, setApproving] = useState<Record<string, boolean>>({});
   const [togglingStatus, setTogglingStatus] = useState(false);
@@ -843,27 +848,61 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   return (
     <main style={mainStyle}>
       <style>{layoutCss}</style>
-      <h1>Case {caseItem.caseNo}</h1>
-      <p>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "1rem",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
+        <h1 style={{ borderBottom: "none", paddingBottom: 0 }}>
+          Case {caseItem.caseNo}
+        </h1>
         <button
           type="button"
+          className="btn-ghost"
           disabled={togglingStatus}
           onClick={() => void toggleStatus()}
-          style={approveButtonStyle}
+          style={{ marginTop: "0.6rem" }}
         >
           {caseItem.status === "closed" ? "Reopen Case" : "Close Case"}
         </button>
+      </div>
+      <p
+        style={{
+          color: "var(--muted)",
+          borderBottom: "1px solid var(--line)",
+          paddingBottom: "1rem",
+          marginTop: "0.2rem",
+        }}
+      >
+        {caseItem.status === "closed" ? "Closed case" : "Active case"}
+        {caseItem.crimeType ? ` · ${caseItem.crimeType}` : ""}
+        {caseItem.occurredAt ? ` · ${caseItem.occurredAt}` : ""}
       </p>
       {showFreshBadge ? <p style={badgeStyle}>new similar cases</p> : null}
       <div className="trace-case-layout">
         <section aria-label="Case detail" style={cardStyle}>
-          <h2>Case detail</h2>
-          <p>{caseItem.summary}</p>
-          {fieldRow("Crime type", caseItem.crimeType)}
-          {fieldRow("Incident date", caseItem.occurredAt)}
-          {fieldRow("Method", caseItem.mo)}
-          {fieldRow("Weapon", caseItem.weapon)}
-          {fieldRow("Status", caseItem.status === "closed" ? "Closed" : "Open")}
+          <h2 style={{ marginTop: "0.2rem" }}>Case detail</h2>
+          <p
+            style={{
+              fontSize: "1.06rem",
+              lineHeight: 1.65,
+              maxWidth: "68ch",
+              margin: "0.4rem 0 0",
+            }}
+          >
+            {caseItem.summary}
+          </p>
+          <div className="case-fields">
+            {fieldRow("Crime type", caseItem.crimeType)}
+            {fieldRow("Incident date", caseItem.occurredAt)}
+            {fieldRow("Method", caseItem.mo)}
+            {fieldRow("Weapon", caseItem.weapon)}
+            {fieldRow("Status", caseItem.status === "closed" ? "Closed" : "Open")}
+          </div>
           <EvidenceSection
             evidences={draftEvidences}
             onChange={(evidences) => {
@@ -913,8 +952,56 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             }}
           />
         </section>
-        <section aria-label="Similar cases" style={cardStyle}>
-          <h2>Similar cases</h2>
+        <section
+          aria-label="Similar cases"
+          className="trace-similar similar-scroll"
+          style={cardStyle}
+        >
+          <div className="record-head">
+            <h2 style={{ margin: 0 }}>Similar cases</h2>
+            {similar && similar.results.length > 0 ? (
+              <span className="record-count">
+                {similar.results.length}{" "}
+                {similar.results.length === 1 ? "match" : "matches"}
+              </span>
+            ) : null}
+          </div>
+          {similar && similar.results.length > 0 ? (
+            <>
+              <p style={{ color: "var(--muted)", fontSize: "0.88rem", marginTop: 0 }}>
+                Ranked by overall score. Open a row to see its evidence.
+              </p>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "0.45rem",
+                  flexWrap: "wrap",
+                  marginBottom: "0.85rem",
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() =>
+                    setExpandedSimilar(
+                      Object.fromEntries(
+                        similar.results.map((r) => [r.caseId, true]),
+                      ),
+                    )
+                  }
+                >
+                  Expand all
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => setExpandedSimilar({})}
+                >
+                  Collapse all
+                </button>
+              </div>
+            </>
+          ) : null}
           {similarError ? <p role="alert">{similarError}</p> : null}
           {similar?.pendingEnrichment ? (
             <p style={badgeStyle}>
@@ -928,55 +1015,235 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           ) : null}
           {similar && similar.results.length > 0 ? (
             <ul aria-label="Similar case list">
-              {similar.results.map((r) => (
-                <li key={r.caseId} style={cardStyle}>
-                  <p>
-                    <strong>Case: </strong>
-                    <a href={`/cases/${r.caseId}`}>{r.caseNo || r.caseId}</a>
-                  </p>
-                  <p>
-                    <strong>score: </strong>
-                    {r.score === 0 ? "0 (not scored)" : String(r.score)}
-                  </p>
-                  <p>
-                    <strong>reason: </strong>
-                    {r.reason}
-                  </p>
-                  {Array.isArray(r.similarities) && r.similarities.length > 0 ? (
-                    <ul>
-                      {r.similarities.map((s, i) => (
-                        <li key={`${s.kind}-${i}`}>
-                          <strong>
-                            {SIMILARITY_KIND_LABELS[s.kind] ?? s.kind}:{" "}
-                          </strong>
-                          {s.description} ({s.strength}/10)
-                          {s.evidence ? (
-                            <>
-                              {" — "}
-                              <span>evidence: {s.evidence}</span>
-                            </>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {approved[r.caseId] ? (
-                    <p>approved</p>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={approving[r.caseId] === true}
-                      onClick={() => void approve(r.caseId)}
-                      style={approveButtonStyle}
+              {similar.results.map((r) => {
+                const scoreColor =
+                  r.score >= 8
+                    ? "var(--accent)"
+                    : r.score >= 5
+                      ? "var(--gold)"
+                      : "var(--muted)";
+                const sims = Array.isArray(r.similarities)
+                  ? r.similarities
+                  : [];
+                const strongest =
+                  sims.length > 0
+                    ? sims.reduce((a, b) => (b.strength > a.strength ? b : a))
+                    : null;
+                const expanded = expandedSimilar[r.caseId] === true;
+                return (
+                  <li
+                    key={r.caseId}
+                    style={{
+                      background: "var(--panel-2)",
+                      border: "1px solid var(--line-soft)",
+                      borderRadius: "12px",
+                      padding: "0.95rem 1rem",
+                      marginBottom: "0.7rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "sticky",
+                        top: "-0.95rem",
+                        zIndex: 2,
+                        background: "var(--panel-2)",
+                        margin: "-0.95rem -1rem 0",
+                        padding: "0.95rem 1rem 0.7rem",
+                        borderRadius: "12px 12px 0 0",
+                        borderBottom: expanded
+                          ? "1px solid var(--line-soft)"
+                          : "none",
+                      }}
                     >
-                      relevant
-                    </button>
-                  )}
-                  {approveError[r.caseId] ? (
-                    <p role="alert">{approveError[r.caseId]}</p>
-                  ) : null}
-                </li>
-              ))}
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          gap: "0.8rem",
+                        }}
+                      >
+                        <p style={{ margin: 0 }}>
+                          <strong>Case: </strong>
+                          <a href={`/cases/${r.caseId}`} style={{ fontSize: "1.02rem" }}>
+                            {r.caseNo || r.caseId}
+                          </a>
+                        </p>
+                        <span style={{ textAlign: "right", lineHeight: 1.05 }}>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "1.45rem",
+                              fontWeight: 900,
+                              color: scoreColor,
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            {r.score === 0 ? "0" : String(r.score)}
+                          </span>
+                          <span style={{ fontSize: "0.68rem", color: "var(--muted)" }}>
+                            {r.score === 0 ? "not scored" : "score / 10"}
+                          </span>
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "0.6rem",
+                          flexWrap: "wrap",
+                          marginTop: "0.55rem",
+                        }}
+                      >
+                        {approved[r.caseId] ? (
+                          <span className="chip gold">approved</span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            style={{ padding: "0.32rem 0.8rem", fontSize: "0.84rem" }}
+                            disabled={approving[r.caseId] === true}
+                            onClick={() => void approve(r.caseId)}
+                          >
+                            relevant
+                          </button>
+                        )}
+                        {sims.length > 0 ? (
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            style={{ padding: "0.32rem 0.8rem", fontSize: "0.84rem" }}
+                            aria-expanded={expanded}
+                            aria-controls={`similar-details-${r.caseId}`}
+                            onClick={() =>
+                              setExpandedSimilar((cur) => ({
+                                ...cur,
+                                [r.caseId]: !expanded,
+                              }))
+                            }
+                          >
+                            {expanded ? "Hide details ▴" : "Show details ▾"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                    <p
+                      style={{
+                        color: "var(--muted)",
+                        fontSize: "0.9rem",
+                        lineHeight: 1.55,
+                        margin: "0.45rem 0 0",
+                      }}
+                    >
+                      <strong style={{ color: "var(--text)" }}>reason: </strong>
+                      {r.reason}
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "0.4rem",
+                        alignItems: "center",
+                        marginTop: "0.6rem",
+                      }}
+                    >
+                      {sims.length > 0 ? (
+                        <span className="chip">
+                          {sims.length}{" "}
+                          {sims.length === 1 ? "finding" : "findings"}
+                        </span>
+                      ) : null}
+                      {strongest ? (
+                        <span className="chip gold">
+                          Strongest:{" "}
+                          {SIMILARITY_KIND_LABELS[strongest.kind] ??
+                            strongest.kind}{" "}
+                          {strongest.strength}/10
+                        </span>
+                      ) : null}
+                    </div>
+                    {expanded && sims.length > 0 ? (
+                      <ul
+                        id={`similar-details-${r.caseId}`}
+                        style={{ marginTop: "0.5rem" }}
+                      >
+                        {r.similarities.map((s, i) => (
+                          <li
+                            key={`${s.kind}-${i}`}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              borderTop: "1px solid var(--line-soft)",
+                              borderRadius: 0,
+                              padding: "0.6rem 0 0.55rem",
+                              marginBottom: 0,
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                gap: "0.8rem",
+                                fontSize: "0.88rem",
+                              }}
+                            >
+                              <strong>
+                                {SIMILARITY_KIND_LABELS[s.kind] ?? s.kind}:
+                              </strong>
+                              <span style={{ color: "var(--muted)", whiteSpace: "nowrap" }}>
+                                {s.strength}/10
+                              </span>
+                            </span>
+                            <span style={{ display: "block", fontSize: "0.9rem", marginTop: "0.15rem" }}>
+                              {s.description}
+                            </span>
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                display: "block",
+                                height: "0.28rem",
+                                background: "var(--panel-3)",
+                                borderRadius: "999px",
+                                overflow: "hidden",
+                                margin: "0.4rem 0 0",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  display: "block",
+                                  height: "100%",
+                                  width: `${Math.max(0, Math.min(10, s.strength)) * 10}%`,
+                                  background: scoreColor,
+                                  borderRadius: "999px",
+                                }}
+                              />
+                            </span>
+                            {s.evidence ? (
+                              <span
+                                style={{
+                                  display: "block",
+                                  fontSize: "0.82rem",
+                                  color: "var(--muted)",
+                                  borderLeft: "3px solid var(--gold)",
+                                  paddingLeft: "0.6rem",
+                                  marginTop: "0.45rem",
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                evidence: {s.evidence}
+                              </span>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {approveError[r.caseId] ? (
+                      <p role="alert">{approveError[r.caseId]}</p>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           ) : null}
         </section>

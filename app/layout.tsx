@@ -22,8 +22,13 @@ export default function RootLayout({
         <SwRegister />
         <header className="trace-nav">
           <nav>
+            <a className="brand" href="/">
+              TRACE<em>.</em>
+            </a>
             <a href="/">Cases</a>
-            <a href="/new">+ New Case</a>
+            <a className="nav-cta" href="/new">
+              + New Case
+            </a>
           </nav>
         </header>
         {children}

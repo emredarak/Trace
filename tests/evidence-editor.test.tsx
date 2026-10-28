@@ -61,6 +61,26 @@ describe("EvidenceSection", () => {
     expect(screen.getByText("has marks on it")).toBeTruthy();
   });
 
+  it("photo opens in a lightbox and closes with the close button", () => {
+    const items: CaseEvidenceDraft[] = [
+      {
+        id: "e1",
+        title: "Knife photo",
+        note: "on the pier",
+        type: "evidence",
+        imageFile: "f.jpg",
+        audioFile: null,
+      },
+    ];
+    render(
+      <EvidenceSection evidences={items} onChange={vi.fn()} idPrefix="test" readOnly />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /enlarge photo/i }));
+    expect(screen.getByRole("dialog", { name: /photo: knife photo/i })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /close photo/i }));
+    expect(screen.queryByRole("dialog", { name: /photo: knife photo/i })).toBeNull();
+  });
+
   it("saved audio and image render as player/image", () => {
     const items: CaseEvidenceDraft[] = [
       {

@@ -12,11 +12,11 @@ export const EVIDENCE_TYPES = [
 ];
 
 const wrap: React.CSSProperties = {
-  maxWidth: "28rem",
+  maxWidth: "62rem",
   margin: "0 auto",
-  padding: "1rem",
+  padding: "1.75rem clamp(1rem,3vw,2.5rem) 4rem",
   fontSize: "1rem",
-  lineHeight: 1.5,
+  lineHeight: 1.55,
 };
 
 const field: React.CSSProperties = {
@@ -46,11 +46,12 @@ const chipRow: React.CSSProperties = {
 
 function chipStyle(selected: boolean): React.CSSProperties {
   return {
-    fontSize: "1rem",
-    padding: "0.6rem 1rem",
+    fontSize: "0.95rem",
+    padding: "0.55rem 1rem",
     borderRadius: "999px",
-    border: selected ? "2px solid black" : "1px solid gray",
-    background: selected ? "#eee" : "white",
+    border: selected ? "1px solid var(--accent)" : "1px solid var(--line)",
+    background: selected ? "var(--accent)" : "var(--panel-2)",
+    color: selected ? "var(--accent-ink)" : "var(--text)",
     cursor: "pointer",
   };
 }
