@@ -87,6 +87,40 @@ export function initDb(): void {
       longitude REAL,
       createdAt TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS case_dossiers (
+      caseId TEXT PRIMARY KEY REFERENCES cases(id) ON DELETE CASCADE,
+      version INTEGER NOT NULL DEFAULT 1,
+      hash TEXT NOT NULL,
+      json TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS enrichment_jobs (
+      id TEXT PRIMARY KEY,
+      caseId TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('transcribe', 'sam', 'dossier')),
+      refId TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'done', 'failed')),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      lastError TEXT,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_enrichment_jobs_open
+      ON enrichment_jobs (kind, refId) WHERE status = 'pending' AND refId IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_enrichment_jobs_status
+      ON enrichment_jobs (status, createdAt);
+    CREATE TABLE IF NOT EXISTS similar_results (
+      queryId TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      candidateId TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+      score REAL,
+      similarities TEXT,
+      reason TEXT,
+      queryHash TEXT,
+      candidateHash TEXT,
+      model TEXT,
+      createdAt TEXT NOT NULL,
+      PRIMARY KEY (queryId, candidateId)
+    );
     CREATE VIRTUAL TABLE IF NOT EXISTS case_fts USING fts5(
       summary, crimeType, locationType, weapon, mo,
       content='cases', content_rowid='rowid'
@@ -150,6 +184,34 @@ export function initDb(): void {
   if (!personColumns.has("audioFile")) {
     database.exec("ALTER TABLE case_persons ADD COLUMN audioFile TEXT");
   }
+}
+
+export type EnrichmentJobKind = "transcribe" | "sam" | "dossier";
+export type EnrichmentJobStatus = "pending" | "done" | "failed";
+
+export function enqueueJob(
+  database: Database.Database,
+  input: { caseId: string; kind: EnrichmentJobKind; refId?: string | null },
+): string {
+  const refId = input.refId ?? null;
+  const existing = database
+    .prepare(
+      `SELECT id FROM enrichment_jobs
+       WHERE kind = ? AND status = 'pending'
+         AND (refId = ? OR (refId IS NULL AND ? IS NULL))
+       ORDER BY createdAt ASC LIMIT 1`,
+    )
+    .get(input.kind, refId, refId) as { id: string } | undefined;
+  if (existing) return existing.id;
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  database
+    .prepare(
+      `INSERT INTO enrichment_jobs (id, caseId, kind, refId, status, attempts, lastError, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, 'pending', 0, NULL, ?, ?)`,
+    )
+    .run(id, input.caseId, input.kind, refId, now, now);
+  return id;
 }
 
 function nextCaseNo(database: Database.Database): string {
