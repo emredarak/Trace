@@ -15,6 +15,7 @@ import {
 } from "../../../lib/evidences";
 import {
   SimilarSearchProgress,
+  displayModelName,
   type StageView,
 } from "../../components/similar-search-progress";
 import { readSearchEvents } from "../../../lib/search-stream";
@@ -40,13 +41,13 @@ interface SimilarResponse {
 const SIMILAR_STAGE_META: Record<StageKey, { label: string; owner: string; why: string }> = {
   enrichment: {
     label: "Enrichment",
-    owner: "Muse Voice Transcribe · SAM 3.1",
+    owner: "Muse Voice Transcribe 1.0 · SAM 3.1",
     why: "Audio becomes searchable text and images gain object labels; both feed the similarity check.",
   },
   dossiers: {
     label: "Case files",
-    owner: "Muse Glimmer",
-    why: "Each case is compiled into one comparable file; unchanged files are reused.",
+    owner: "Muse Spark 1.3",
+    why: "Each case is compiled into one comparable file; unchanged files are reused from the last build.",
   },
   candidates: {
     label: "Candidates",
@@ -55,8 +56,8 @@ const SIMILAR_STAGE_META: Record<StageKey, { label: string; owner: string; why: 
   },
   scoring: {
     label: "Scoring",
-    owner: "Muse Spark Open",
-    why: "Candidate files are compared in a single call; every similarity is listed with a strength (1–10).",
+    owner: "Muse Wonder 1.0",
+    why: "Candidate files are compared in a single call; this model decides each similarity, its strength (1–10) and the overall score.",
   },
   verification: {
     label: "Verification & ranking",
@@ -72,6 +73,47 @@ function initialProgressStages(): StageView[] {
     status: "pending",
     details: [],
   }));
+}
+
+function ownerFromDetails(
+  stage: StageKey,
+  details: Record<string, number | string | boolean> | undefined,
+  fallback: string,
+): string {
+  if (!details) return fallback;
+  if (stage === "enrichment") {
+    const t = details.transcribeModel;
+    const s = details.samModel;
+    if (typeof t === "string" && typeof s === "string") {
+      return `${displayModelName(t)} · ${displayModelName(s)}`;
+    }
+    return fallback;
+  }
+  if ((stage === "dossiers" || stage === "scoring") && typeof details.model === "string") {
+    return displayModelName(details.model);
+  }
+  return fallback;
+}
+
+function alreadyDoneSentence(
+  details: Record<string, number | string | boolean> | undefined,
+): string {
+  const tModel =
+    typeof details?.transcribeModel === "string"
+      ? displayModelName(details.transcribeModel)
+      : "Muse Voice Transcribe 1.0";
+  const sModel =
+    typeof details?.samModel === "string" ? displayModelName(details.samModel) : "SAM 3.1";
+  const audio = detailNum(details, "audioFiles") ?? 0;
+  const images = detailNum(details, "imageFiles") ?? 0;
+  if (audio === 0 && images === 0) {
+    return "Already done — this case has no audio or image evidence to process; its records are used as they are.";
+  }
+  const transcripts = detailNum(details, "transcriptsDone") ?? 0;
+  const markings = detailNum(details, "markingsDone") ?? 0;
+  const transcriptWord = transcripts === 1 ? "transcript" : "transcripts";
+  const markingWord = markings === 1 ? "marking" : "markings";
+  return `Already done — ${transcripts} audio ${transcriptWord} and ${markings} image ${markingWord} were produced with ${tModel} and ${sModel} and stored in the case files.`;
 }
 
 function detailNum(details: Record<string, number | string | boolean> | undefined, key: string): number | null {
@@ -466,6 +508,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 ? {
                     ...s,
                     status: "active",
+                    owner: ownerFromDetails(event.stage, event.details, s.owner),
                     details: progressDetails(event.stage, event.details),
                   }
                 : s,
@@ -478,20 +521,26 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 ? {
                     ...s,
                     status: "active",
+                    owner: ownerFromDetails(event.stage, event.details, s.owner),
                     details: progressDetails(event.stage, event.details, event.completed, event.total),
                   }
                 : s,
             ),
           );
         } else if (event.type === "stage_completed") {
+          const alreadyDone = event.stage === "enrichment" && event.status === "skipped";
           setProgressStages((prev) =>
             prev.map((s) =>
               s.key === event.stage
                 ? {
                     ...s,
-                    status: event.status,
+                    status: alreadyDone ? "done" : event.status,
+                    note: alreadyDone ? "Already done" : s.note,
+                    owner: ownerFromDetails(event.stage, event.details, s.owner),
                     durationMs: event.durationMs,
-                    details: progressDetails(event.stage, event.details),
+                    details: alreadyDone
+                      ? [alreadyDoneSentence(event.details)]
+                      : progressDetails(event.stage, event.details),
                   }
                 : s,
             ),

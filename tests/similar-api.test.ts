@@ -370,6 +370,38 @@ describe("GET /api/cases/[id]/similar", () => {
     }
   });
 
+  it("progress events carry the actual model names that will do the work", async () => {
+    process.env.PROSECUTOR_MODEL = "muse-spark-1.3";
+    process.env.JUDGE_MODEL = "muse-wonder-1.0";
+    try {
+      const id = await seedQueryPlusSix();
+      const events = await streamEvents(id);
+      const started = (stage: string) =>
+        events.find((e) => e.type === "stage_started" && e.stage === stage) as unknown as {
+          details?: Record<string, unknown>;
+        };
+      expect(started("enrichment").details).toMatchObject({
+        transcribeModel: "muse-voice-transcribe-1.0",
+        samModel: "sam-3.1",
+      });
+      expect(started("dossiers").details).toMatchObject({ model: "muse-spark-1.3" });
+      expect(started("scoring").details).toMatchObject({ model: "muse-wonder-1.0" });
+      const enrichmentDone = events.find(
+        (e) => e.type === "stage_completed" && e.stage === "enrichment",
+      ) as unknown as { status: string; details?: Record<string, unknown> };
+      expect(enrichmentDone.status).toBe("skipped");
+      expect(enrichmentDone.details).toMatchObject({
+        transcribeModel: "muse-voice-transcribe-1.0",
+        samModel: "sam-3.1",
+      });
+      expect(typeof enrichmentDone.details?.audioFiles).toBe("number");
+      expect(typeof enrichmentDone.details?.imageFiles).toBe("number");
+    } finally {
+      delete process.env.PROSECUTOR_MODEL;
+      delete process.env.JUDGE_MODEL;
+    }
+  });
+
   it("streamed call for a missing case is still a plain 404 JSON", async () => {
     const res = await getSimilar(
       new Request("http://localhost/api/cases/yok/similar?stream=1"),

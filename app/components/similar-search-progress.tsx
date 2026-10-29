@@ -12,6 +12,24 @@ export interface StageView {
   durationMs?: number;
   activeElapsedMs?: number;
   details: string[];
+  /** Chip shown next to the label, e.g. "Already done" for pre-completed work. */
+  note?: string;
+}
+
+/** "muse-wonder-1.0" -> "Muse Wonder 1.0", "sam-3.1" -> "SAM 3.1". */
+export function displayModelName(id: string): string {
+  if (id.startsWith("muse-")) {
+    return (
+      "Muse " +
+      id
+        .slice("muse-".length)
+        .split("-")
+        .map((w) => (/^[0-9]/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(" ")
+    );
+  }
+  if (id.startsWith("sam-")) return `SAM ${id.slice("sam-".length)}`;
+  return id;
 }
 
 const css = [
@@ -210,6 +228,11 @@ export function SimilarSearchProgress({
                   <strong>
                     {index + 1} · {stage.label}
                   </strong>{" "}
+                  {stage.note ? (
+                    <span style={{ color: "var(--accent)", fontSize: "0.8rem", fontWeight: 650 }}>
+                      {stage.note}
+                    </span>
+                  ) : null}
                   {stage.status === "skipped" ? (
                     <span style={{ color: "var(--faint)", fontSize: "0.8rem" }}>Skipped</span>
                   ) : null}

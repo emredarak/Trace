@@ -4,7 +4,10 @@ import { getDb, initDb } from "../../../../../lib/db";
 import { processPendingJobs } from "../../../../../lib/enrichment";
 import { buildDossier, type CaseDossier } from "../../../../../lib/dossier";
 import { findCandidates } from "../../../../../lib/candidates";
-import { scoreCandidates, type ScoreProgressEvent } from "../../../../../lib/similarity";
+import { scoreCandidates, sparkModelName, type ScoreProgressEvent } from "../../../../../lib/similarity";
+import { dossierModelName } from "../../../../../lib/glimmer-client";
+import { DEFAULT_TRANSCRIBE_MODEL } from "../../../../../lib/transcribe";
+import { DEFAULT_SAM_MODEL } from "../../../../../lib/mark-photo";
 import {
   STAGE_ORDER,
   estimateRemaining,
@@ -35,6 +38,44 @@ function hasPendingEnrichment(db: ReturnType<typeof getDb>): boolean {
     return row.n > 0;
   } catch {
     return false;
+  }
+}
+
+function transcribeModelName(): string {
+  return process.env.META_TRANSCRIBE_MODEL ?? DEFAULT_TRANSCRIBE_MODEL;
+}
+
+function samModelName(): string {
+  return process.env.META_SAM_MODEL ?? DEFAULT_SAM_MODEL;
+}
+
+/** Query-case evidence already enriched (stored on the records themselves). */
+function queryEnrichmentCounts(db: Database.Database, caseId: string): {
+  audioFiles: number;
+  imageFiles: number;
+  transcriptsDone: number;
+  markingsDone: number;
+} {
+  const fallback = { audioFiles: 0, imageFiles: 0, transcriptsDone: 0, markingsDone: 0 };
+  try {
+    const one = (sql: string): number =>
+      (db.prepare(sql).get(caseId) as { n: number }).n;
+    return {
+      audioFiles:
+        one("SELECT COUNT(*) AS n FROM case_persons WHERE caseId = ? AND audioFile IS NOT NULL") +
+        one("SELECT COUNT(*) AS n FROM evidences WHERE caseId = ? AND audioFile IS NOT NULL"),
+      imageFiles: one(
+        "SELECT COUNT(*) AS n FROM evidences WHERE caseId = ? AND imageFile IS NOT NULL",
+      ),
+      transcriptsDone:
+        one("SELECT COUNT(*) AS n FROM case_persons WHERE caseId = ? AND transcript IS NOT NULL") +
+        one("SELECT COUNT(*) AS n FROM evidences WHERE caseId = ? AND transcript IS NOT NULL"),
+      markingsDone: one(
+        "SELECT COUNT(*) AS n FROM evidences WHERE caseId = ? AND marking IS NOT NULL",
+      ),
+    };
+  } catch {
+    return fallback;
   }
 }
 
@@ -184,7 +225,10 @@ async function runSimilarSearch(
   tracker.started();
   try {
     // --- Enrichment (bounded; errors never break the flow) ---
-    tracker.startStage("enrichment");
+    tracker.startStage("enrichment", {
+      transcribeModel: transcribeModelName(),
+      samModel: samModelName(),
+    });
     let selected = { total: 0, transcribeCount: 0, samCount: 0 };
     let enrichDone = 0;
     let enrichFailed = 0;
@@ -225,6 +269,9 @@ async function runSimilarSearch(
         done: enrichDone,
         failed: enrichFailed,
         pendingAfter: countPendingModelJobs(db),
+        transcribeModel: transcribeModelName(),
+        samModel: samModelName(),
+        ...queryEnrichmentCounts(db, id),
       },
     );
     const pendingEnrichment = hasPendingEnrichment(db);
@@ -241,7 +288,7 @@ async function runSimilarSearch(
     }
     tracker.run.dossierTotal = caseRows.length;
     tracker.workloads.dossierTotal = caseRows.length;
-    tracker.startStage("dossiers", { total: caseRows.length });
+    tracker.startStage("dossiers", { total: caseRows.length, model: dossierModelName() });
     const dossiers: CaseDossier[] = [];
     let updated = 0;
     let cached = 0;
@@ -289,7 +336,7 @@ async function runSimilarSearch(
       tracker.startStage("verification");
       tracker.completeStage("verification", "skipped", { total: 0 });
     } else {
-      tracker.startStage("scoring", { total: candidates.length });
+      tracker.startStage("scoring", { total: candidates.length, model: sparkModelName() });
       let finishInfo: Extract<ScoreProgressEvent, { type: "scoring_finished" }> | null = null;
       // Scoring is only closed once scoring_finished is known: a Spark
       // response that turns out malformed (parse/validation throws inside

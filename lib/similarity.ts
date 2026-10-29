@@ -126,7 +126,8 @@ function asSparkFn(input: SparkClientInput | undefined): SparkFn {
   return defaultSpark;
 }
 
-function sparkModelName(): string {
+/** Model that actually decides similarity under the current env. */
+export function sparkModelName(): string {
   if (process.env.BASETEN_API_KEY) {
     return process.env.SPARK_MODEL ?? "muse-spark-open";
   }

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import {
   SimilarSearchProgress,
+  displayModelName,
   type StageView,
 } from "../app/components/similar-search-progress";
 import { readSearchEvents } from "../lib/search-stream";
@@ -101,13 +102,42 @@ describe("SimilarSearchProgress", () => {
 
   it("labels skipped stages and formats hours in the clock", () => {
     const stages = STAGES.map((s) =>
-      s.key === "enrichment" ? { ...s, status: "skipped" as const, durationMs: 0 } : s,
+      s.key === "scoring" ? { ...s, status: "skipped" as const, durationMs: 0 } : s,
     );
     render(
       <SimilarSearchProgress stages={stages} elapsedMs={3_661_000} estimate={null} estimateOverrun={false} />,
     );
     expect(screen.getByText("1:01:01")).toBeTruthy();
     expect(screen.getByText(/Skipped/)).toBeTruthy();
+  });
+
+  it("renders an already-done stage with a tick and its note instead of Skipped", () => {
+    const stages = STAGES.map((s) =>
+      s.key === "enrichment"
+        ? {
+            ...s,
+            status: "done" as const,
+            durationMs: 0,
+            note: "Already done",
+            details: [
+              "Already done — 2 audio transcripts and 1 image marking were produced with Muse Voice Transcribe 1.0 and SAM 3.1 and stored in the case files.",
+            ],
+          }
+        : s,
+    );
+    render(
+      <SimilarSearchProgress stages={stages} elapsedMs={2000} estimate={null} estimateOverrun={false} />,
+    );
+    expect(screen.getByText("Already done")).toBeTruthy();
+    expect(screen.queryByText("Skipped")).toBeNull();
+  });
+
+  it("formats raw model ids as display names", () => {
+    expect(displayModelName("muse-voice-transcribe-1.0")).toBe("Muse Voice Transcribe 1.0");
+    expect(displayModelName("sam-3.1")).toBe("SAM 3.1");
+    expect(displayModelName("muse-spark-1.3")).toBe("Muse Spark 1.3");
+    expect(displayModelName("muse-wonder-1.0")).toBe("Muse Wonder 1.0");
+    expect(displayModelName("Llama-4-Maverick-17B-128E-Instruct-FP8")).toBe("Llama-4-Maverick-17B-128E-Instruct-FP8");
   });
 });
 
