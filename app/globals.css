@@ -8,7 +8,7 @@
   --line: #2e4436;
   --line-soft: #24382c;
   --text: #eaf2ec;
-  --muted: #9db8a6;
+  --muted: #b3c9bb;
   --faint: #6f8a77;
   --accent: #82d99a;
   --accent-strong: #5fc67e;
@@ -35,7 +35,7 @@ body {
     var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
-  line-height: 1.55;
+  line-height: 1.65;
 }
 
 /* Animated ambient background (canvas, see ambient-background.tsx) */
@@ -525,4 +525,26 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   .intro-mono,
   .intro-radar,
   .intro-skip { animation: none !important; transition: none !important; }
+}
+
+/* Readability: preview affordance (task 2) — link-vs-button language.
+   Row stays a button; links keep their underline. The hint sits at the
+   right edge and appears only on hover / keyboard focus. */
+.case-row { position: relative; }
+.case-row .preview-hint {
+  position: absolute;
+  right: 1.1rem;
+  bottom: 1rem;
+  font-size: 0.82rem;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.case-row:hover .preview-hint,
+.case-row:focus-visible .preview-hint {
+  opacity: 1;
 }

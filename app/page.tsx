@@ -578,6 +578,7 @@ function CaseList({
               Open case
             </a>
           </span>
+          <span className="preview-hint" aria-hidden="true">→ Preview</span>
         </button>
       ))}
     </div>
