@@ -575,7 +575,7 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
 /* Similar cards: true carousel — one card per view, side arrows centered
    on the card edges, counter + dots below. Detail expands downward inside
    its own card (flex-start); track slides with transform. */
-.similar-carousel { position: relative; }
+.similar-carousel { position: relative; padding: 0 2.8rem; }
 .similar-viewport { overflow: hidden; border-radius: 12px; }
 .similar-track {
   display: flex;
@@ -590,7 +590,7 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
 }
 .similar-arrow {
   position: absolute;
-  top: 50%;
+  top: calc(50% - 0.8rem);
   translate: 0 -50%;
   z-index: 3;
   width: 2.4rem;
@@ -608,8 +608,12 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   cursor: pointer;
 }
 .similar-arrow:hover:not(:disabled) { background: var(--panel-3); }
-.similar-arrow.prev { left: 0.5rem; }
-.similar-arrow.next { right: 0.5rem; }
+.similar-arrow.prev { left: 0; }
+.similar-arrow.next { right: 0; }
+@media (max-width: 44rem) {
+  .similar-carousel { padding: 0 2.2rem; }
+  .similar-arrow { width: 2rem; height: 2rem; }
+}
 .similar-dots {
   display: flex;
   align-items: center;
