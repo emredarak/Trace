@@ -99,6 +99,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible {
   outline-offset: 2px;
 }
 input:focus, textarea:focus, select:focus { border-color: var(--accent-strong); }
+/* The intro overlay moves focus to <main> when it closes; never draw a
+   frame for that programmatic target. Interactive elements keep theirs. */
+main:focus { outline: none; }
 
 button {
   background: var(--accent);
@@ -432,7 +435,7 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-/* Intro overlay (session-once, ~2.2s) */
+/* Intro overlay (every full page load, ~2.2s) */
 .intro-overlay {
   position: fixed;
   inset: 0;
@@ -554,12 +557,13 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   .drawer-pulse { animation: none !important; }
 }
 
-/* Selection link (task 3): drawer echoes the clicked row, pulse re-triggers
-   per selection via key={selected.id} remount (~600ms). */
+/* Selection link (task 3): drawer echoes the clicked row, flash re-triggers
+   per selection via key={selected.id} remount (~600ms). Flash is a
+   momentary background tint, not a border. */
 .drawer-pulse { animation: drawer-pulse 600ms ease; }
 @keyframes drawer-pulse {
-  from { box-shadow: 0 0 0 2px var(--gold); }
-  to { box-shadow: 0 0 0 0 transparent; }
+  from { box-shadow: inset 0 0 0 999px rgba(242, 179, 61, 0.22); }
+  to { box-shadow: inset 0 0 0 999px transparent; }
 }
 
 /* Similar cards (task 4): separated cards with score band + primary action.
