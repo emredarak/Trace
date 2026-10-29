@@ -413,6 +413,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     anchorElapsedMs: number;
   } | null>(null);
   const progressStageStarts = useRef<Partial<Record<StageKey, number>>>({});
+  const similarListRef = useRef<HTMLUListElement | null>(null);
   const [approved, setApproved] = useState<Record<string, boolean>>({});
   const [expandedSimilar, setExpandedSimilar] = useState<
     Record<string, boolean>
@@ -1066,6 +1067,28 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     }
   }
 
+  function scrollSimilar(dir: 1 | -1) {
+    const list = similarListRef.current;
+    if (!list) return;
+    const first = list.querySelector<HTMLElement>(
+      "[data-testid='similar-card']",
+    );
+    const step = (first?.offsetWidth ?? 320) + 12;
+    const reduced =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    try {
+      if (typeof list.scrollBy === "function") {
+        list.scrollBy({ left: dir * step, behavior: reduced ? "auto" : "smooth" });
+      } else {
+        list.scrollLeft += dir * step;
+      }
+    } catch {
+      // Scroll unavailable (e.g. test env): selection state is unaffected.
+    }
+  }
+
   if (caseMissing) {
     return (
       <main style={mainStyle}>
@@ -1237,7 +1260,8 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
           {similar && similar.results.length > 0 ? (
             <>
               <p style={{ color: "var(--muted)", fontSize: "0.88rem", marginTop: 0 }}>
-                Ranked by overall score. Open a row to see its evidence.
+                Ranked by overall score. Scroll sideways to browse, open a
+                card to see its evidence.
               </p>
               <div
                 className="sim-expand-row"
@@ -1268,6 +1292,26 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 >
                   Collapse all
                 </button>
+                <span
+                  style={{ display: "inline-flex", gap: "0.45rem", marginLeft: "auto" }}
+                >
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    aria-label="Show previous match"
+                    onClick={() => scrollSimilar(-1)}
+                  >
+                    ‹ Prev
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    aria-label="Show next match"
+                    onClick={() => scrollSimilar(1)}
+                  >
+                    Next ›
+                  </button>
+                </span>
               </div>
             </>
           ) : null}
@@ -1294,7 +1338,11 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             <p>No similar cases.</p>
           ) : null}
           {similar && similar.results.length > 0 ? (
-            <ul aria-label="Similar case list" className="similar-list">
+            <ul
+              aria-label="Similar case list"
+              className="similar-list"
+              ref={similarListRef}
+            >
               {similar.results.map((r) => {
                 const scoreColor =
                   r.score >= 8

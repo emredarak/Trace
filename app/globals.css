@@ -572,9 +572,25 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   to { background-color: transparent; }
 }
 
-/* Similar cards (task 4): separated cards with score band + primary action.
-   List spacing via grid gap; card keeps panel-2 surface + border. */
-.similar-list { display: grid; gap: 12px; }
+/* Similar cards (task 4): horizontal snap slider — cards sit side by side,
+   expand downward inside their own card (flex-start), arrows scroll by card. */
+.similar-list {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 0.1rem 0.1rem 0.6rem;
+  margin: 0;
+  align-items: flex-start;
+  scrollbar-width: thin;
+  scrollbar-color: var(--panel-3) transparent;
+}
+.similar-list::-webkit-scrollbar { height: 8px; }
+.similar-list::-webkit-scrollbar-thumb { background: var(--panel-3); border-radius: 99px; }
+.similar-list .similar-card {
+  flex: 0 0 min(22rem, 85%);
+  scroll-snap-align: start;
+}
 .similar-card { position: relative; }
 .sim-score-band {
   height: 4px;

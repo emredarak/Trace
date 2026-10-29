@@ -143,4 +143,19 @@ describe("similar cards", () => {
     fireEvent.click(within(zeroCard).getByRole("button", { name: "Mark relevant" }));
     expect(await within(zeroCard).findByText(/✓ Approved/)).toBeTruthy();
   });
+
+  it("renders matches as a horizontal slider with prev/next controls", async () => {
+    stubFetch();
+    render(<CaseDetail caseId={CASE_ID} />);
+
+    const list = await screen.findByRole("list", { name: /similar/i });
+    expect(list.className).toContain("similar-list");
+
+    const prev = screen.getByRole("button", { name: /previous match/i });
+    const next = screen.getByRole("button", { name: /next match/i });
+    // Controls must not throw (jsdom has no smooth scrollBy; fallback applies).
+    fireEvent.click(next);
+    fireEvent.click(prev);
+    expect(list.children).toHaveLength(4);
+  });
 });
