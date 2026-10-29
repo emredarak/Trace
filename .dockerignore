@@ -1,0 +1,15 @@
+.git
+.next
+node_modules
+data
+uploads
+trace.db
+trace.db-shm
+trace.db-wal
+.env*.local
+.superpowers
+demo-assets
+tests
+docs
+*.md
+tsconfig.tsbuildinfo

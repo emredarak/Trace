@@ -7,6 +7,7 @@ tsconfig.tsbuildinfo
 *.db-wal
 *.db-shm
 uploads/
+data/
 next-env.d.ts
 docs/
 .env*.local

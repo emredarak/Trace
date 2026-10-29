@@ -1,0 +1,37 @@
+services:
+  app:
+    build: .
+    image: trace-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      TRACE_DB_PATH: /data/trace.db
+      TRACE_UPLOAD_DIR: /data/uploads
+    volumes:
+      # Persistent data lives outside the container (host ./data folder).
+      - ./data:/data
+    restart: unless-stopped
+
+  # Production only (EC2): docker compose --profile prod up -d
+  # Set SITE_ADDRESS in .env.local (domain for automatic HTTPS, or ":80" for HTTP-only).
+  caddy:
+    image: caddy:2
+    profiles: ["prod"]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
