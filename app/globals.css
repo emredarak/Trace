@@ -572,24 +572,69 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   to { background-color: transparent; }
 }
 
-/* Similar cards (task 4): horizontal snap slider — cards sit side by side,
-   expand downward inside their own card (flex-start), arrows scroll by card. */
-.similar-list {
+/* Similar cards: true carousel — one card per view, side arrows centered
+   on the card edges, counter + dots below. Detail expands downward inside
+   its own card (flex-start); track slides with transform. */
+.similar-carousel { position: relative; }
+.similar-viewport { overflow: hidden; border-radius: 12px; }
+.similar-track {
   display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  padding: 0.1rem 0.1rem 0.6rem;
   margin: 0;
+  padding: 0.1rem;
   align-items: flex-start;
-  scrollbar-width: thin;
-  scrollbar-color: var(--panel-3) transparent;
+  transition: transform 350ms ease;
 }
-.similar-list::-webkit-scrollbar { height: 8px; }
-.similar-list::-webkit-scrollbar-thumb { background: var(--panel-3); border-radius: 99px; }
-.similar-list .similar-card {
-  flex: 0 0 min(22rem, 85%);
-  scroll-snap-align: start;
+.similar-track .similar-card {
+  flex: 0 0 100%;
+  box-sizing: border-box;
+}
+.similar-arrow {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 3;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--accent-strong);
+  background: rgba(10, 16, 13, 0.88);
+  color: var(--accent);
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.similar-arrow:hover:not(:disabled) { background: var(--panel-3); }
+.similar-arrow.prev { left: 0.5rem; }
+.similar-arrow.next { right: 0.5rem; }
+.similar-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 0.7rem;
+}
+.similar-dots .count {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  margin-right: 0.3rem;
+}
+.similar-dots .dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.similar-dots .dot[aria-current="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .similar-card { position: relative; }
 .sim-score-band {

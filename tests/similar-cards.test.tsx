@@ -144,18 +144,22 @@ describe("similar cards", () => {
     expect(await within(zeroCard).findByText(/✓ Approved/)).toBeTruthy();
   });
 
-  it("renders matches as a horizontal slider with prev/next controls", async () => {
+  it("renders matches as a carousel with arrows, counter and dots", async () => {
     stubFetch();
     render(<CaseDetail caseId={CASE_ID} />);
 
     const list = await screen.findByRole("list", { name: /similar/i });
-    expect(list.className).toContain("similar-list");
-
-    const prev = screen.getByRole("button", { name: /previous match/i });
-    const next = screen.getByRole("button", { name: /next match/i });
-    // Controls must not throw (jsdom has no smooth scrollBy; fallback applies).
-    fireEvent.click(next);
-    fireEvent.click(prev);
+    expect(list.className).toContain("similar-track");
     expect(list.children).toHaveLength(4);
+
+    expect(screen.getByText("1 / 4")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /next match/i }));
+    expect(await screen.findByText("2 / 4")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /previous match/i }));
+    expect(await screen.findByText("1 / 4")).toBeTruthy();
+
+    // Dots jump straight to a slide.
+    fireEvent.click(screen.getByRole("button", { name: "Go to match 3" }));
+    expect(await screen.findByText("3 / 4")).toBeTruthy();
   });
 });
