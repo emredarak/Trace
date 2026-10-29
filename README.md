@@ -39,7 +39,12 @@ For the demo script see `DEMO.md`. Design document:
    `similar_results` table; they are not re-scored unless content changes.
 5. **Presentation** (`GET /api/cases/[id]/similar`): first 5 results by default
    (`SIMILAR_RESULT_LIMIT`), case number (`caseNo`) instead of raw id on the card,
-   per item type + description + strength + evidence.
+   per item type + description + strength + evidence. With `?stream=1` the same
+   endpoint streams NDJSON progress events (enrichment, dossiers, candidates,
+   scoring, verification) before the result; the case page shows them as a live
+   timeline with an elapsed clock. Remaining-time estimates are computed from
+   recorded stage timings (`similar_search_runs`, counts only) and stay hidden
+   until enough search history exists.
 
 ## Setup
 
