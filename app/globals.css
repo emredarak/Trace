@@ -561,3 +561,26 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   from { box-shadow: 0 0 0 2px var(--gold); }
   to { box-shadow: 0 0 0 0 transparent; }
 }
+
+/* Similar cards (task 4): separated cards with score band + primary action.
+   List spacing via grid gap; card keeps panel-2 surface + border. */
+.similar-list { display: grid; gap: 12px; }
+.similar-card { position: relative; }
+.sim-score-band {
+  height: 4px;
+  border-radius: 999px;
+  margin: -0.45rem -0.5rem 0.85rem;
+}
+.sim-score-band[data-score="high"] { background: var(--accent); }
+.sim-score-band[data-score="mid"] { background: var(--gold); }
+.sim-score-band[data-score="low"] { background: var(--faint); }
+button.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid transparent;
+  padding: 0.38rem 0.95rem;
+  font-size: 0.86rem;
+  border-radius: 999px;
+}
+button.btn-primary:hover:not(:disabled) { background: #9ae7b1; }
+.sim-expand-row .btn-ghost { font-size: 0.82rem; }

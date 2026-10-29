@@ -1240,6 +1240,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 Ranked by overall score. Open a row to see its evidence.
               </p>
               <div
+                className="sim-expand-row"
                 style={{
                   display: "flex",
                   gap: "0.45rem",
@@ -1293,7 +1294,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
             <p>No similar cases.</p>
           ) : null}
           {similar && similar.results.length > 0 ? (
-            <ul aria-label="Similar case list">
+            <ul aria-label="Similar case list" className="similar-list">
               {similar.results.map((r) => {
                 const scoreColor =
                   r.score >= 8
@@ -1312,14 +1313,20 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                 return (
                   <li
                     key={r.caseId}
+                    className="similar-card"
+                    data-testid="similar-card"
                     style={{
                       background: "var(--panel-2)",
                       border: "1px solid var(--line-soft)",
                       borderRadius: "12px",
                       padding: "0.95rem 1rem",
-                      marginBottom: "0.7rem",
+                      marginBottom: 0,
                     }}
                   >
+                    <div
+                      className="sim-score-band"
+                      data-score={r.score >= 8 ? "high" : r.score >= 5 ? "mid" : "low"}
+                    />
                     <div
                       style={{
                         position: "sticky",
@@ -1376,16 +1383,16 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                         }}
                       >
                         {approved[r.caseId] ? (
-                          <span className="chip gold">approved</span>
+                          <span className="chip gold">✓ Approved</span>
                         ) : (
                           <button
                             type="button"
-                            className="btn-ghost"
+                            className="btn-primary"
                             style={{ padding: "0.32rem 0.8rem", fontSize: "0.84rem" }}
                             disabled={approving[r.caseId] === true}
                             onClick={() => void approve(r.caseId)}
                           >
-                            relevant
+                            Mark relevant
                           </button>
                         )}
                         {sims.length > 0 ? (
