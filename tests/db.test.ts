@@ -149,6 +149,24 @@ describe("case database", () => {
       ["model", 0],
       ["createdAt", 0],
     ]);
+    expect(columns("similar_search_runs")).toEqual([
+      ["id", 1],
+      ["enrichmentMs", 0],
+      ["dossiersMs", 0],
+      ["candidatesMs", 0],
+      ["scoringMs", 0],
+      ["verificationMs", 0],
+      ["enrichmentJobs", 0],
+      ["transcribeJobs", 0],
+      ["samJobs", 0],
+      ["dossierTotal", 0],
+      ["candidateCount", 0],
+      ["cachedCount", 0],
+      ["sparkPendingCount", 0],
+      ["imageCount", 0],
+      ["outcome", 0],
+      ["createdAt", 0],
+    ]);
   });
 
   it("stores dossier and similar result rows keyed by case", () => {

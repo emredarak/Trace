@@ -121,6 +121,24 @@ export function initDb(): void {
       createdAt TEXT NOT NULL,
       PRIMARY KEY (queryId, candidateId)
     );
+    CREATE TABLE IF NOT EXISTS similar_search_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      enrichmentMs INTEGER,
+      dossiersMs INTEGER,
+      candidatesMs INTEGER,
+      scoringMs INTEGER,
+      verificationMs INTEGER,
+      enrichmentJobs INTEGER NOT NULL DEFAULT 0,
+      transcribeJobs INTEGER NOT NULL DEFAULT 0,
+      samJobs INTEGER NOT NULL DEFAULT 0,
+      dossierTotal INTEGER NOT NULL DEFAULT 0,
+      candidateCount INTEGER NOT NULL DEFAULT 0,
+      cachedCount INTEGER NOT NULL DEFAULT 0,
+      sparkPendingCount INTEGER NOT NULL DEFAULT 0,
+      imageCount INTEGER NOT NULL DEFAULT 0,
+      outcome TEXT NOT NULL DEFAULT 'result',
+      createdAt TEXT NOT NULL
+    );
     CREATE VIRTUAL TABLE IF NOT EXISTS case_fts USING fts5(
       summary, crimeType, locationType, weapon, mo,
       content='cases', content_rowid='rowid'
