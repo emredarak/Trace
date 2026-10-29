@@ -1,5 +1,6 @@
 import SwRegister from "./sw-register";
 import { AmbientBackground } from "./components/ambient-background";
+import { IntroOverlay } from "./components/intro-overlay";
 import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
@@ -22,6 +23,7 @@ export default function RootLayout({
       <body>
         <SwRegister />
         <AmbientBackground />
+        <IntroOverlay />
         <header className="trace-nav">
           <nav>
             <a className="brand" href="/">

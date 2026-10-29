@@ -430,3 +430,99 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* Intro overlay (session-once, ~2.2s) */
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-deep);
+  overflow: hidden;
+  transition: transform 400ms ease;
+}
+.intro-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(130, 217, 154, 0.05) 0 1px, transparent 1px 56px),
+    repeating-linear-gradient(90deg, rgba(130, 217, 154, 0.05) 0 1px, transparent 1px 56px);
+  pointer-events: none;
+}
+.intro-overlay.is-leaving { transform: translateY(-100%); }
+.intro-card {
+  text-align: center;
+  padding: 2rem;
+}
+.intro-wordmark {
+  margin: 0;
+  font-weight: 900;
+  font-size: clamp(2.4rem, 7vw, 4.2rem);
+  letter-spacing: 0.22em;
+  color: var(--text);
+  animation: intro-tracking 900ms ease both;
+}
+.intro-wordmark em { color: var(--accent); font-style: normal; }
+@keyframes intro-tracking {
+  from { opacity: 0; letter-spacing: 0.6em; }
+  to { opacity: 1; letter-spacing: 0.22em; }
+}
+.intro-rule {
+  height: 2px;
+  margin: 1.1rem auto 0;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  animation: intro-sweep 1200ms ease both;
+}
+@keyframes intro-sweep {
+  from { width: 0; opacity: 0; }
+  to { width: min(22rem, 70vw); opacity: 1; }
+}
+.intro-mono {
+  margin: 1.1rem 0 0;
+  min-height: 1.6em;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  letter-spacing: 0.28em;
+  color: var(--muted);
+}
+.intro-radar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 12rem;
+  height: 12rem;
+  translate: -50% -50%;
+  border: 1px solid rgba(130, 217, 154, 0.35);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: intro-radar 2200ms ease-out both;
+}
+@keyframes intro-radar {
+  from { transform: scale(0.4); opacity: 0.8; }
+  to { transform: scale(2.2); opacity: 0; }
+}
+.intro-skip {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.86rem;
+}
+.intro-skip:hover:not(:disabled) { background: var(--panel-3); color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-overlay,
+  .intro-card,
+  .intro-wordmark,
+  .intro-rule,
+  .intro-mono,
+  .intro-radar,
+  .intro-skip { animation: none !important; transition: none !important; }
+}

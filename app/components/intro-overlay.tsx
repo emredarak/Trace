@@ -1,0 +1,122 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
+const STORAGE_KEY = "trace-intro-seen";
+const AUTO_CLOSE_MS = 2200;
+const LEAVE_MS = 400;
+const LINE_MS = 600;
+
+const LINES = ["OPENING CASE BOARD…", "LOCATING PINS…", "READY"];
+
+function prefersReducedMotion(): boolean {
+  const mm =
+    typeof globalThis !== "undefined" &&
+    typeof (globalThis as { matchMedia?: typeof window.matchMedia }).matchMedia === "function"
+      ? (globalThis as { matchMedia: typeof window.matchMedia }).matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        )
+      : null;
+  return mm?.matches === true;
+}
+
+function alreadySeen(): boolean {
+  try {
+    return sessionStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function returnFocusToMain(): void {
+  const main = document.querySelector("main");
+  if (main instanceof HTMLElement) {
+    if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+    main.focus({ preventScroll: true });
+  }
+}
+
+/**
+ * Session-once intro overlay: TRACE wordmark tracking-in, gold sweep,
+ * mono status lines, radar ring. Auto-closes after 2200ms with a 400ms
+ * leaving curtain. Skip button + Escape close early. Never renders under
+ * prefers-reduced-motion or when already seen this session.
+ */
+export function IntroOverlay() {
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [lineIndex, setLineIndex] = useState(0);
+  const closedRef = useRef(false);
+  const timersRef = useRef<number[]>([]);
+
+  const finish = useCallback(() => {
+    setVisible(false);
+    try {
+      sessionStorage.setItem(STORAGE_KEY, "1");
+    } catch {
+      // Storage unavailable (private mode): overlay simply stays session-once in memory.
+    }
+    returnFocusToMain();
+  }, []);
+
+  const beginLeave = useCallback(() => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    setLeaving(true);
+    timersRef.current.push(window.setTimeout(finish, LEAVE_MS));
+  }, [finish]);
+
+  useEffect(() => {
+    setMounted(true);
+    if (prefersReducedMotion()) return;
+    if (alreadySeen()) return;
+    setVisible(true);
+    const timers = timersRef.current;
+    timers.push(window.setTimeout(() => setLineIndex(1), LINE_MS));
+    timers.push(window.setTimeout(() => setLineIndex(2), LINE_MS * 2));
+    timers.push(window.setTimeout(beginLeave, AUTO_CLOSE_MS));
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") beginLeave();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      timers.forEach((t) => window.clearTimeout(t));
+      timersRef.current = [];
+    };
+  }, [beginLeave]);
+
+  if (!mounted || !visible) return null;
+
+  return (
+    <div
+      data-testid="intro-overlay"
+      className={leaving ? "intro-overlay is-leaving" : "intro-overlay"}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Opening case board"
+    >
+      <div className="intro-radar" aria-hidden="true" />
+      <div className="intro-card">
+        <p className="intro-wordmark">
+          TRACE<em>.</em>
+        </p>
+        <div className="intro-rule" aria-hidden="true" />
+        <p className="intro-mono" aria-live="polite">
+          {LINES[lineIndex]}
+        </p>
+        <button
+          type="button"
+          data-testid="intro-skip"
+          className="intro-skip"
+          onClick={beginLeave}
+        >
+          Skip
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default IntroOverlay;
