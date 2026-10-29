@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 const AUTO_CLOSE_MS = 2200;
 const LEAVE_MS = 400;
@@ -28,12 +29,14 @@ function returnFocusToMain(): void {
 }
 
 /**
- * Intro overlay shown on every full page load: TRACE wordmark tracking-in,
- * gold sweep, mono status lines, radar ring. Auto-closes after 2200ms with
- * a 400ms leaving curtain. Skip button + Escape close early. Never renders
- * under prefers-reduced-motion.
+ * Intro overlay shown on every full load of the homepage ("/") only:
+ * TRACE wordmark tracking-in, gold sweep, mono status lines, radar ring.
+ * Auto-closes after 2200ms with a 400ms leaving curtain. Skip button +
+ * Escape close early. Never renders under prefers-reduced-motion or off
+ * the homepage.
  */
 export function IntroOverlay() {
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -56,6 +59,7 @@ export function IntroOverlay() {
 
   useEffect(() => {
     setMounted(true);
+    if (pathname !== "/") return;
     if (prefersReducedMotion()) return;
     setVisible(true);
     const timers = timersRef.current;
@@ -71,7 +75,7 @@ export function IntroOverlay() {
       timers.forEach((t) => window.clearTimeout(t));
       timersRef.current = [];
     };
-  }, [beginLeave]);
+  }, [beginLeave, pathname]);
 
   useEffect(() => {
     if (mounted && visible) skipRef.current?.focus({ preventScroll: true });

@@ -3,12 +3,22 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { IntroOverlay } from "../app/components/intro-overlay";
 
+const { mockPathname } = vi.hoisted(() => ({ mockPathname: { value: "/" } }));
+vi.mock("next/navigation", () => ({ usePathname: () => mockPathname.value }));
+
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("IntroOverlay", () => {
-  it("shows on every load", async () => {
+  it("shows on every homepage load", async () => {
+    mockPathname.value = "/";
     render(<IntroOverlay />);
     expect(await screen.findByTestId("intro-overlay")).toBeTruthy();
+  });
+  it("stays hidden off the homepage", () => {
+    mockPathname.value = "/cases/case-1";
+    const { queryByTestId } = render(<IntroOverlay />);
+    expect(queryByTestId("intro-overlay")).toBeNull();
+    mockPathname.value = "/";
   });
   it("respects reduced motion", () => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true, addEventListener: () => {}, removeEventListener: () => {} }));
