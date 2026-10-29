@@ -124,6 +124,36 @@ describe("processPendingJobs", () => {
     expect(JSON.parse(row.marking).boxes).toMatchObject([{ label: "knife" }]);
   });
 
+  it("reports selected jobs and per-job progress through the callbacks", async () => {
+    const caseId = await makeCase();
+    const res = await addEvidence(
+      formReq({ title: "Crime scene knife", note: "kitchen" }, {
+        image: new File(["img"], "f.jpg", { type: "image/jpeg" }),
+        audio: new File(["audio"], "a.mp3", { type: "audio/mpeg" }),
+      }),
+      caseParams(caseId),
+    );
+    expect(res.status).toBe(201);
+
+    const selected: unknown[] = [];
+    const finished: Record<string, unknown>[] = [];
+    const out = await processPendingJobs(
+      getDb(),
+      10,
+      { transcribe: fakeTranscribe, markPhoto: fakeMark },
+      {
+        onJobsSelected: (info) => selected.push(info),
+        onJobFinished: (info) => finished.push({ ...info }),
+      },
+    );
+    expect(out).toEqual({ done: 2, failed: 0 });
+    expect(selected).toEqual([{ total: 2, transcribeCount: 1, samCount: 1 }]);
+    expect(finished).toHaveLength(2);
+    expect(finished[0]).toMatchObject({ completed: 1, total: 2 });
+    expect(finished[1]).toMatchObject({ completed: 2, total: 2, done: 2, failed: 0 });
+    expect(finished.map((f) => f.kind).sort()).toEqual(["sam", "transcribe"]);
+  });
+
   it("SAM hint: title else note, else 'evidence'", async () => {
     const caseId = await makeCase();
     const db = getDb();

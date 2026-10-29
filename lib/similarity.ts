@@ -93,6 +93,19 @@ export type SparkClientInput =
   | { chatCompletion: (prompt: string, images?: SparkImage[]) => Promise<string> }
   | { sparkChat: (prompt: string, images?: SparkImage[]) => Promise<string> };
 
+export type ScoreProgressEvent =
+  | { type: "cache_checked"; cachedCount: number; pendingCount: number }
+  | { type: "spark_started"; pendingCount: number; imageCount: number }
+  | { type: "spark_returned" }
+  | { type: "validation_started"; pendingCount: number }
+  | {
+      type: "scoring_finished";
+      scoredCount: number;
+      unscoredCount: number;
+      sparkCalled: boolean;
+      degraded: boolean;
+    };
+
 const defaultSpark: SparkFn = (prompt, images) => sparkChat(prompt, images);
 
 function asSparkFn(input: SparkClientInput | undefined): SparkFn {
@@ -568,6 +581,7 @@ export async function scoreCandidates(
   queryId: string,
   candidates: CandidateMatch[],
   spark?: SparkClientInput,
+  onProgress?: (event: ScoreProgressEvent) => void,
 ): Promise<ScoredCase[]> {
   // Deduplicate candidates, preserving input order.
   const seenInput = new Set<string>();
@@ -620,7 +634,13 @@ export async function scoreCandidates(
     if (cached) resultsById.set(c.caseId, cached);
     else pending.push(c);
   }
+  onProgress?.({
+    type: "cache_checked",
+    cachedCount: resultsById.size,
+    pendingCount: pending.length,
+  });
 
+  let degraded = false;
   if (pending.length > 0) {
     const sparkFn = asSparkFn(spark);
     try {
@@ -647,10 +667,17 @@ export async function scoreCandidates(
         };
       });
       const prompt = buildPrompt(queryText, entries, images);
+      onProgress?.({
+        type: "spark_started",
+        pendingCount: pending.length,
+        imageCount: images.length,
+      });
       const raw = await withTimeout(
         sparkFn(prompt, images.length > 0 ? images : undefined),
         sparkTimeoutMs(),
       );
+      onProgress?.({ type: "spark_returned" });
+      onProgress?.({ type: "validation_started", pendingCount: pending.length });
       const parsed = parseModelPayload(raw);
 
       const pendingIds = new Set(pending.map((c) => c.caseId));
@@ -694,6 +721,7 @@ export async function scoreCandidates(
         }
       }
     } catch {
+      degraded = true;
       // Malformed response / key-model error / timeout: unscored fallback.
       for (const c of pending) {
         if (!resultsById.has(c.caseId)) {
@@ -719,6 +747,14 @@ export async function scoreCandidates(
     if ((x.score > 0) !== (y.score > 0)) return x.score > 0 ? -1 : 1;
     if (x.score !== y.score) return y.score - x.score;
     return (inputOrder.get(x.caseId) ?? 0) - (inputOrder.get(y.caseId) ?? 0);
+  });
+  const scoredCount = all.filter((s) => s.score > 0).length;
+  onProgress?.({
+    type: "scoring_finished",
+    scoredCount,
+    unscoredCount: all.length - scoredCount,
+    sparkCalled: pending.length > 0,
+    degraded,
   });
   return all;
 }

@@ -343,4 +343,47 @@ describe("scoreCandidates", () => {
     expect(scored[0].score).toBe(9);
     expect(fake.chatCompletion).toHaveBeenCalledTimes(1);
   });
+
+  it("reports progress events in order, and cache-only runs report no Spark call", async () => {
+    const { query, a, candidates } = await seedQueryAndCandidates();
+    const spark = vi.fn(async () =>
+      JSON.stringify([{ caseId: a.id, score: 9, reason: "very similar", similarities: [] }]),
+    );
+    const events: { type: string }[] = [];
+    const onProgress = (e: { type: string }) => events.push(e);
+
+    await scoreCandidates(getDb(), query.id, [candidates[0]], spark, onProgress);
+    expect(events.map((e) => e.type)).toEqual([
+      "cache_checked",
+      "spark_started",
+      "spark_returned",
+      "validation_started",
+      "scoring_finished",
+    ]);
+    expect(events[0]).toMatchObject({ cachedCount: 0, pendingCount: 1 });
+    expect(events[1]).toMatchObject({ pendingCount: 1, imageCount: 0 });
+    expect(events[4]).toMatchObject({ scoredCount: 1, unscoredCount: 0, sparkCalled: true, degraded: false });
+
+    events.length = 0;
+    await scoreCandidates(getDb(), query.id, [candidates[0]], spark, onProgress);
+    expect(events.map((e) => e.type)).toEqual(["cache_checked", "scoring_finished"]);
+    expect(events[0]).toMatchObject({ cachedCount: 1, pendingCount: 0 });
+    expect(events[1]).toMatchObject({ scoredCount: 1, unscoredCount: 0, sparkCalled: false, degraded: false });
+  });
+
+  it("reports a degraded finish when the model fails, keeping the unscored fallback", async () => {
+    const { query, candidates } = await seedQueryAndCandidates();
+    const failing = vi.fn(async () => {
+      throw new Error("model down");
+    });
+    const events: { type: string }[] = [];
+    const scored = await scoreCandidates(getDb(), query.id, [candidates[0]], failing, (e) =>
+      events.push(e),
+    );
+    expect(scored).toHaveLength(1);
+    expect(scored[0].score).toBe(0);
+    const last = events[events.length - 1] as unknown as Record<string, unknown>;
+    expect(last.type).toBe("scoring_finished");
+    expect(last).toMatchObject({ sparkCalled: true, degraded: true, unscoredCount: 1 });
+  });
 });

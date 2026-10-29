@@ -186,10 +186,26 @@ async function runJob(
   throw new Error(`unsupported job type: ${job.kind}`);
 }
 
+export interface EnrichmentProgress {
+  onJobsSelected?: (info: {
+    total: number;
+    transcribeCount: number;
+    samCount: number;
+  }) => void;
+  onJobFinished?: (info: {
+    completed: number;
+    total: number;
+    done: number;
+    failed: number;
+    kind: string;
+  }) => void;
+}
+
 export async function processPendingJobs(
   db: Database.Database,
   limit = 10,
   clients: EnrichmentClients = {},
+  progress: EnrichmentProgress = {},
 ): Promise<{ done: number; failed: number }> {
   ensureEnrichmentColumns(db);
   const safeLimit =
@@ -214,6 +230,11 @@ export async function processPendingJobs(
        ORDER BY createdAt ASC LIMIT ?`,
     )
     .all(safeLimit) as JobRow[];
+  progress.onJobsSelected?.({
+    total: jobs.length,
+    transcribeCount: jobs.filter((j) => j.kind === "transcribe").length,
+    samCount: jobs.filter((j) => j.kind === "sam").length,
+  });
   let done = 0;
   let failed = 0;
   for (const job of jobs) {
@@ -242,6 +263,13 @@ export async function processPendingJobs(
       ).run(err instanceof Error ? err.message : String(err), now, job.id);
       failed++;
     }
+    progress.onJobFinished?.({
+      completed: done + failed,
+      total: jobs.length,
+      done,
+      failed,
+      kind: job.kind,
+    });
   }
   return { done, failed };
 }
