@@ -1,3 +1,4 @@
+import { createServer } from "node:http";
 import { beforeEach, describe, expect, it } from "vitest";
 import { closeDb, enqueueJob, getDb, initDb } from "../lib/db";
 import { POST as createCase, GET as listCases } from "../app/api/cases/route";
@@ -270,6 +271,103 @@ describe("GET /api/cases/[id]/similar", () => {
     expect(progressText).not.toContain("waterfront");
     expect(progressText).not.toContain("night theft");
     expect(progressText).not.toContain("TR-");
+  });
+
+  async function fakeSparkServer(content: string | ((prompt: string) => string)) {
+    const server = createServer((req, res) => {
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        const prompt = (() => {
+          try {
+            return String(JSON.parse(body).messages?.[0]?.content ?? "");
+          } catch {
+            return body;
+          }
+        })();
+        const text = typeof content === "function" ? content(prompt) : content;
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ choices: [{ message: { content: text } }] }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
+    process.env.META_API_KEY = "test-key";
+    process.env.JUDGE_API_URL = `http://127.0.0.1:${port}/chat`;
+    return async () => {
+      delete process.env.META_API_KEY;
+      delete process.env.JUDGE_API_URL;
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    };
+  }
+
+  async function streamEvents(id: string) {
+    const res = await getSimilar(
+      new Request(`http://localhost/api/cases/${id}/similar?stream=1`),
+      similarParams(id),
+    );
+    return (await res.text())
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+  }
+
+  it("marks scoring degraded (not done) when Spark returns malformed output after responding", async () => {
+    const close = await fakeSparkServer("this is not json");
+    try {
+      const id = await seedQueryPlusSix();
+      enqueueJob(getDb(), { caseId: id, kind: "transcribe", refId: "missing-record" });
+      const events = await streamEvents(id);
+      const scoring = events.find((e) => e.type === "stage_completed" && e.stage === "scoring");
+      const verification = events.find((e) => e.type === "stage_completed" && e.stage === "verification");
+      expect(scoring?.status).toBe("degraded");
+      expect(verification?.status).toBe("skipped");
+      expect(events[events.length - 1].type).toBe("result");
+      // Degraded scoring must not enter the estimate history as a clean sample.
+      const run = getDb()
+        .prepare("SELECT scoringMs, verificationMs FROM similar_search_runs ORDER BY id DESC LIMIT 1")
+        .get() as { scoringMs: unknown; verificationMs: unknown };
+      expect(run.scoringMs).toBeNull();
+      expect(run.verificationMs).toBeNull();
+      // Enrichment progress snapshots stay cumulative: kind totals survive per-job events.
+      const enrichProgress = events.filter((e) => e.type === "stage_progress" && e.stage === "enrichment");
+      const last = enrichProgress[enrichProgress.length - 1] as unknown as { details?: Record<string, unknown> };
+      expect(last.details).toMatchObject({ transcribeCount: 1, samCount: 0 });
+    } finally {
+      await close();
+    }
+  });
+
+  it("spark progress reports the real cached count once some candidates are cached", async () => {
+    const close = await fakeSparkServer((prompt) => {
+      const ids = [...new Set(prompt.match(/[0-9a-f]{8}-[0-9a-f-]{27,}/g) ?? [])];
+      return JSON.stringify(ids.map((caseId) => ({ caseId, score: 5, reason: "ok", similarities: [] })));
+    });
+    try {
+      const id = await seedQueryPlusSix();
+      const first = await streamEvents(id);
+      const firstSpark = first.find(
+        (e) => e.type === "stage_progress" && e.stage === "scoring" && (e.details as Record<string, unknown>)?.sparkCalled === true,
+      ) as unknown as { details: Record<string, unknown> };
+      expect(firstSpark.details).toMatchObject({ cachedCount: 0 });
+      expect(firstSpark.details.pendingCount as number).toBeGreaterThan(0);
+
+      await create({
+        summary: "waterfront night case 7",
+        crimeType: "theft",
+        locationType: "waterfront",
+        weapon: "knife",
+        mo: "night approach",
+      });
+      const second = await streamEvents(id);
+      const secondSpark = second.find(
+        (e) => e.type === "stage_progress" && e.stage === "scoring" && (e.details as Record<string, unknown>)?.sparkCalled === true,
+      ) as unknown as { details: Record<string, unknown> };
+      expect(secondSpark.details.cachedCount as number).toBeGreaterThan(0);
+      expect(secondSpark.details.pendingCount as number).toBeGreaterThan(0);
+    } finally {
+      await close();
+    }
   });
 
   it("streamed call for a missing case is still a plain 404 JSON", async () => {

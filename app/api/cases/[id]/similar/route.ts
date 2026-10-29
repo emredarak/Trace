@@ -134,15 +134,19 @@ class SearchTracker {
     this.estimateEvent();
   }
 
+  elapsedInStage(stage: StageKey): number {
+    const startedAt = this.stageStartedAt.get(stage);
+    return startedAt === undefined ? 0 : Math.max(0, Math.round(performance.now() - startedAt));
+  }
+
   completeStage(
     stage: StageKey,
     status: "done" | "skipped" | "degraded",
     details?: Details,
     recordDuration = status === "done",
+    durationOverride?: number,
   ): void {
-    const startedAt = this.stageStartedAt.get(stage);
-    const durationMs =
-      startedAt === undefined ? 0 : Math.max(0, Math.round(performance.now() - startedAt));
+    const durationMs = durationOverride ?? this.elapsedInStage(stage);
     this.durations.set(stage, durationMs);
     if (recordDuration) {
       this.run[`${stage}Ms` as keyof SearchRunRecord] = durationMs as never;
@@ -200,6 +204,9 @@ async function runSimilarSearch(
             done: info.done,
             failed: info.failed,
             kind: info.kind,
+            total: selected.total,
+            transcribeCount: selected.transcribeCount,
+            samCount: selected.samCount,
           });
         },
       });
@@ -284,7 +291,10 @@ async function runSimilarSearch(
     } else {
       tracker.startStage("scoring", { total: candidates.length });
       let finishInfo: Extract<ScoreProgressEvent, { type: "scoring_finished" }> | null = null;
-      let verificationActive = false;
+      // Scoring is only closed once scoring_finished is known: a Spark
+      // response that turns out malformed (parse/validation throws inside
+      // scoreCandidates) must complete as degraded, never as done.
+      let sparkReturnDurationMs: number | null = null;
       const onScoreProgress = (event: ScoreProgressEvent) => {
         if (event.type === "cache_checked") {
           tracker.run.cachedCount = event.cachedCount;
@@ -297,19 +307,13 @@ async function runSimilarSearch(
         } else if (event.type === "spark_started") {
           tracker.run.imageCount = event.imageCount;
           tracker.progress("scoring", tracker.run.cachedCount, candidates.length, {
+            cachedCount: tracker.run.cachedCount,
             pendingCount: event.pendingCount,
             imageCount: event.imageCount,
             sparkCalled: true,
           });
         } else if (event.type === "spark_returned") {
-          tracker.completeStage("scoring", "done", {
-            cachedCount: tracker.run.cachedCount,
-            pendingCount: tracker.run.sparkPendingCount,
-            imageCount: tracker.run.imageCount,
-            sparkCalled: true,
-          });
-          tracker.startStage("verification", { pendingCount: tracker.run.sparkPendingCount });
-          verificationActive = true;
+          sparkReturnDurationMs = tracker.elapsedInStage("scoring");
         } else if (event.type === "scoring_finished") {
           finishInfo = event;
         }
@@ -331,35 +335,33 @@ async function runSimilarSearch(
           unscoredCount,
         });
       } else if (info.degraded) {
-        if (!verificationActive) {
-          tracker.completeStage("scoring", "degraded", {
-            cachedCount: tracker.run.cachedCount,
-            pendingCount: tracker.run.sparkPendingCount,
-            imageCount: tracker.run.imageCount,
-            sparkCalled: true,
-            scoredCount,
-            unscoredCount,
-          });
-          tracker.startStage("verification");
-        }
+        tracker.completeStage("scoring", "degraded", {
+          cachedCount: tracker.run.cachedCount,
+          pendingCount: tracker.run.sparkPendingCount,
+          imageCount: tracker.run.imageCount,
+          sparkCalled: true,
+          scoredCount,
+          unscoredCount,
+        }, false, sparkReturnDurationMs ?? undefined);
+        tracker.startStage("verification");
         tracker.completeStage("verification", "skipped", {
           scoredCount,
           unscoredCount,
         });
-      } else if (verificationActive) {
-        tracker.completeStage("verification", "done", {
-          scoredCount,
-          unscoredCount,
-        });
       } else {
-        // Spark path finished without a spark_returned marker (defensive).
+        const totalScoringMs = tracker.elapsedInStage("scoring");
+        const sparkMs = sparkReturnDurationMs ?? totalScoringMs;
         tracker.completeStage("scoring", "done", {
           cachedCount: tracker.run.cachedCount,
           pendingCount: tracker.run.sparkPendingCount,
+          imageCount: tracker.run.imageCount,
           sparkCalled: true,
-        });
-        tracker.startStage("verification", { total: candidates.length });
-        tracker.completeStage("verification", "done", { scoredCount, unscoredCount });
+        }, true, sparkMs);
+        tracker.startStage("verification", { pendingCount: tracker.run.sparkPendingCount });
+        tracker.completeStage("verification", "done", {
+          scoredCount,
+          unscoredCount,
+        }, true, Math.max(0, totalScoringMs - sparkMs));
       }
     }
 
