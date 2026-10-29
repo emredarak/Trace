@@ -195,4 +195,89 @@ describe("GET /api/cases/[id]/similar", () => {
     );
     expect(res.status).toBe(404);
   });
+
+  it("streams NDJSON progress ending in the same result as the plain call", async () => {
+    const id = await seedQueryPlusSix();
+    const res = await getSimilar(
+      new Request(`http://localhost/api/cases/${id}/similar?stream=1`),
+      similarParams(id),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("application/x-ndjson");
+    const text = await res.text();
+    const events = text
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    expect(events[0].type).toBe("started");
+    expect(events[events.length - 1].type).toBe("result");
+    const completedStages = events
+      .filter((e) => e.type === "stage_completed")
+      .map((e) => e.stage);
+    expect(completedStages).toEqual([
+      "enrichment",
+      "dossiers",
+      "candidates",
+      "scoring",
+      "verification",
+    ]);
+    for (const e of events.filter((e) => e.type === "stage_completed")) {
+      expect(typeof e.durationMs).toBe("number");
+      expect(e.durationMs as number).toBeGreaterThanOrEqual(0);
+    }
+    expect(events.every((e) => typeof e.seq === "number" && typeof e.elapsedMs === "number")).toBe(true);
+
+    const plain = await (
+      await getSimilar(new Request(`http://localhost/api/cases/${id}/similar`), similarParams(id))
+    ).json();
+    const result = events[events.length - 1] as unknown as Record<string, unknown>;
+    expect(result.results).toEqual(plain.results);
+    // The streamed call ran first and cleared needsRerank, so only it reports stale.
+    expect(result.fresh).toBe(false);
+    expect(plain.fresh).toBe(true);
+    expect(result.limit).toBe(plain.limit);
+
+    // Both the streamed and the plain call recorded a timing run.
+    const runs = getDb().prepare("SELECT COUNT(*) AS n FROM similar_search_runs").get() as { n: number };
+    expect(runs.n).toBe(2);
+  });
+
+  it("marks scoring degraded and verification skipped on the no-key fallback, still returning a result", async () => {
+    const id = await seedQueryPlusSix();
+    const res = await getSimilar(
+      new Request(`http://localhost/api/cases/${id}/similar?stream=1`),
+      similarParams(id),
+    );
+    const events = (await res.text())
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const scoring = events.find((e) => e.type === "stage_completed" && e.stage === "scoring");
+    const verification = events.find((e) => e.type === "stage_completed" && e.stage === "verification");
+    expect(scoring?.status).toBe("degraded");
+    expect(verification?.status).toBe("skipped");
+    expect(events[events.length - 1].type).toBe("result");
+  });
+
+  it("progress events before the result carry counts only, never case content", async () => {
+    const id = await seedQueryPlusSix();
+    const res = await getSimilar(
+      new Request(`http://localhost/api/cases/${id}/similar?stream=1`),
+      similarParams(id),
+    );
+    const lines = (await res.text()).split("\n").filter((l) => l.trim());
+    const progressText = lines.slice(0, -1).join("\n");
+    expect(progressText).not.toContain("waterfront");
+    expect(progressText).not.toContain("night theft");
+    expect(progressText).not.toContain("TR-");
+  });
+
+  it("streamed call for a missing case is still a plain 404 JSON", async () => {
+    const res = await getSimilar(
+      new Request("http://localhost/api/cases/yok/similar?stream=1"),
+      similarParams("yok"),
+    );
+    expect(res.status).toBe(404);
+    expect(res.headers.get("content-type")).toContain("application/json");
+  });
 });

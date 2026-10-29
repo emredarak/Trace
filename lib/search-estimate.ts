@@ -29,6 +29,51 @@ export const STAGE_ORDER: StageKey[] = [
   "verification",
 ];
 
+/** NDJSON progress events streamed by GET /api/cases/[id]/similar?stream=1. */
+export type SearchProgressEvent =
+  | { seq: number; elapsedMs: number; type: "started" }
+  | {
+      seq: number;
+      elapsedMs: number;
+      type: "stage_started";
+      stage: StageKey;
+      details?: Record<string, number | string | boolean>;
+    }
+  | {
+      seq: number;
+      elapsedMs: number;
+      type: "stage_progress";
+      stage: StageKey;
+      completed: number;
+      total: number;
+      details?: Record<string, number | string | boolean>;
+    }
+  | {
+      seq: number;
+      elapsedMs: number;
+      type: "stage_completed";
+      stage: StageKey;
+      status: "done" | "skipped" | "degraded";
+      durationMs: number;
+      details?: Record<string, number | string | boolean>;
+    }
+  | {
+      seq: number;
+      elapsedMs: number;
+      type: "estimate";
+      estimate: { lowMs: number; highMs: number; sampleCount: number } | null;
+    }
+  | {
+      seq: number;
+      elapsedMs: number;
+      type: "result";
+      results: unknown[];
+      fresh: boolean;
+      limit: number;
+      pendingEnrichment: boolean;
+    }
+  | { seq: number; elapsedMs: number; type: "error"; error: string };
+
 export interface SearchRunRecord {
   enrichmentMs: number | null;
   dossiersMs: number | null;
