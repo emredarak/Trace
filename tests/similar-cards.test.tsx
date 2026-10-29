@@ -162,4 +162,17 @@ describe("similar cards", () => {
     fireEvent.click(screen.getByRole("button", { name: "Go to match 3" }));
     expect(await screen.findByText("3 / 4")).toBeTruthy();
   });
+
+  it("navigating collapses open details", async () => {
+    stubFetch();
+    render(<CaseDetail caseId={CASE_ID} />);
+
+    const cards = await screen.findAllByTestId("similar-card");
+    fireEvent.click(within(cards[0]).getByRole("button", { name: /show details/i }));
+    expect(await within(cards[0]).findByText("theft in both")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /next match/i }));
+    expect(await screen.findByText("2 / 4")).toBeTruthy();
+    expect(screen.queryByText("theft in both")).toBeNull();
+  });
 });

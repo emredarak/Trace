@@ -1072,7 +1072,12 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
     similarTotal === 0 ? 0 : Math.min(similarIndex, similarTotal - 1);
   function goSimilar(dir: 1 | -1) {
     if (similarTotal === 0) return;
+    setExpandedSimilar({});
     setSimilarIndex((i) => (i + dir + similarTotal) % similarTotal);
+  }
+  function goToSimilar(i: number) {
+    setExpandedSimilar({});
+    setSimilarIndex(i);
   }
 
   if (caseMissing) {
@@ -1576,7 +1581,7 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
                     className="dot"
                     aria-label={`Go to match ${i + 1}`}
                     aria-current={i === similarSafe ? "true" : undefined}
-                    onClick={() => setSimilarIndex(i)}
+                    onClick={() => goToSimilar(i)}
                   />
                 ))}
               </div>
