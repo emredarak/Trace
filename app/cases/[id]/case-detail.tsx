@@ -13,6 +13,16 @@ import {
   toEvidenceResponse,
   type CaseEvidenceDraft,
 } from "../../../lib/evidences";
+import {
+  SimilarSearchProgress,
+  type StageView,
+} from "../../components/similar-search-progress";
+import { readSearchEvents } from "../../../lib/search-stream";
+import {
+  STAGE_ORDER,
+  type SearchProgressEvent,
+  type StageKey,
+} from "../../../lib/search-estimate";
 
 type CaseWithEntries = CaseRecord & {
   entries?: Evidence[];
@@ -25,6 +35,110 @@ interface SimilarResponse {
   fresh: boolean;
   limit?: number;
   pendingEnrichment?: boolean;
+}
+
+const SIMILAR_STAGE_META: Record<StageKey, { label: string; owner: string; why: string }> = {
+  enrichment: {
+    label: "Enrichment",
+    owner: "Muse Voice Transcribe · SAM 3.1",
+    why: "Audio becomes searchable text and images gain object labels; both feed the similarity check.",
+  },
+  dossiers: {
+    label: "Case files",
+    owner: "Muse Glimmer",
+    why: "Each case is compiled into one comparable file; unchanged files are reused.",
+  },
+  candidates: {
+    label: "Candidates",
+    owner: "Local code",
+    why: "Text, location (≤5 km), person, object and time (±90 days) channels nominate up to 20 candidates.",
+  },
+  scoring: {
+    label: "Scoring",
+    owner: "Muse Spark Open",
+    why: "Candidate files are compared in a single call; every similarity is listed with a strength (1–10).",
+  },
+  verification: {
+    label: "Verification & ranking",
+    owner: "Local code",
+    why: "Quoted evidence must exist in the source records; unverifiable items are dropped before ranking.",
+  },
+};
+
+function initialProgressStages(): StageView[] {
+  return STAGE_ORDER.map((key) => ({
+    key,
+    ...SIMILAR_STAGE_META[key],
+    status: "pending",
+    details: [],
+  }));
+}
+
+function detailNum(details: Record<string, number | string | boolean> | undefined, key: string): number | null {
+  const v = details?.[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function progressDetails(
+  stage: StageKey,
+  details: Record<string, number | string | boolean> | undefined,
+  completed?: number,
+  total?: number,
+): string[] {
+  if (!details && completed === undefined) return [];
+  const lines: string[] = [];
+  const totalN = total ?? detailNum(details, "total");
+  if (stage === "enrichment") {
+    const t = detailNum(details, "transcribeCount");
+    const s = detailNum(details, "samCount");
+    if (t !== null || s !== null) lines.push(`${t ?? 0} transcription · ${s ?? 0} image marking jobs`);
+    const done = detailNum(details, "done");
+    const failed = detailNum(details, "failed");
+    if (done !== null || failed !== null) lines.push(`${done ?? 0} done · ${failed ?? 0} failed`);
+    else if (completed !== undefined && totalN) lines.push(`${completed} of ${totalN} jobs finished`);
+    const pendingAfter = detailNum(details, "pendingAfter");
+    if (pendingAfter !== null && pendingAfter > 0) lines.push(`${pendingAfter} more jobs still pending after this search`);
+    if ((detailNum(details, "failed") ?? 0) > 0) lines.push("Continuing with the remaining data.");
+  } else if (stage === "dossiers") {
+    const updated = detailNum(details, "updated");
+    const cached = detailNum(details, "cached");
+    if (updated !== null || cached !== null) {
+      lines.push(`${updated ?? 0} of ${totalN ?? 0} files updated · ${cached ?? 0} reused`);
+    } else if (completed !== undefined && totalN) {
+      lines.push(`${completed} of ${totalN} files processed`);
+    }
+    const failed = detailNum(details, "failed");
+    if (failed !== null && failed > 0) lines.push(`${failed} files could not be built — continuing with the rest.`);
+  } else if (stage === "candidates") {
+    if (totalN !== null) lines.push(`${totalN} candidates found`);
+    const channels: [string, string][] = [
+      ["text", "Text"],
+      ["location", "Location"],
+      ["person", "Person"],
+      ["object", "Object"],
+      ["time", "Time"],
+    ];
+    const parts = channels
+      .map(([k, label]) => ({ label, n: detailNum(details, k) }))
+      .filter((c) => c.n !== null && c.n > 0)
+      .map((c) => `${c.label} ${c.n}`);
+    if (parts.length > 0) lines.push(parts.join(" · "));
+  } else if (stage === "scoring") {
+    const cached = detailNum(details, "cachedCount");
+    const pending = detailNum(details, "pendingCount");
+    if (details?.sparkCalled === false) lines.push("All candidates came from cache — Spark was not called.");
+    else if (cached !== null || pending !== null) lines.push(`${cached ?? 0} from cache · ${pending ?? 0} to score`);
+    const images = detailNum(details, "imageCount");
+    if (images !== null && images > 0) lines.push(`${images} evidence images attached for visual check`);
+    const scored = detailNum(details, "scoredCount");
+    const unscored = detailNum(details, "unscoredCount");
+    if (scored !== null || unscored !== null) lines.push(`${scored ?? 0} scored · ${unscored ?? 0} unscored`);
+  } else if (stage === "verification") {
+    const scored = detailNum(details, "scoredCount");
+    const unscored = detailNum(details, "unscoredCount");
+    if (scored !== null || unscored !== null) lines.push(`${scored ?? 0} scored · ${unscored ?? 0} unscored`);
+  }
+  return lines;
 }
 
 export const SIMILARITY_KIND_LABELS: Record<string, string> = {
@@ -247,6 +361,16 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   const [caseMissing, setCaseMissing] = useState(false);
   const [similar, setSimilar] = useState<SimilarResponse | null>(null);
   const [similarError, setSimilarError] = useState("");
+  const [progressStages, setProgressStages] = useState<StageView[]>(initialProgressStages);
+  const [progressStartedAt, setProgressStartedAt] = useState<number | null>(null);
+  const [progressNow, setProgressNow] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
+  const [progressEstimate, setProgressEstimate] = useState<{
+    lowMs: number;
+    highMs: number;
+    anchorElapsedMs: number;
+  } | null>(null);
+  const progressStageStarts = useRef<Partial<Record<StageKey, number>>>({});
   const [approved, setApproved] = useState<Record<string, boolean>>({});
   const [expandedSimilar, setExpandedSimilar] = useState<
     Record<string, boolean>
@@ -280,6 +404,8 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    let tick: ReturnType<typeof setInterval> | undefined;
+    let showTimer: ReturnType<typeof setTimeout> | undefined;
     async function load() {
       try {
         const res = await fetch(`/api/cases/${id}`);
@@ -311,13 +437,74 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
       } catch {
         if (!cancelled) setCaseMissing(true);
       }
+      const startedAt = Date.now();
+      if (!cancelled) {
+        setProgressStartedAt(startedAt);
+        setProgressNow(startedAt);
+        tick = setInterval(() => {
+          if (!cancelled) setProgressNow(Date.now());
+        }, 1000);
+        showTimer = setTimeout(() => {
+          if (!cancelled) setShowProgress(true);
+        }, 600);
+      }
+      const applyProgress = (event: SearchProgressEvent) => {
+        if (cancelled) return;
+        if (event.type === "estimate") {
+          setProgressEstimate(
+            event.estimate
+              ? { ...event.estimate, anchorElapsedMs: event.elapsedMs }
+              : null,
+          );
+          return;
+        }
+        if (event.type === "stage_started") {
+          progressStageStarts.current[event.stage] = event.elapsedMs;
+          setProgressStages((prev) =>
+            prev.map((s) =>
+              s.key === event.stage
+                ? {
+                    ...s,
+                    status: "active",
+                    details: progressDetails(event.stage, event.details),
+                  }
+                : s,
+            ),
+          );
+        } else if (event.type === "stage_progress") {
+          setProgressStages((prev) =>
+            prev.map((s) =>
+              s.key === event.stage
+                ? {
+                    ...s,
+                    status: "active",
+                    details: progressDetails(event.stage, event.details, event.completed, event.total),
+                  }
+                : s,
+            ),
+          );
+        } else if (event.type === "stage_completed") {
+          setProgressStages((prev) =>
+            prev.map((s) =>
+              s.key === event.stage
+                ? {
+                    ...s,
+                    status: event.status,
+                    durationMs: event.durationMs,
+                    details: progressDetails(event.stage, event.details),
+                  }
+                : s,
+            ),
+          );
+        }
+      };
       try {
-        const res = await fetch(`/api/cases/${id}/similar`);
+        const res = await fetch(`/api/cases/${id}/similar?stream=1`);
         if (!res.ok) {
           if (!cancelled) setSimilarError("Could not load similar cases.");
           return;
         }
-        const body = (await res.json()) as SimilarResponse;
+        const body = await readSearchEvents(res, applyProgress);
         if (!cancelled) {
           const all = Array.isArray(body.results) ? body.results : [];
           setSimilar({
@@ -332,11 +519,16 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
         }
       } catch {
         if (!cancelled) setSimilarError("Connection error, please try again.");
+      } finally {
+        if (tick) clearInterval(tick);
+        if (showTimer) clearTimeout(showTimer);
       }
     }
     void load();
     return () => {
       cancelled = true;
+      if (tick) clearInterval(tick);
+      if (showTimer) clearTimeout(showTimer);
     };
   }, [id]);
 
@@ -841,6 +1033,33 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
   }
 
   const showFreshBadge = similar?.fresh === false || caseItem.needsRerank === true;
+  const progressElapsedMs =
+    progressStartedAt !== null ? Math.max(0, progressNow - progressStartedAt) : 0;
+  const progressElapsedServerMs =
+    progressStartedAt !== null ? progressElapsedMs : 0;
+  const agedEstimate = (() => {
+    if (!progressEstimate) return null;
+    const delta = Math.max(0, progressElapsedServerMs - progressEstimate.anchorElapsedMs);
+    return {
+      lowMs: Math.max(0, progressEstimate.lowMs - delta),
+      highMs: Math.max(0, progressEstimate.highMs - delta),
+    };
+  })();
+  const estimateOverrun = Boolean(
+    progressEstimate &&
+      progressElapsedServerMs - progressEstimate.anchorElapsedMs > progressEstimate.highMs,
+  );
+  const renderProgressStages: StageView[] = progressStages.map((s) => {
+    if (s.status !== "active") return s;
+    const startElapsed = progressStageStarts.current[s.key];
+    return {
+      ...s,
+      activeElapsedMs:
+        startElapsed !== undefined
+          ? Math.max(0, progressElapsedServerMs - startElapsed)
+          : progressElapsedServerMs,
+    };
+  });
   const locationsDirty = !sameLocations(baselineLocations, draftLocations);
   const personsDirty = !samePersons(baselinePersons, draftPersons);
   const evidencesDirty = !sameEvidences(baselineEvidences, draftEvidences);
@@ -1009,7 +1228,18 @@ export function CaseDetail({ caseId: id }: { caseId: string }) {
               based on incomplete data.
             </p>
           ) : null}
-          {!similar && !similarError ? <p>Loading…</p> : null}
+          {!similar && !similarError ? (
+            showProgress ? (
+              <SimilarSearchProgress
+                stages={renderProgressStages}
+                elapsedMs={progressElapsedMs}
+                estimate={estimateOverrun ? null : agedEstimate}
+                estimateOverrun={estimateOverrun}
+              />
+            ) : (
+              <p>Loading…</p>
+            )
+          ) : null}
           {similar && similar.results.length === 0 ? (
             <p>No similar cases.</p>
           ) : null}

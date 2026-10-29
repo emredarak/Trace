@@ -187,6 +187,7 @@ function stubFetch(
     failLocationSave?: boolean;
     failPersonSave?: boolean;
     pendingEnrichment?: boolean;
+    similarStream?: "result" | "no-result";
   } = {},
 ) {
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -350,12 +351,27 @@ function stubFetch(
     ) {
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     }
-    if (url === `/api/cases/${CASE_ID}/similar`) {
-      return {
-        ok: true,
+    if (url === `/api/cases/${CASE_ID}/similar?stream=1`) {
+      const lines = [
+        JSON.stringify({ seq: 1, elapsedMs: 0, type: "started" }),
+        ...(opts.similarStream === "no-result"
+          ? []
+          : [
+              JSON.stringify({
+                seq: 2,
+                elapsedMs: 1,
+                type: "result",
+                results: RESULTS,
+                fresh,
+                limit: 5,
+                pendingEnrichment: opts.pendingEnrichment ?? false,
+              }),
+            ]),
+      ];
+      return new Response(lines.join("\n") + "\n", {
         status: 200,
-        json: async () => ({ results: RESULTS, fresh, limit: 5, pendingEnrichment: opts.pendingEnrichment ?? false }),
-      };
+        headers: { "Content-Type": "application/x-ndjson" },
+      });
     }
     if (url === `/api/cases/${CASE_ID}/links` && init?.method === "POST") {
       const body = JSON.parse(init.body as string);
@@ -442,6 +458,25 @@ describe("Case detail + similar list", () => {
 
     const section = await screen.findByRole("region", { name: /similar cases/i });
     expect(await within(section).findByText(/pending|background enrichment/i)).toBeTruthy();
+  });
+
+  it("shows the connection error when the progress stream ends without a result", async () => {
+    stubFetch(false, { similarStream: "no-result" });
+    renderPage();
+
+    const section = await screen.findByRole("region", { name: /similar cases/i });
+    expect(
+      await within(section).findByText("Connection error, please try again."),
+    ).toBeTruthy();
+  });
+
+  it("does not flash the progress timeline when results arrive immediately", async () => {
+    stubFetch();
+    renderPage();
+
+    const list = await screen.findByRole("list", { name: /similar/i });
+    expect(list).toBeTruthy();
+    expect(screen.queryByText(/Finding similar cases/)).toBeNull();
   });
 
   it("case detail and evidence (transcript + photo marking) visible", async () => {
