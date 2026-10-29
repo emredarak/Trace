@@ -573,7 +573,7 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
 }
 .sim-score-band[data-score="high"] { background: var(--accent); }
 .sim-score-band[data-score="mid"] { background: var(--gold); }
-.sim-score-band[data-score="low"] { background: var(--faint); }
+.sim-score-band[data-score="low"] { background: var(--muted); }
 button.btn-primary {
   background: var(--accent);
   color: var(--accent-ink);
@@ -582,5 +582,5 @@ button.btn-primary {
   font-size: 0.86rem;
   border-radius: 999px;
 }
-button.btn-primary:hover:not(:disabled) { background: #9ae7b1; }
+button.btn-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
 .sim-expand-row .btn-ghost { font-size: 0.82rem; }

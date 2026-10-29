@@ -49,6 +49,7 @@ export function IntroOverlay() {
   const [lineIndex, setLineIndex] = useState(0);
   const closedRef = useRef(false);
   const timersRef = useRef<number[]>([]);
+  const skipRef = useRef<HTMLButtonElement | null>(null);
 
   const finish = useCallback(() => {
     setVisible(false);
@@ -73,8 +74,8 @@ export function IntroOverlay() {
     if (alreadySeen()) return;
     setVisible(true);
     const timers = timersRef.current;
-    timers.push(window.setTimeout(() => setLineIndex(1), LINE_MS));
-    timers.push(window.setTimeout(() => setLineIndex(2), LINE_MS * 2));
+    timers.push(window.setTimeout(() => { if (!closedRef.current) setLineIndex(1); }, LINE_MS));
+    timers.push(window.setTimeout(() => { if (!closedRef.current) setLineIndex(2); }, LINE_MS * 2));
     timers.push(window.setTimeout(beginLeave, AUTO_CLOSE_MS));
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") beginLeave();
@@ -86,6 +87,10 @@ export function IntroOverlay() {
       timersRef.current = [];
     };
   }, [beginLeave]);
+
+  useEffect(() => {
+    if (mounted && visible) skipRef.current?.focus({ preventScroll: true });
+  }, [mounted, visible]);
 
   if (!mounted || !visible) return null;
 
@@ -111,6 +116,8 @@ export function IntroOverlay() {
           data-testid="intro-skip"
           className="intro-skip"
           onClick={beginLeave}
+          ref={skipRef}
+          autoFocus
         >
           Skip
         </button>

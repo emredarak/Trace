@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-// tests/intro-overlay.test.tsx — @vitest-environment jsdom
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { IntroOverlay } from "../app/components/intro-overlay";
