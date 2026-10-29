@@ -221,7 +221,8 @@ li {
 .stat span { color: var(--muted); font-size: 0.83rem; }
 .case-row { width: 100%; text-align: left; background: var(--panel); color: var(--text); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 1rem 1.1rem; margin-bottom: 0.8rem; display: block; font-weight: 500; }
 .case-row:hover { background: var(--panel-2); border-color: var(--accent-strong); }
-.case-row.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow); background: var(--panel-2); }
+.case-row.selected { border-color: var(--accent); box-shadow: inset 4px 0 0 var(--gold), 0 0 0 1px var(--accent), var(--shadow); background: var(--panel-2); }
+.case-row, .case-row .case-summary, .case-no, .drawer, .drawer h2 { overflow-wrap: anywhere; min-width: 0; }
 .case-row-top { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
 .case-no { font-weight: 850; letter-spacing: 0.02em; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.55rem; }
@@ -550,4 +551,13 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
 }
 @media (prefers-reduced-motion: reduce) {
   .case-row .preview-hint { transition: none !important; }
+  .drawer-pulse { animation: none !important; }
+}
+
+/* Selection link (task 3): drawer echoes the clicked row, pulse re-triggers
+   per selection via key={selected.id} remount (~600ms). */
+.drawer-pulse { animation: drawer-pulse 600ms ease; }
+@keyframes drawer-pulse {
+  from { box-shadow: 0 0 0 2px var(--gold); }
+  to { box-shadow: 0 0 0 0 transparent; }
 }

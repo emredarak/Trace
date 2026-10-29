@@ -103,6 +103,20 @@ export default function Home() {
   const selected =
     filtered.find((c) => c.id === selectedId) ?? active[0] ?? past[0] ?? null;
   const located = filtered.filter(hasCoords);
+
+  function handleSelect(id: string) {
+    setSelectedId(id);
+    setTab("overview");
+    if (typeof document !== "undefined") {
+      const reduced =
+        typeof window !== "undefined" &&
+        typeof window.matchMedia === "function" &&
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      document
+        .querySelector(".drawer")
+        ?.scrollIntoView?.({ behavior: reduced ? "auto" : "smooth", block: "nearest" });
+    }
+  }
   const nowMs = Date.now();
   const locatedAges = located
     .map((c) => ageInDays(c, nowMs))
@@ -351,10 +365,7 @@ export default function Home() {
                     color: colorForCase(c),
                     label: ageLabel(ageInDays(c, nowMs)),
                   })}
-                  onSelect={(id) => {
-                    setSelectedId(id);
-                    setTab("overview");
-                  }}
+                  onSelect={handleSelect}
                 />
               </section>
               <section aria-label="Past cases">
@@ -367,10 +378,7 @@ export default function Home() {
                     color: colorForCase(c),
                     label: ageLabel(ageInDays(c, nowMs)),
                   })}
-                  onSelect={(id) => {
-                    setSelectedId(id);
-                    setTab("overview");
-                  }}
+                  onSelect={handleSelect}
                 />
               </section>
             </>
@@ -382,8 +390,8 @@ export default function Home() {
           aria-label="Selected case detail"
         >
           {selected ? (
-            <>
-              <span className="chip gold">Selected case</span>
+            <div key={selected.id} className="drawer-pulse">
+              <span className="chip gold" data-testid="selected-title">Selected: {selected.caseNo}</span>
               <h2 style={{ fontSize: "1.45rem", marginBottom: "0.3rem" }}>
                 {selected.caseNo}
               </h2>
@@ -485,7 +493,7 @@ export default function Home() {
                   </dd>
                 </dl>
               ) : null}
-            </>
+            </div>
           ) : (
             <>
               <h2>Case detail</h2>
@@ -532,6 +540,7 @@ function CaseList({
             </span>
           </span>
           <span
+            className="case-summary"
             style={{ display: "block", color: "var(--muted)", marginTop: "0.25rem" }}
           >
             {c.summary.slice(0, 110)}
