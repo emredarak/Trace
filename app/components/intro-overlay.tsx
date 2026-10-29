@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const STORAGE_KEY = "trace-intro-seen";
 const AUTO_CLOSE_MS = 2200;
 const LEAVE_MS = 400;
 const LINE_MS = 600;
@@ -20,14 +19,6 @@ function prefersReducedMotion(): boolean {
   return mm?.matches === true;
 }
 
-function alreadySeen(): boolean {
-  try {
-    return sessionStorage.getItem(STORAGE_KEY) !== null;
-  } catch {
-    return false;
-  }
-}
-
 function returnFocusToMain(): void {
   const main = document.querySelector("main");
   if (main instanceof HTMLElement) {
@@ -37,10 +28,10 @@ function returnFocusToMain(): void {
 }
 
 /**
- * Session-once intro overlay: TRACE wordmark tracking-in, gold sweep,
- * mono status lines, radar ring. Auto-closes after 2200ms with a 400ms
- * leaving curtain. Skip button + Escape close early. Never renders under
- * prefers-reduced-motion or when already seen this session.
+ * Intro overlay shown on every full page load: TRACE wordmark tracking-in,
+ * gold sweep, mono status lines, radar ring. Auto-closes after 2200ms with
+ * a 400ms leaving curtain. Skip button + Escape close early. Never renders
+ * under prefers-reduced-motion.
  */
 export function IntroOverlay() {
   const [mounted, setMounted] = useState(false);
@@ -53,11 +44,6 @@ export function IntroOverlay() {
 
   const finish = useCallback(() => {
     setVisible(false);
-    try {
-      sessionStorage.setItem(STORAGE_KEY, "1");
-    } catch {
-      // Storage unavailable (private mode): overlay simply stays session-once in memory.
-    }
     returnFocusToMain();
   }, []);
 
@@ -71,7 +57,6 @@ export function IntroOverlay() {
   useEffect(() => {
     setMounted(true);
     if (prefersReducedMotion()) return;
-    if (alreadySeen()) return;
     setVisible(true);
     const timers = timersRef.current;
     timers.push(window.setTimeout(() => { if (!closedRef.current) setLineIndex(1); }, LINE_MS));
