@@ -590,7 +590,8 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
 }
 .similar-arrow {
   position: absolute;
-  top: calc(50% - 0.8rem);
+  /* Fixed offset from the top: stays put when the card expands downward. */
+  top: 9rem;
   translate: 0 -50%;
   z-index: 3;
   width: 2.4rem;
