@@ -548,3 +548,6 @@ button.lightbox-close:hover:not(:disabled) { background: var(--panel-3); }
 .case-row:focus-visible .preview-hint {
   opacity: 1;
 }
+@media (prefers-reduced-motion: reduce) {
+  .case-row .preview-hint { transition: none !important; }
+}
