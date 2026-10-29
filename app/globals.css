@@ -152,6 +152,8 @@ li {
   gap: 1.6rem;
   align-items: center;
 }
+.trace-nav nav.brand-only { justify-content: center; }
+.trace-nav nav.brand-only .brand { margin-right: 0; }
 .trace-nav .brand {
   color: var(--text);
   text-decoration: none;

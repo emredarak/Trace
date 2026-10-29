@@ -25,13 +25,9 @@ export default function RootLayout({
         <AmbientBackground />
         <IntroOverlay />
         <header className="trace-nav">
-          <nav>
+          <nav className="brand-only" aria-label="Trace">
             <a className="brand" href="/">
               TRACE<em>.</em>
-            </a>
-            <a href="/">Cases</a>
-            <a className="nav-cta" href="/new">
-              + New Case
             </a>
           </nav>
         </header>
