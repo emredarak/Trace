@@ -593,4 +593,10 @@ button.btn-primary {
   border-radius: 999px;
 }
 button.btn-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1); }
-.sim-expand-row .btn-ghost { font-size: 0.82rem; }
+.sim-expand-row .btn-ghost {
+  font-size: 0.82rem;
+  border-color: var(--accent-strong);
+  color: var(--accent);
+  background: rgba(130, 217, 154, 0.07);
+}
+.sim-expand-row .btn-ghost:hover:not(:disabled) { background: rgba(130, 217, 154, 0.14); }
