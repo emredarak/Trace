@@ -92,11 +92,12 @@ Proje şu adresten canlı olarak denenebilir:
 | | |
 |---|---|
 | **Demo Adresi** | https://trace.51-20-67-60.sslip.io/login |
-| **Demo Şifresi** | `hackathontracedemo` |
 
 ### 🔑 Demo Şifresi: `hackathontracedemo`
 
 </div>
+
+> ☁️ Canlı demo, **AWS EC2** üzerinde çalışmaktadır (Docker + Caddy, otomatik HTTPS). **Hackathon sonuçları açıklandıktan sonra kapatılacaktır** — sondaki [Önemli Not](#-önemli-not) bölümüne bakın.
 
 ### Demoda 3 dakikada neler görebilirsiniz?
 
@@ -164,6 +165,17 @@ Trace'te dört Meta modeli de süs olarak değil, **her biri kendi doğal işind
 >
 > **Aktif kurulum ve alternatifler:** Şu an aktif olarak dosya derlemede **Muse Spark 1.3**, benzerlik yargısında **Muse Wonder 1.0** kullanılmaktadır. Güvenlik (verinin dışarı sızmaması, kurum içinde kalması) ve maliyetlerin kısılması açısından, aynı rollerde kod değişikliği yapmadan yalnızca env değişkenleriyle **Muse Spark 1.3 yerine Muse Glimmer**, **Muse Wonder 1.0 yerine Muse Spark Open** kullanılabilir; özellikle Spark Open'ın kurumun kendi sistemlerinde çalıştırılması, vaka verisinin kurum dışına çıkmaması için önerilen yoldur.
 
+### 🧑‍💻 Geliştirme Sürecinde Meta Modelleri
+
+Meta teknolojileri yalnızca çalışma anında kullanılmadı — Trace'in nasıl tasarlanıp geliştirildiğini de şekillendirdi:
+
+| Aşama | Meta teknolojisi | Nasıl kullanıldı? |
+|---|---|---|
+| **Fikir ve yazılım geliştirme** | **Muse Spark 1.3**, **Muse Wonder**, **Muse Code** | Geliştirme sürecinin tamamında sıklıkla kullanıldı: ürün fikrinin olgunlaştırılması, tasarım kararları ve ödünleşimlerin çalışılması ve yazılımın geliştirilmesi — benzerlik hattından model-rol mimarisine, uygulamadan hata ayıklama ve gözden geçirmeye kadar. Trace'in çok modelli tasarımı (ayrı derleyici ve yargıç rolleri, doğrulanmış kanıt kuralları, zarif bozulma) bu süreçte olgunlaştırıldı. |
+| **Test ve demo görselleri** | **Muse Image 1.0** (`muse-image-1.0`) | **Yalnızca** test ve demo için kurgusal delil fotoğrafları üretmekte kullanıldı (örn. iskeledeki bıçak, yanmış kulübe ve benzin bidonu, levye izli kapı; `demo-assets/` altında). Bu sentetik görseller; SAM 3.1 işaretlemesini, nesne aday kanalını ve görsel doğrulamayı güvenli, uydurma malzemeyle sınamak için kullanıldı — asla gerçek delille değil. Görsel üretim, **çalışan üründe hiçbir rol oynamaz**: Trace bir soruşturma içinde görsel üretmez. |
+
+Bu ayrım önemlidir: çalışan sistemde modeller vaka malzemesini yalnızca *okur* (transkript eder, işaretler, derler, karşılaştırır) ve ürettikleri her iddia kaynağa karşı denetlenir; üretken görseller yalnızca, herhangi bir vaka girilmeden önce oluşturulmuş kurgusal test verisi olarak vardır.
+
 ---
 
 ## 🛠️ Teknoloji Yığını
@@ -176,7 +188,8 @@ Trace'te dört Meta modeli de süs olarak değil, **her biri kendi doğal işind
 | **Çevrimdışı** | Service Worker + IndexedDB outbox kuyruğu (FIFO tekrar gönderim, 409'da sunucu kaydı kazanır) |
 | **Yapay zekâ** | Meta Model API (OpenAI uyumlu chat katmanı) · Muse Spark 1.3 · Muse Wonder 1.0 · Muse Voice Transcribe · SAM 3.1 |
 | **Test** | Vitest + Testing Library + jsdom — **41 dosya, 349 test** |
-| **Dağıtım** | Docker (çok aşamalı, Node 22) · Docker Compose · Caddy (otomatik HTTPS, ters proxy) |
+| **Geliştirme** | Muse Spark 1.3 · Muse Wonder · Muse Code (fikir ve yazılım geliştirme) · Muse Image 1.0 (yalnızca kurgusal test/demo delil görselleri) |
+| **Dağıtım** | Canlı demo **AWS EC2** üzerinde · Docker (çok aşamalı, Node 22) · Docker Compose · Caddy (otomatik HTTPS, ters proxy) |
 | **Arayüz** | Next.js App Router ile tek web uygulaması |
 
 ---
@@ -210,7 +223,7 @@ PowerShell örneği:
 
 ```powershell
 $env:MODEL_API_KEY="..."
-$env:DEMO_PASSCODE="hackathontracedemo"
+$env:DEMO_PASSCODE="kendi-sifrenizi-belirleyin"
 npm run dev
 ```
 
@@ -350,7 +363,7 @@ Testler ağ erişimi olmadan çalışır; model istemcileri testlerde sahte (fak
 
 ## 📌 Önemli Not
 
-> **Canlı demo sitesi ([trace.51-20-67-60.sslip.io](https://trace.51-20-67-60.sslip.io/login)), demo sonuçları açıklandıktan sonra kaldırılacaktır.** Değerlendirme sonrasında bu adresten projeye erişilemeyebilir; projeyi incelemek için bu repodaki kurulum adımlarını kullanarak yerel ortamınızda çalıştırabilirsiniz.
+> **Canlı demo sitesi ([trace.51-20-67-60.sslip.io](https://trace.51-20-67-60.sslip.io/login)), AWS EC2 üzerinde çalışmaktadır ve hackathon sonuçları açıklandıktan sonra kapatılacaktır.** Değerlendirme sonrasında bu adresten projeye erişilemeyecektir; projeyi incelemek için bu repodaki kurulum adımlarını kullanarak yerel ortamınızda çalıştırabilirsiniz.
 
 ---
 

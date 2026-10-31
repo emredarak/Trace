@@ -92,11 +92,12 @@ The project can be tried live at:
 | | |
 |---|---|
 | **Demo URL** | https://trace.51-20-67-60.sslip.io/login |
-| **Demo Password** | `hackathontracedemo` |
 
 ### 🔑 Demo Password: `hackathontracedemo`
 
 </div>
+
+> ☁️ The live demo runs on an **AWS EC2** instance (Docker + Caddy, automatic HTTPS). It will be **shut down after the hackathon results are announced** — see the [Important Note](#-important-note) at the end.
 
 ### What can you see in the demo in 3 minutes?
 
@@ -164,6 +165,17 @@ All four Meta models in Trace work not as decoration, but **each in its natural 
 >
 > **Active setup and alternatives:** **Muse Spark 1.3** is currently active for file compilation and **Muse Wonder 1.0** for similarity judging. For security (keeping data from leaking outside, staying inside the organization) and to cut costs, **Muse Glimmer can be used instead of Muse Spark 1.3** and **Muse Spark Open instead of Muse Wonder 1.0** in the same roles, with no code change — only env variables. In particular, running Spark Open on the organization's own systems is the recommended path so that case data never leaves the organization.
 
+### 🧑‍💻 Meta Models in the Development Process
+
+Meta technologies were not only used at runtime — they shaped how Trace itself was designed and built:
+
+| Stage | Meta technology | How it was used |
+|---|---|---|
+| **Ideation & software development** | **Muse Spark 1.3**, **Muse Wonder**, **Muse Code** | Used extensively throughout the development process: maturing the product idea, working through design decisions and trade-offs, and developing the software itself — from the similarity pipeline and model-role architecture to implementation, debugging, and review. The multi-model design of Trace (separate compiler and judge roles, verified-evidence rules, graceful degradation) was refined in this process. |
+| **Test & demo assets** | **Muse Image 1.0** (`muse-image-1.0`) | Used **only** to produce fictional evidence photos for testing and the demo (e.g. the knife on the pier, the burnt cabin and gasoline can, the crowbar-marked door under `demo-assets/`). These synthetic images were used to exercise SAM 3.1 marking, the object candidate channel, and visual verification with safe, made-up material — never with real evidence. Image generation plays **no role in the runtime product**: Trace creates no imagery inside an investigation. |
+
+This distinction matters: in the running system, models only *read* case material (transcribe, mark, compile, compare) and every claim they make is checked against the source; generative imagery exists solely as fictional test data created before any case is entered.
+
 ---
 
 ## 🛠️ Tech Stack
@@ -176,7 +188,8 @@ All four Meta models in Trace work not as decoration, but **each in its natural 
 | **Offline** | Service Worker + IndexedDB outbox queue (FIFO replay; on 409 the server record wins) |
 | **AI** | Meta Model API (OpenAI-compatible chat layer) · Muse Spark 1.3 · Muse Wonder 1.0 · Muse Voice Transcribe · SAM 3.1 |
 | **Tests** | Vitest + Testing Library + jsdom — **41 files, 349 tests** |
-| **Deployment** | Docker (multi-stage, Node 22) · Docker Compose · Caddy (automatic HTTPS, reverse proxy) |
+| **Development** | Muse Spark 1.3 · Muse Wonder · Muse Code (ideation & software development) · Muse Image 1.0 (fictional test/demo evidence images only) |
+| **Deployment** | Live demo hosted on **AWS EC2** · Docker (multi-stage, Node 22) · Docker Compose · Caddy (automatic HTTPS, reverse proxy) |
 | **Interface** | A single web application with Next.js App Router |
 
 ---
@@ -210,7 +223,7 @@ PowerShell example:
 
 ```powershell
 $env:MODEL_API_KEY="..."
-$env:DEMO_PASSCODE="hackathontracedemo"
+$env:DEMO_PASSCODE="choose-your-own-password"
 npm run dev
 ```
 
@@ -350,7 +363,7 @@ Tests run without network access; model clients are replaced with fake clients i
 
 ## 📌 Important Note
 
-> **The live demo site ([trace.51-20-67-60.sslip.io](https://trace.51-20-67-60.sslip.io/login)) will be taken down after the demo results are announced.** After evaluation, the project may no longer be accessible at this address; to inspect the project, you can run it locally using the installation steps in this repo.
+> **The live demo site ([trace.51-20-67-60.sslip.io](https://trace.51-20-67-60.sslip.io/login)) runs on an AWS EC2 instance and will be shut down after the hackathon results are announced.** After evaluation, the project will no longer be accessible at this address; to inspect the project, you can run it locally using the installation steps in this repo.
 
 ---
 
