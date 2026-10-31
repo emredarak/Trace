@@ -14,13 +14,13 @@ vi.mock("../app/components/map-picker", () => ({
   }) => (
     <div>
       <span>
-        {pick ? `pin:${pick.latitude},${pick.longitude}` : "pin:yok"}
+        {pick ? `pin:${pick.latitude},${pick.longitude}` : "pin:none"}
       </span>
       <button
         type="button"
         onClick={() => onPick?.({ latitude: 40.1, longitude: 29.2 })}
       >
-        Harita noktası seç
+        Select map point
       </button>
     </div>
   ),
@@ -241,7 +241,7 @@ describe("LocationPicker", () => {
     fireEvent.change(screen.getByLabelText(/Location Title/), {
       target: { value: "Map point" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Harita noktası seç" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select map point" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Clear map selection" }),
     );

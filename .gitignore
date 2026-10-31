@@ -11,4 +11,5 @@ data/
 backup-*/
 next-env.d.ts
 docs/
+DEMO.md
 .env*.local
