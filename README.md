@@ -83,16 +83,11 @@ This project was built from scratch for the **Meta Global AI Developer Hackathon
 
 ## 🚀 Live Demo
 
-The project can be tried live at:
+The project can be tried live:
 
 <div align="center">
 
-### 👉 [trace.51-20-67-60.sslip.io/login](https://trace.51-20-67-60.sslip.io/login)
-
-| | |
-|---|---|
-| **Demo URL** | https://trace.51-20-67-60.sslip.io/login |
-
+### 👉 Live Demo: [trace.51-20-67-60.sslip.io/login](https://trace.51-20-67-60.sslip.io/login)
 ### 🔑 Demo Password: `hackathontracedemo`
 
 </div>
@@ -363,7 +358,7 @@ Tests run without network access; model clients are replaced with fake clients i
 
 ## 📌 Important Note
 
-> **The live demo site ([trace.51-20-67-60.sslip.io](https://trace.51-20-67-60.sslip.io/login)) runs on an AWS EC2 instance and will be shut down after the hackathon results are announced.** After evaluation, the project will no longer be accessible at this address; to inspect the project, you can run it locally using the installation steps in this repo.
+> **The live demo site (linked in the Live Demo section above) runs on an AWS EC2 instance and will be shut down after the hackathon results are announced.** After evaluation, the project will no longer be accessible at that address; to inspect the project, you can run it locally using the installation steps in this repo.
 
 ---
 

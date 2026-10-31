@@ -83,16 +83,11 @@ Bu proje, **Meta Global AI Developer Hackathon (Indie Developer track)** kapsam�
 
 ## 🚀 Canlı Demo
 
-Proje şu adresten canlı olarak denenebilir:
+Proje canlı olarak denenebilir:
 
 <div align="center">
 
-### 👉 [trace.51-20-67-60.sslip.io/login](https://trace.51-20-67-60.sslip.io/login)
-
-| | |
-|---|---|
-| **Demo Adresi** | https://trace.51-20-67-60.sslip.io/login |
-
+### 👉 Canlı Demo: [trace.51-20-67-60.sslip.io/login](https://trace.51-20-67-60.sslip.io/login)
 ### 🔑 Demo Şifresi: `hackathontracedemo`
 
 </div>
@@ -363,7 +358,7 @@ Testler ağ erişimi olmadan çalışır; model istemcileri testlerde sahte (fak
 
 ## 📌 Önemli Not
 
-> **Canlı demo sitesi ([trace.51-20-67-60.sslip.io](https://trace.51-20-67-60.sslip.io/login)), AWS EC2 üzerinde çalışmaktadır ve hackathon sonuçları açıklandıktan sonra kapatılacaktır.** Değerlendirme sonrasında bu adresten projeye erişilemeyecektir; projeyi incelemek için bu repodaki kurulum adımlarını kullanarak yerel ortamınızda çalıştırabilirsiniz.
+> **Canlı demo sitesi (yukarıdaki Canlı Demo bölümünde bağlantısı verilmiştir), AWS EC2 üzerinde çalışmaktadır ve hackathon sonuçları açıklandıktan sonra kapatılacaktır.** Değerlendirme sonrasında bu adresten projeye erişilemeyecektir; projeyi incelemek için bu repodaki kurulum adımlarını kullanarak yerel ortamınızda çalıştırabilirsiniz.
 
 ---
 
